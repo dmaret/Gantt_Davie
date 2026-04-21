@@ -71,7 +71,7 @@ App.views.dashboard = {
           <td class="mono">${c.ref}</td>
           <td>${c.fournisseur}</td>
           <td>${prj?prj.code:'—'}</td>
-          <td class="right">${c.montant.toLocaleString('fr-FR')} €</td>
+          <td class="right">${c.montant.toLocaleString('fr-CH')} CHF</td>
           <td>${cell('A1')}</td><td>${cell('A2')}</td><td>${cell('A3')}</td><td>${cell('A4')}</td>
           <td><span class="badge ${statutBadge}">${c.statut}</span></td>
         </tr>`;

@@ -38,7 +38,7 @@ App.views.commandes = {
         <td class="mono">${c.ref}</td>
         <td>${c.fournisseur}</td>
         <td>${prj?`<span class="badge" style="background:${prj.couleur}22;color:${prj.couleur}">${prj.code}</span>`:'—'}</td>
-        <td class="right">${c.montant.toLocaleString('fr-FR')} €</td>
+        <td class="right">${c.montant.toLocaleString('fr-CH')} CHF</td>
         <td class="mono small">${D.fmt(c.dateDemande)}</td>
         ${axes.map(cellAxe).join('')}
         <td><div class="bar-inline ${pct<100?'warn':''}"><div class="fill" style="width:${pct}%;background:${pct===100?'var(--success)':'var(--warning)'}"></div></div></td>
@@ -100,7 +100,7 @@ App.views.commandes = {
       </div>
       <div class="row">
         <div class="field"><label>Fournisseur</label><input id="cf-four" value="${c.fournisseur||''}"></div>
-        <div class="field"><label>Montant (€)</label><input type="number" id="cf-mont" value="${c.montant||0}"></div>
+        <div class="field"><label>Montant (CHF)</label><input type="number" id="cf-mont" value="${c.montant||0}"></div>
       </div>
       <div class="field"><label>Projet</label>
         <select id="cf-prj">${s.projets.map(p=>`<option value="${p.id}" ${p.id===c.projetId?'selected':''}>${p.code} — ${p.nom}</option>`).join('')}</select>
