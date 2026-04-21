@@ -98,8 +98,8 @@ App.views.gantt = {
     for (let i=0; i<days; i++) {
       const d = D.addDays(start, i);
       const dt = D.parse(d);
-      const show = i===0 || dt.getDate()===1 || dt.getDay()===1;
-      headerCells.push(`<div class="gantt-cell head ${bgRow(d)}" style="padding:4px 2px;font-size:10px">${show ? dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}) : ''}</div>`);
+      const show = i===0 || dt.getUTCDate()===1 || dt.getUTCDay()===1;
+      headerCells.push(`<div class="gantt-cell head ${bgRow(d)}" style="padding:4px 2px;font-size:10px">${show ? dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',timeZone:'UTC'}) : ''}</div>`);
     }
 
     // Body rows

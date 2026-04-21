@@ -1,5 +1,5 @@
 // Données + persistance localStorage + seed réaliste
-const STORAGE_KEY = 'atelier_plan_v2';
+const STORAGE_KEY = 'atelier_plan_v3';
 
 const DB = {
   state: null,
@@ -31,14 +31,22 @@ const DB = {
   tachesDeMachine(mid) { return this.state.taches.filter(t => t.machineId === mid); },
 };
 
-// Utilitaires date (YYYY-MM-DD)
+// Utilitaires date (YYYY-MM-DD) — tout en UTC pour éviter les décalages de fuseau
 const D = {
-  today() { const d = new Date(); return D.iso(d); },
-  iso(d)  { return d.toISOString().slice(0,10); },
-  parse(s) { return new Date(s + 'T00:00:00'); },
-  addDays(s, n) { const d = D.parse(s); d.setDate(d.getDate()+n); return D.iso(d); },
+  today() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  },
+  iso(d) {
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth()+1).padStart(2,'0') + '-' + String(d.getUTCDate()).padStart(2,'0');
+  },
+  parse(s) {
+    const [y,m,day] = s.split('-').map(Number);
+    return new Date(Date.UTC(y, m-1, day));
+  },
+  addDays(s, n) { const d = D.parse(s); d.setUTCDate(d.getUTCDate()+n); return D.iso(d); },
   diffDays(a, b) { return Math.round((D.parse(b)-D.parse(a))/86400000); },
-  isWeekend(s) { const d = D.parse(s).getDay(); return d===0 || d===6; },
+  isWeekend(s) { const d = D.parse(s).getUTCDay(); return d===0 || d===6; },
   isWorkday(s) { return !D.isWeekend(s); },
   // Ajuste au premier jour ouvré >= s
   nextWorkday(s) { let cur = s; while (D.isWeekend(cur)) cur = D.addDays(cur, 1); return cur; },
@@ -63,7 +71,7 @@ const D = {
   workdaysBetween(a,b) { return D.weekdaysBetween(a,b); },
   fmt(s) {
     const d = D.parse(s);
-    return d.toLocaleDateString('fr-CH', { day:'2-digit', month:'short' });
+    return d.toLocaleDateString('fr-CH', { day:'2-digit', month:'short', timeZone:'UTC' });
   }
 };
 
