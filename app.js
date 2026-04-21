@@ -7,7 +7,48 @@ const App = {
     DB.load();
     this.applyTheme(localStorage.getItem('theme') || 'light');
     this.bindTopbar();
+    this.populateUserSelect();
+    this.updateBell();
+    this.bellInterval = setInterval(() => this.updateBell(), 30000);
     this.navigate(location.hash.replace('#','') || 'dashboard');
+  },
+
+  currentUser() {
+    const id = localStorage.getItem('atelier_user_id');
+    return (DB.state.utilisateurs || []).find(u => u.id === id) || (DB.state.utilisateurs || [])[0] || { id:'_', nom:'Anonyme', axes:[] };
+  },
+  setCurrentUser(id) {
+    localStorage.setItem('atelier_user_id', id);
+    this.toast('Signé comme ' + (this.currentUser().nom), 'success');
+  },
+  populateUserSelect() {
+    const sel = document.getElementById('user-select');
+    if (!sel) return;
+    const users = DB.state.utilisateurs || [];
+    const curId = this.currentUser().id;
+    sel.innerHTML = users.map(u => `<option value="${u.id}" ${u.id===curId?'selected':''}>${u.nom} · ${u.axes.join('/')||'—'}</option>`).join('');
+    sel.onchange = e => this.setCurrentUser(e.target.value);
+  },
+  canSignAxe(axeCode) {
+    const u = this.currentUser();
+    return (u.axes || []).includes(axeCode);
+  },
+
+  updateBell() {
+    const alerts = this.proactiveAlerts();
+    const count = alerts.length;
+    const badge = document.getElementById('bell-count');
+    if (!badge) return;
+    badge.textContent = count;
+    badge.classList.toggle('hidden', count === 0);
+    badge.classList.toggle('bad', alerts.some(a => a.niveau === 'bad'));
+  },
+  showBellPanel() {
+    const alerts = this.proactiveAlerts();
+    const body = alerts.length
+      ? `<ul class="list">${alerts.map(a => `<li><span class="badge ${a.niveau}">${a.kind}</span> <span>${a.msg}</span></li>`).join('')}</ul>`
+      : `<p class="muted">Aucune alerte. ✔</p>`;
+    this.openModal(`Alertes proactives (${alerts.length})`, body, `<span class="spacer" style="flex:1"></span><button class="btn" onclick="App.closeModal()">Fermer</button>`);
   },
 
   bindTopbar() {
@@ -28,6 +69,7 @@ const App = {
     });
     document.getElementById('btn-print').addEventListener('click', () => window.print());
     document.getElementById('btn-help').addEventListener('click', () => this.showHelp());
+    document.getElementById('btn-bell').addEventListener('click', () => this.showBellPanel());
     document.getElementById('btn-tablette').addEventListener('click', () => {
       document.body.classList.toggle('tablette');
       const on = document.body.classList.contains('tablette');
@@ -98,6 +140,7 @@ const App = {
     const root = document.getElementById('view-root');
     root.innerHTML = '';
     this.views[this.view].render(root);
+    this.updateBell();
   },
 
   // Modal helpers

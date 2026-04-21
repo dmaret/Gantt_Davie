@@ -63,13 +63,30 @@ body {
   background: var(--primary-weak); color: var(--primary); border-color: transparent;
   font-weight: 600;
 }
-.actions { display: flex; gap: 6px; }
+.actions { display: flex; gap: 6px; align-items: center; }
 .btn-ghost {
   background: transparent; border: 1px solid var(--border);
   padding: 6px 10px; border-radius: 6px; color: var(--text);
   cursor: pointer; font-size: 13px; font-family: inherit;
 }
 .btn-ghost:hover { background: var(--surface-2); }
+.user-select {
+  background: var(--surface-2); border: 1px solid var(--border);
+  padding: 6px 8px; border-radius: 6px; color: var(--text);
+  font-size: 12px; font-family: inherit; max-width: 170px;
+}
+.btn-ghost.bell { position: relative; padding: 6px 10px; }
+.bell-icon { font-size: 14px; }
+.bell-count {
+  position: absolute; top: -4px; right: -4px;
+  background: var(--warning); color: #fff;
+  font-size: 10px; font-weight: 700;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 8px; line-height: 16px; text-align: center;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.bell-count.bad { background: var(--danger); }
+.bell-count.hidden { display: none; }
 
 /* Main */
 main#view-root {

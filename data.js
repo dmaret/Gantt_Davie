@@ -6,10 +6,15 @@ const DB = {
   load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) { this.state = JSON.parse(raw); return; }
+      if (raw) { this.state = JSON.parse(raw); this.migrate(); return; }
     } catch (e) { console.warn('load failed', e); }
     this.state = seed();
     this.save();
+  },
+  migrate() {
+    // Ajouts rétrocompatibles sans invalider le localStorage
+    if (!this.state.utilisateurs) this.state.utilisateurs = defaultUsers();
+    this.state.commandes.forEach(c => { if (!c.validationLog) c.validationLog = []; });
   },
   save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state)); },
   reset() { this.state = seed(); this.save(); },
@@ -102,6 +107,17 @@ const CSV = {
     URL.revokeObjectURL(url);
   },
 };
+
+// Utilisateurs autorisés à signer les axes 4A (multi-utilisateur léger, sans backend)
+function defaultUsers() {
+  return [
+    { id:'U_CP',    nom:'Alice Chef-Projet',  role:'Chef de projet',     axes:['A1'] },
+    { id:'U_LOG',   nom:'Bruno Logistique',    role:'Logistique',         axes:['A2'] },
+    { id:'U_TECH',  nom:'Carla Tech',          role:'Direction technique',axes:['A3'] },
+    { id:'U_BUD',   nom:'David Budget',        role:'Contrôle budget',    axes:['A4'] },
+    { id:'U_DIR',   nom:'Elena Direction',     role:'Direction',          axes:['A1','A2','A3','A4'] },
+  ];
+}
 
 function seed() {
   const today = D.today();

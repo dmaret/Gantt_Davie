@@ -50,25 +50,83 @@ App.views.personnes = {
         return `<div class="bar-inline ${cls}" title="${w.h}h"><div class="fill" style="width:${w.pct}%"></div></div>`;
       }).join('');
       const avgCls = avgPct > 95 ? 'bad' : avgPct > 80 ? 'warn' : '';
-      return `<tr data-id="${p.id}" style="cursor:pointer">
-        <td><strong>${App.personneLabel(p)}</strong></td>
+      return `<tr data-id="${p.id}">
+        <td><strong class="p-name" style="cursor:pointer">${App.personneLabel(p)}</strong></td>
         <td>${p.role}</td>
         <td><span class="muted">${DB.lieu(p.lieuPrincipalId)?.nom || '—'}</span></td>
         <td>${(p.competences||[]).map(c => `<span class="chip">${c}</span>`).join('')}</td>
         <td>${tsNow.length}</td>
         <td><div style="display:flex;gap:3px">${cells}</div></td>
         <td class="right"><span class="badge ${avgCls==='bad'?'bad':avgCls==='warn'?'warn':'good'}">${avgPct}%</span></td>
+        <td><button class="btn-ghost p-semaine" data-id="${p.id}" title="Ma semaine">📅</button></td>
       </tr>`;
     }).join('');
 
     document.getElementById('p-table').innerHTML = `
       <table class="data">
-        <thead><tr><th>Personne</th><th>Rôle</th><th>Lieu principal</th><th>Compétences</th><th>Tâches 7j</th><th>Charge 4 semaines</th><th class="right">Moy.</th></tr></thead>
+        <thead><tr><th>Personne</th><th>Rôle</th><th>Lieu principal</th><th>Compétences</th><th>Tâches 7j</th><th>Charge 4 semaines</th><th class="right">Moy.</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="muted small" style="margin-top:10px">${list.length} personne(s) · 4 barres = 4 semaines glissantes · cliquer pour éditer</p>
+      <p class="muted small" style="margin-top:10px">${list.length} personne(s) · 4 barres = 4 semaines glissantes · cliquer sur le nom pour éditer · 📅 = planning personnel</p>
     `;
-    document.querySelectorAll('#p-table tbody tr').forEach(tr => tr.onclick = () => this.openForm(tr.dataset.id));
+    document.querySelectorAll('#p-table tbody .p-name').forEach(el => el.onclick = () => this.openForm(el.closest('tr').dataset.id));
+    document.querySelectorAll('#p-table tbody .p-semaine').forEach(b => b.onclick = e => { e.stopPropagation(); this.openSemaine(b.dataset.id); });
+  },
+
+  openSemaine(id) {
+    const p = DB.personne(id);
+    if (!p) return;
+    const s = DB.state;
+    const today = D.today();
+    const weekEnd = D.addWorkdays(today, 4);
+    const nextWeekStart = D.addWorkdays(weekEnd, 1);
+    const nextWeekEnd = D.addWorkdays(nextWeekStart, 4);
+
+    const mkRange = (a, b) => {
+      const ts = s.taches.filter(t => (t.assignes||[]).includes(p.id) && t.fin >= a && t.debut <= b)
+        .sort((x,y) => x.debut.localeCompare(y.debut));
+      const deps = s.deplacements.filter(d => d.personneId === p.id && d.date >= a && d.date <= b)
+        .sort((x,y) => x.date.localeCompare(y.date));
+      const heures = ts.reduce((n,t) => n + D.workdaysBetween(t.debut > a ? t.debut : a, t.fin < b ? t.fin : b) * 7, 0);
+      return { ts, deps, heures };
+    };
+    const cette = mkRange(today, weekEnd);
+    const prochaine = mkRange(nextWeekStart, nextWeekEnd);
+
+    const renderBloc = (label, a, b, r) => {
+      const pct = Math.min(100, Math.round(r.heures / p.capaciteHebdo * 100));
+      const cls = pct > 95 ? 'bad' : pct > 80 ? 'warn' : 'good';
+      const tItems = r.ts.length ? r.ts.map(t => {
+        const prj = DB.projet(t.projetId);
+        const lieu = DB.lieu(t.lieuId);
+        return `<li><span class="badge" style="background:${prj?prj.couleur+'33':''};color:${prj?prj.couleur:''}">${prj?prj.code:''}</span> <strong>${t.nom}</strong> <span class="muted small">· ${D.fmt(t.debut)}→${D.fmt(t.fin)} · ${lieu?lieu.nom:'—'}</span></li>`;
+      }).join('') : '<li class="muted">Aucune tâche.</li>';
+      const dItems = r.deps.length ? r.deps.map(d => {
+        const o = DB.lieu(d.origineId), de = DB.lieu(d.destinationId);
+        return `<li>🚚 ${D.fmt(d.date)} · ${d.motif} · ${o?o.nom:'—'} → ${de?de.nom:'—'} · ${d.duree}</li>`;
+      }).join('') : '';
+      return `<div class="card" style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <h3 style="margin:0">${label}</h3>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="muted small">${D.fmt(a)} → ${D.fmt(b)}</span>
+            <span class="badge ${cls}">${r.heures}h / ${p.capaciteHebdo}h (${pct}%)</span>
+          </div>
+        </div>
+        <div class="bar-inline ${cls}"><div class="fill" style="width:${pct}%"></div></div>
+        <h4 style="margin:10px 0 4px 0">Tâches (${r.ts.length})</h4>
+        <ul class="list">${tItems}</ul>
+        ${r.deps.length ? `<h4 style="margin:10px 0 4px 0">Déplacements (${r.deps.length})</h4><ul class="list">${dItems}</ul>` : ''}
+      </div>`;
+    };
+
+    const body = `
+      <div class="muted small" style="margin-bottom:10px">${p.role} · ${DB.lieu(p.lieuPrincipalId)?.nom || '—'} · Capacité ${p.capaciteHebdo}h/sem · Compétences : ${(p.competences||[]).join(', ')||'—'}</div>
+      ${renderBloc('Cette semaine', today, weekEnd, cette)}
+      ${renderBloc('Semaine prochaine', nextWeekStart, nextWeekEnd, prochaine)}
+    `;
+    const foot = `<button class="btn btn-secondary" onclick="window.print()">⎙ Imprimer</button><span class="spacer" style="flex:1"></span><button class="btn" onclick="App.closeModal()">Fermer</button>`;
+    App.openModal('Ma semaine — ' + App.personneLabel(p), body, foot);
   },
   openForm(id) {
     const isNew = !id;

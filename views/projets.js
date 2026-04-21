@@ -12,7 +12,14 @@ App.views.projets = {
       </div>
     `;
     document.getElementById('prj-add').onclick = () => this.openForm(null);
-    document.querySelectorAll('.prj-card').forEach(c => c.onclick = () => this.openForm(c.dataset.id));
+    document.querySelectorAll('.prj-card').forEach(c => c.onclick = e => {
+      if (e.target.closest('.prj-report')) return;
+      this.openForm(c.dataset.id);
+    });
+    document.querySelectorAll('.prj-report').forEach(b => b.onclick = e => {
+      e.stopPropagation();
+      this.exportReport(b.dataset.id);
+    });
   },
   renderProjectCard(p) {
     const taches = DB.tachesDuProjet(p.id);
@@ -36,14 +43,112 @@ App.views.projets = {
           <div class="bar-inline" style="flex:1;width:auto"><div class="fill" style="width:${pct}%;background:${p.couleur}"></div></div>
           <span class="small mono">${pct}%</span>
         </div>
-        <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+        <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           <span class="badge muted">${total} tâches</span>
           <span class="badge muted">${jalons.length} jalons</span>
           <span class="badge ${p.statut==='en-cours'?'good':'muted'}">${p.statut}</span>
           ${retard ? '<span class="badge bad">retard</span>' : ''}
+          <span style="flex:1"></span>
+          <button class="btn-ghost prj-report" data-id="${p.id}" title="Rapport PDF">⎙ Rapport</button>
         </div>
       </div>
     `;
+  },
+  exportReport(id) {
+    const p = DB.projet(id);
+    if (!p) return;
+    const s = DB.state;
+    const tasks = DB.tachesDuProjet(id).slice().sort((a,b) => a.debut.localeCompare(b.debut));
+    const done = tasks.filter(t => t.avancement === 100).length;
+    const pct = tasks.length ? Math.round(done / tasks.length * 100) : 0;
+    const pr = App.predictProjectEnd(id);
+    const cmds = s.commandes.filter(c => c.projetId === id);
+    const htTotal = cmds.reduce((n,c) => n + (c.montantHT||0), 0);
+    const ttcTotal = cmds.reduce((n,c) => n + Money.ttc(c.montantHT||0, c.tauxTVA||8.1), 0);
+    const bom = p.bom || [];
+    const today = D.today();
+
+    // Gantt simplifié : barres horizontales à l'échelle temporelle
+    const tmin = tasks.reduce((m,t) => t.debut < m ? t.debut : m, p.debut);
+    const tmax = tasks.reduce((m,t) => t.fin > m ? t.fin : m, p.fin);
+    const totalDays = Math.max(1, D.diffDays(tmin, tmax));
+    const barsHtml = tasks.map(t => {
+      const off = D.diffDays(tmin, t.debut) / totalDays * 100;
+      const w = Math.max(1, D.diffDays(t.debut, t.fin) / totalDays * 100);
+      const color = t.jalon ? '#000' : p.couleur;
+      return `<tr>
+        <td style="width:180px">${t.nom}${t.jalon?' ◆':''}</td>
+        <td style="width:110px">${D.fmt(t.debut)} → ${D.fmt(t.fin)}</td>
+        <td style="width:50px;text-align:right">${t.avancement||0}%</td>
+        <td style="position:relative;background:#f6f6f6;height:14px;border-radius:3px">
+          <div style="position:absolute;left:${off}%;width:${w}%;top:1px;bottom:1px;background:${color};border-radius:3px;opacity:.85"></div>
+        </td>
+      </tr>`;
+    }).join('');
+
+    const bomHtml = bom.length ? `
+      <h2>Bill of Materials</h2>
+      <table class="data">
+        <thead><tr><th>Article</th><th class="right">Besoin</th><th class="right">Stock</th><th>Statut</th></tr></thead>
+        <tbody>${bom.map(l => {
+          const art = DB.stock(l.articleId);
+          if (!art) return '';
+          const manque = l.quantite - art.quantite;
+          return `<tr><td>${art.ref} — ${art.nom}</td><td class="right">${l.quantite} ${art.unite}</td><td class="right">${art.quantite}</td><td>${manque>0?`<span style="color:#c43b3b">rupture -${manque}</span>`:'OK'}</td></tr>`;
+        }).join('')}</tbody>
+      </table>` : '';
+
+    const cmdHtml = cmds.length ? `
+      <h2>Commandes (${cmds.length})</h2>
+      <table class="data">
+        <thead><tr><th>Réf</th><th>Fournisseur</th><th class="right">HT</th><th class="right">TTC</th><th>Statut</th></tr></thead>
+        <tbody>${cmds.map(c => `<tr><td>${c.ref}</td><td>${c.fournisseur}</td><td class="right">${Money.chf(c.montantHT||0)}</td><td class="right">${Money.chf(Money.ttc(c.montantHT||0, c.tauxTVA||8.1))}</td><td>${c.statut}</td></tr>`).join('')}
+        <tr><td colspan="2"><strong>Total</strong></td><td class="right"><strong>${Money.chf(htTotal)}</strong></td><td class="right"><strong>${Money.chf(ttcTotal)}</strong></td><td></td></tr>
+        </tbody>
+      </table>` : '';
+
+    const predHtml = pr && pr.predEnd ? `
+      <p><strong>Fin planifiée :</strong> ${D.fmt(p.fin)} · <strong>Fin prédite :</strong> ${D.fmt(pr.predEnd)}
+      <span style="color:${pr.delayDays>=3?'#c43b3b':pr.delayDays>=1?'#c47800':'#1f8a4c'}">(${pr.delayDays>0?'+':''}${pr.delayDays} j · vitesse ${pr.vitesse}×)</span></p>` : '';
+
+    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Rapport ${p.code}</title>
+      <style>
+        body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color: #222; }
+        h1 { border-bottom: 3px solid ${p.couleur}; padding-bottom: 6px; margin: 0 0 8px 0; }
+        h2 { margin-top: 20px; color: ${p.couleur}; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+        table.data { width: 100%; border-collapse: collapse; font-size: 12px; }
+        table.data th, table.data td { border-bottom: 1px solid #eee; padding: 4px 6px; text-align: left; }
+        table.data th { background: #f6f6f6; }
+        .right { text-align: right; }
+        .kpis { display: flex; gap: 14px; margin: 12px 0 4px 0; }
+        .kpi { flex: 1; background: #f6f6f6; padding: 10px; border-radius: 6px; border-left: 4px solid ${p.couleur}; }
+        .kpi .label { font-size: 10px; color: #777; text-transform: uppercase; }
+        .kpi .value { font-size: 22px; font-weight: 600; }
+        .small { font-size: 11px; color: #666; }
+        .footer { margin-top: 24px; color: #888; font-size: 10px; text-align: center; border-top: 1px solid #ddd; padding-top: 6px; }
+        @media print { @page { size: A4 landscape; margin: 12mm; } body { margin: 0; } }
+      </style></head><body>
+      <h1>${p.code} — ${p.nom}</h1>
+      <p class="small">Client : <strong>${p.client||'—'}</strong> · Étage ${p.etage} · Priorité ${p.priorite} · Statut ${p.statut}</p>
+      <div class="kpis">
+        <div class="kpi"><div class="label">Avancement</div><div class="value">${pct} %</div></div>
+        <div class="kpi"><div class="label">Tâches</div><div class="value">${tasks.length}</div></div>
+        <div class="kpi"><div class="label">Budget HT</div><div class="value">${Money.chf(htTotal)}</div></div>
+        <div class="kpi"><div class="label">Budget TTC</div><div class="value">${Money.chf(ttcTotal)}</div></div>
+      </div>
+      ${predHtml}
+      <h2>Planning</h2>
+      <table class="data">${barsHtml}</table>
+      ${bomHtml}
+      ${cmdHtml}
+      <div class="footer">Généré le ${D.fmt(today)} par ${App.currentUser().nom} · Atelier · Planification</div>
+      <script>setTimeout(() => window.print(), 400);</script>
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { App.toast('Pop-up bloqué — autoriser les pop-ups','error'); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
   },
   openForm(id) {
     const isNew = !id;

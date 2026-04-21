@@ -29,11 +29,7 @@ App.views.commandes = {
     if (!c.validationLog) c.validationLog = [];
     return c;
   },
-  currentUser() { return localStorage.getItem('atelier_user') || 'Anonyme'; },
-  setUser() {
-    const u = prompt('Votre nom (pour signer les validations 4A) :', this.currentUser());
-    if (u && u.trim()) { localStorage.setItem('atelier_user', u.trim()); App.toast('Signé comme ' + u.trim(), 'success'); }
-  },
+  currentUser() { return App.currentUser().nom; },
   draw() {
     const s = DB.state;
     s.commandes.forEach(c => this.migrate(c));
@@ -84,6 +80,10 @@ App.views.commandes = {
       const c = DB.state.commandes.find(x => x.id === b.dataset.cmd);
       this.migrate(c);
       const axe = b.dataset.axe;
+      if (!App.canSignAxe(axe)) {
+        App.toast(`${App.currentUser().nom} n'est pas autorisé·e à signer ${axe}`, 'error');
+        return;
+      }
       c.validations[axe] = !c.validations[axe];
       c.validationLog.push({ axe, action: c.validations[axe]?'validé':'invalidé', valideur: this.currentUser(), date: new Date().toISOString() });
       const axes = DB.state.regle4A.axes;
@@ -134,9 +134,12 @@ App.views.commandes = {
       <h3 style="margin-top:10px">Lignes</h3>
       <div id="cf-lignes">${(c.lignes||[]).map((l,i)=>this.ligneRow(l,i)).join('')}</div>
       <button class="btn btn-secondary" id="cf-add-ligne" style="margin-top:6px">+ Ligne</button>
-      <h3 style="margin-top:14px">Validations 4A <span class="muted small">· signé par <strong>${this.currentUser()}</strong> <button class="btn-ghost" id="cf-user" style="padding:1px 8px">changer</button></span></h3>
+      <h3 style="margin-top:14px">Validations 4A <span class="muted small">· utilisateur courant <strong>${this.currentUser()}</strong> (modifiable dans la topbar)</span></h3>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        ${s.regle4A.axes.map(a => `<label class="chip"><input type="checkbox" data-axe="${a.code}" ${c.validations[a.code]?'checked':''}> ${a.code} · ${a.nom}</label>`).join('')}
+        ${s.regle4A.axes.map(a => {
+          const ok = App.canSignAxe(a.code);
+          return `<label class="chip" title="${ok?'Autorisé':'Non autorisé pour cet utilisateur'}" style="${ok?'':'opacity:.45'}"><input type="checkbox" data-axe="${a.code}" ${c.validations[a.code]?'checked':''} ${ok?'':'disabled'}> ${a.code} · ${a.nom}</label>`;
+        }).join('')}
       </div>
       ${(c.validationLog||[]).length ? `<h3 style="margin-top:14px">Historique (${c.validationLog.length})</h3>
       <ul class="list" style="max-height:160px;overflow:auto">${c.validationLog.slice().reverse().map(l => `<li style="font-size:12px"><div><strong>${l.axe}</strong> · ${l.action}</div><div class="muted small">${l.valideur} · ${new Date(l.date).toLocaleString('fr-CH')}</div></li>`).join('')}</ul>` : ''}
@@ -161,9 +164,6 @@ App.views.commandes = {
     document.getElementById('cf-ht').oninput = refreshTTC;
     document.getElementById('cf-tva').oninput = refreshTTC;
     refreshTTC();
-    const userBtn = document.getElementById('cf-user');
-    if (userBtn) userBtn.onclick = () => { this.setUser(); App.closeModal(); this.openForm(id); };
-
     document.getElementById('cf-cancel').onclick = () => App.closeModal();
     document.getElementById('cf-save').onclick = () => {
       c.ref = document.getElementById('cf-ref').value.trim();
@@ -173,7 +173,16 @@ App.views.commandes = {
       c.tauxTVA = +document.getElementById('cf-tva').value;
       delete c.montant; // ancienne clé obsolète
       c.projetId = document.getElementById('cf-prj').value;
-      document.querySelectorAll('[data-axe]').forEach(cb => c.validations[cb.dataset.axe] = cb.checked);
+      document.querySelectorAll('#modal-body input[data-axe]').forEach(cb => {
+        const axe = cb.dataset.axe;
+        const before = !!c.validations[axe];
+        const after = cb.checked;
+        if (before !== after) {
+          if (!App.canSignAxe(axe)) { App.toast(`Axe ${axe} non modifiable par ${App.currentUser().nom}`, 'error'); return; }
+          c.validations[axe] = after;
+          c.validationLog.push({ axe, action: after?'validé':'invalidé', valideur: this.currentUser(), date: new Date().toISOString() });
+        }
+      });
       // Collect lines
       const lignes = [];
       document.querySelectorAll('.ligne-row').forEach(row => {

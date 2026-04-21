@@ -30,6 +30,8 @@
       <button data-view="whatif" class="nav-btn">What-if</button>
     </nav>
     <div class="actions">
+      <select id="user-select" class="user-select" title="Utilisateur courant (pour signer les validations 4A)"></select>
+      <button id="btn-bell" class="btn-ghost bell" title="Alertes proactives"><span class="bell-icon">🔔</span><span id="bell-count" class="bell-count hidden">0</span></button>
       <input type="file" id="import-file" accept=".json" hidden>
       <button id="btn-import" class="btn-ghost" title="Importer un JSON">Importer</button>
       <button id="btn-export" class="btn-ghost" title="Exporter en JSON">Exporter</button>
