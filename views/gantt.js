@@ -6,6 +6,56 @@ App.views.gantt = {
     rangeDays: 56,
     projetFilter: '',
     search: '',
+    showDeps: true,
+    showCritical: true,
+    autoCascade: true,
+  },
+  newItem() { this.openTacheForm(null); },
+
+  criticalTasks(projetId) {
+    const tasks = DB.state.taches.filter(t => t.projetId === projetId);
+    const byId = Object.fromEntries(tasks.map(t => [t.id, t]));
+    const dur = t => Math.max(1, D.workdaysBetween(t.debut, t.fin));
+    const len = {}, pred = {};
+    const sorted = tasks.slice().sort((a,b) => a.debut.localeCompare(b.debut));
+    for (const t of sorted) {
+      let best = dur(t), bestPred = null;
+      for (const dep of (t.dependances || [])) {
+        if (len[dep] !== undefined && len[dep] + dur(t) > best) {
+          best = len[dep] + dur(t);
+          bestPred = dep;
+        }
+      }
+      len[t.id] = best; pred[t.id] = bestPred;
+    }
+    let endId = null, maxLen = -1;
+    for (const id in len) if (len[id] > maxLen) { maxLen = len[id]; endId = id; }
+    const critical = new Set();
+    let cur = endId;
+    while (cur) { critical.add(cur); cur = pred[cur]; }
+    return critical;
+  },
+
+  cascadeShift(originTid, deltaDays) {
+    const state = DB.state;
+    const subWorkdays = (iso, n) => { let cur = iso, done = 0; while (done < n) { cur = D.addDays(cur, -1); if (!D.isWeekend(cur)) done++; } return cur; };
+    const moveWD = (iso, n) => n >= 0 ? D.addWorkdays(iso, n) : subWorkdays(iso, -n);
+    const queue = [originTid];
+    const visited = new Set([originTid]);
+    let n = 0;
+    while (queue.length) {
+      const tid = queue.shift();
+      const followers = state.taches.filter(t => (t.dependances||[]).includes(tid));
+      for (const f of followers) {
+        if (visited.has(f.id)) continue;
+        visited.add(f.id);
+        f.debut = moveWD(f.debut, deltaDays);
+        f.fin   = moveWD(f.fin,   deltaDays);
+        n++;
+        queue.push(f.id);
+      }
+    }
+    return n;
   },
 
   render(root) {
@@ -37,6 +87,9 @@ App.views.gantt = {
           </select>
           <button class="btn-ghost" id="g-next">▶</button>
           <button class="btn-ghost" id="g-today">Aujourd'hui</button>
+          <label class="small"><input type="checkbox" id="g-deps" ${st.showDeps?'checked':''}> Dépendances</label>
+          <label class="small"><input type="checkbox" id="g-crit" ${st.showCritical?'checked':''}> Chemin critique</label>
+          <label class="small"><input type="checkbox" id="g-casc" ${st.autoCascade?'checked':''}> Cascade auto</label>
           <span class="spacer"></span>
           <button class="btn-ghost" id="g-csv">⤓ Exporter CSV</button>
           <button class="btn" id="g-add">+ Nouvelle tâche</button>
@@ -59,6 +112,9 @@ App.views.gantt = {
     document.getElementById('g-prev').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, -14); this.draw(); };
     document.getElementById('g-next').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, 14); this.draw(); };
     document.getElementById('g-today').onclick = () => { st.rangeStart = D.addDays(D.today(), -7); this.draw(); };
+    document.getElementById('g-deps').onchange = e => { st.showDeps = e.target.checked; this.draw(); };
+    document.getElementById('g-crit').onchange = e => { st.showCritical = e.target.checked; this.draw(); };
+    document.getElementById('g-casc').onchange = e => { st.autoCascade = e.target.checked; };
     document.getElementById('g-add').onclick = () => this.openTacheForm(null);
     document.getElementById('g-csv').onclick = () => {
       const head = ['Projet','Tâche','Début','Fin','Durée j. ouvrés','Lieu','Machine','Assignés','Avancement','Jalon'];
@@ -124,10 +180,15 @@ App.views.gantt = {
     table.style.position = 'relative';
     table.innerHTML = headerCells.join('') + rows.join('');
 
+    // Chemin critique par projet (si mode projet et option active)
+    const criticalByProj = {};
+    if (st.showCritical) DB.state.projets.forEach(p => { criticalByProj[p.id] = this.criticalTasks(p.id); });
+    const isCritical = t => st.showCritical && criticalByProj[t.projetId] && criticalByProj[t.projetId].has(t.id);
+
     // Place bars in an absolute overlay to simplify positioning
-    // Calculate rowIndex per tache
     let rowIdx = 1; // 1 = header
     const bars = [];
+    const barPos = {}; // tid -> {left, right, top, mid}
     groups.forEach(g => {
       rowIdx++; // group header row
       g.items.forEach(it => {
@@ -138,22 +199,52 @@ App.views.gantt = {
         if (endDays < 0 || offsetDays > days-1) { rowIdx++; return; }
         const left = LABEL_W + offsetDays * CELL_W + 2;
         const width = Math.max(CELL_W - 4, (endDays - offsetDays + 1) * CELL_W - 4);
-        const top = rowIdx * 30 + 3; // approx row height
+        const top = rowIdx * 30 + 3;
         const isConflict = confPersons.has(t.id) || confMachines.has(t.id);
+        const crit = isCritical(t);
         const color = prj ? prj.couleur : '#888';
         const label = t.jalon ? '' : (t.nom + ' · ' + Math.round(t.avancement) + '%');
+        barPos[t.id] = { left, right: left + width, top: top + 11, mid: top + 11 };
 
+        const cls = (isConflict?'conflict ':'') + (crit?'critical ':'');
         if (t.jalon) {
-          bars.push(`<div class="gantt-bar milestone ${isConflict?'conflict':''}" style="left:${left+width/2-7}px;top:${top+2}px;background:${color}" data-tid="${t.id}" title="${t.nom}"></div>`);
+          bars.push(`<div class="gantt-bar milestone ${cls}" style="left:${left+width/2-7}px;top:${top+2}px;background:${color}" data-tid="${t.id}" title="${t.nom}"></div>`);
         } else {
-          bars.push(`<div class="gantt-bar ${isConflict?'conflict':''}" style="left:${left}px;width:${width}px;top:${top}px;height:22px;background:${color}" data-tid="${t.id}" title="${t.nom} — ${D.fmt(t.debut)} → ${D.fmt(t.fin)}">${label}</div>`);
+          bars.push(`<div class="gantt-bar ${cls}" style="left:${left}px;width:${width}px;top:${top}px;height:22px;background:${color}" data-tid="${t.id}" title="${t.nom} — ${D.fmt(t.debut)} → ${D.fmt(t.fin)}${crit?' [critique]':''}">${label}</div>`);
         }
         rowIdx++;
       });
     });
+
+    // Flèches de dépendances (SVG)
+    let depsSvg = '';
+    if (st.showDeps) {
+      const totalW = LABEL_W + days * CELL_W;
+      const totalH = (rowIdx + 2) * 30;
+      const paths = [];
+      DB.state.taches.forEach(t => {
+        (t.dependances || []).forEach(depId => {
+          const p1 = barPos[depId], p2 = barPos[t.id];
+          if (!p1 || !p2) return;
+          const crit = isCritical(t) && isCritical(DB.tache(depId));
+          const x1 = p1.right, y1 = p1.mid;
+          const x2 = p2.left, y2 = p2.mid;
+          const midX = x2 - 8;
+          const d = `M ${x1} ${y1} L ${x1+6} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
+          paths.push(`<path d="${d}" class="${crit?'critical':''}" marker-end="url(#arrow)"/>`);
+        });
+      });
+      depsSvg = `<svg class="gantt-deps" width="${totalW}" height="${totalH}" style="width:${totalW}px;height:${totalH}px">
+        <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+        </marker></defs>
+        ${paths.join('')}
+      </svg>`;
+    }
+
     const overlay = document.createElement('div');
     overlay.style.position = 'absolute'; overlay.style.inset = '0'; overlay.style.pointerEvents = 'none';
-    overlay.innerHTML = bars.join('');
+    overlay.innerHTML = depsSvg + bars.join('');
     table.appendChild(overlay);
     overlay.querySelectorAll('.gantt-bar').forEach(el => {
       el.style.pointerEvents = 'auto';
@@ -225,8 +316,11 @@ App.views.gantt = {
           const moveWD = (iso, n) => n >= 0 ? D.addWorkdays(iso, n) : subWorkdays(iso, -n);
           t.debut = moveWD(t.debut, deltaDays);
           t.fin   = moveWD(t.fin,   deltaDays);
+          let nCasc = 0;
+          if (this.state.autoCascade) nCasc = this.cascadeShift(t.id, deltaDays);
           DB.save();
-          App.toast(`Tâche déplacée de ${deltaDays > 0 ? '+' : ''}${deltaDays} j ouvrés`, 'success');
+          const extra = nCasc ? ` · ${nCasc} tâche(s) dépendante(s) décalée(s)` : '';
+          App.toast(`Tâche déplacée de ${deltaDays > 0 ? '+' : ''}${deltaDays} j ouvrés${extra}`, 'success');
           this.draw();
         }
       };
@@ -272,6 +366,11 @@ App.views.gantt = {
           ${s.personnes.map(p => `<option value="${p.id}" ${(t.assignes||[]).includes(p.id)?'selected':''}>${App.personneLabel(p)} · ${p.role}</option>`).join('')}
         </select>
       </div>
+      <div class="field"><label>Dépendances (tâches dont celle-ci dépend)</label>
+        <select id="f-deps" multiple size="5">
+          ${s.taches.filter(x => x.id !== t.id && x.projetId === t.projetId).sort((a,b)=>a.debut.localeCompare(b.debut)).map(x => `<option value="${x.id}" ${(t.dependances||[]).includes(x.id)?'selected':''}>${x.nom} · ${D.fmt(x.debut)}→${D.fmt(x.fin)}</option>`).join('')}
+        </select>
+      </div>
       <label class="small"><input type="checkbox" id="f-jalon" ${t.jalon?'checked':''}> Jalon</label>
     `;
     const foot = `
@@ -294,6 +393,7 @@ App.views.gantt = {
       t.lieuId = document.getElementById('f-lieu').value || null;
       t.assignes = Array.from(document.getElementById('f-assignes').selectedOptions).map(o => o.value);
       t.jalon = document.getElementById('f-jalon').checked;
+      t.dependances = Array.from(document.getElementById('f-deps').selectedOptions).map(o => o.value);
       if (!t.nom) { App.toast('Nom requis','error'); return; }
       if (isNew) DB.state.taches.push(t);
       DB.save(); App.closeModal(); App.toast('Enregistré','success'); App.refresh();
