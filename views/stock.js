@@ -9,6 +9,7 @@ App.views.stock = {
         <select id="st-proj"><option value="">Tous projets liés</option>${s.projets.map(p=>`<option value="${p.id}">${p.code}</option>`).join('')}</select>
         <label class="small"><input type="checkbox" id="st-alert"> Seulement alertes</label>
         <span class="spacer"></span>
+        <button class="btn-ghost" id="st-csv">⤓ Exporter CSV</button>
         <button class="btn" id="st-add">+ Ajouter un article</button>
       </div>
       <div class="card"><div id="st-table"></div></div>
@@ -18,6 +19,17 @@ App.views.stock = {
     document.getElementById('st-proj').onchange = e => { this.state.projetFilter = e.target.value; this.draw(); };
     document.getElementById('st-alert').onchange = e => { this.state.onlyAlert = e.target.checked; this.draw(); };
     document.getElementById('st-add').onclick = () => this.openForm(null);
+    document.getElementById('st-csv').onclick = () => {
+      const head = ['Référence','Article','Stockage','Quantité','Unité','Seuil alerte','Sous seuil','Projets liés'];
+      const rows = [head];
+      DB.state.stock.forEach(x => {
+        const lieu = DB.lieu(x.lieuId);
+        const projs = (x.projetsLies||[]).map(pid => (DB.projet(pid)||{}).code || '').join(', ');
+        rows.push([x.ref, x.nom, lieu?lieu.nom:'', x.quantite, x.unite, x.seuilAlerte, x.quantite<x.seuilAlerte?'OUI':'', projs]);
+      });
+      CSV.download('stock-' + D.today() + '.csv', rows);
+      App.toast('Export CSV téléchargé','success');
+    };
     this.draw();
   },
   draw() {

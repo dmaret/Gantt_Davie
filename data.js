@@ -63,8 +63,36 @@ const D = {
   workdaysBetween(a,b) { return D.weekdaysBetween(a,b); },
   fmt(s) {
     const d = D.parse(s);
-    return d.toLocaleDateString('fr-FR', { day:'2-digit', month:'short' });
+    return d.toLocaleDateString('fr-CH', { day:'2-digit', month:'short' });
   }
+};
+
+// Calculs TVA
+const Money = {
+  tva(ht, taux) { return Math.round(ht * taux) / 100; },
+  ttc(ht, taux) { return Math.round(ht * (100 + taux)) / 100; },
+  chf(n)  { return (n||0).toLocaleString('fr-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' CHF'; },
+};
+
+// Export CSV (ouvrable dans Excel) — BOM UTF-8 pour accents corrects
+const CSV = {
+  escape(v) {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    if (s.includes(';') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g,'""') + '"';
+    return s;
+  },
+  build(rows) {
+    // rows = [[...],[...]] — premier = entêtes
+    return '﻿' + rows.map(r => r.map(CSV.escape).join(';')).join('\r\n');
+  },
+  download(filename, rows) {
+    const blob = new Blob([CSV.build(rows)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  },
 };
 
 function seed() {
@@ -148,15 +176,15 @@ function seed() {
     });
   }
 
-  // 6 projets actifs — toutes les durées en jours ouvrés
+  // 6 projets actifs — clients suisses, durées en jours ouvrés
   const startWD = D.nextWorkday(start);
   const projets = [
-    { id:'PRJ_A', code:'PRJ-A', nom:'Châssis série A',      client:'Dupuis SA',   couleur:'#2c5fb3', debut: startWD,                      fin: D.addWorkdays(startWD, 39), etage:'1er', priorite:'haute', statut:'en-cours'},
-    { id:'PRJ_B', code:'PRJ-B', nom:'Prototype B-Quantum',  client:'Nexalys',     couleur:'#7c3aed', debut: D.addWorkdays(startWD, 4),    fin: D.addWorkdays(startWD, 27), etage:'2e',  priorite:'haute', statut:'en-cours'},
-    { id:'PRJ_C', code:'PRJ-C', nom:'Refonte ligne C',      client:'Interne',     couleur:'#1f8a4c', debut: D.nextWorkday(D.addDays(startWD,-3)), fin: D.addWorkdays(startWD, 32), etage:'1er', priorite:'moyenne', statut:'en-cours'},
-    { id:'PRJ_D', code:'PRJ-D', nom:'Série D — Export',     client:'Orion GmbH',  couleur:'#c47800', debut: D.addWorkdays(startWD, 7),    fin: D.addWorkdays(startWD, 43), etage:'2e',  priorite:'haute', statut:'planifié'},
-    { id:'PRJ_E', code:'PRJ-E', nom:'Maintenance E',        client:'Interne',     couleur:'#c43b3b', debut: D.addWorkdays(startWD, 14),   fin: D.addWorkdays(startWD, 24), etage:'1er', priorite:'basse', statut:'planifié'},
-    { id:'PRJ_F', code:'PRJ-F', nom:'Étude F — Nouveau',    client:'VertMétal',   couleur:'#0ea5b7', debut: D.addWorkdays(startWD, 18),   fin: D.addWorkdays(startWD, 50), etage:'2e',  priorite:'moyenne', statut:'planifié'},
+    { id:'PRJ_A', code:'PRJ-A', nom:'Châssis série A',      client:'Migros Industrie SA', couleur:'#2c5fb3', debut: startWD,                      fin: D.addWorkdays(startWD, 39), etage:'1er', priorite:'haute', statut:'en-cours'},
+    { id:'PRJ_B', code:'PRJ-B', nom:'Prototype B-Quantum',  client:'CERN',                couleur:'#7c3aed', debut: D.addWorkdays(startWD, 4),    fin: D.addWorkdays(startWD, 27), etage:'2e',  priorite:'haute', statut:'en-cours'},
+    { id:'PRJ_C', code:'PRJ-C', nom:'Refonte ligne C',      client:'Interne',             couleur:'#1f8a4c', debut: D.nextWorkday(D.addDays(startWD,-3)), fin: D.addWorkdays(startWD, 32), etage:'1er', priorite:'moyenne', statut:'en-cours'},
+    { id:'PRJ_D', code:'PRJ-D', nom:'Série D — Export',     client:'CFF SA',              couleur:'#c47800', debut: D.addWorkdays(startWD, 7),    fin: D.addWorkdays(startWD, 43), etage:'2e',  priorite:'haute', statut:'planifié'},
+    { id:'PRJ_E', code:'PRJ-E', nom:'Maintenance E',        client:'Interne',             couleur:'#c43b3b', debut: D.addWorkdays(startWD, 14),   fin: D.addWorkdays(startWD, 24), etage:'1er', priorite:'basse', statut:'planifié'},
+    { id:'PRJ_F', code:'PRJ-F', nom:'Étude F — Nouveau',    client:'Nestlé R&D',          couleur:'#0ea5b7', debut: D.addWorkdays(startWD, 18),   fin: D.addWorkdays(startWD, 50), etage:'2e',  priorite:'moyenne', statut:'planifié'},
   ];
 
   // Tâches pour chaque projet, affectations et machines/lieux
@@ -240,14 +268,15 @@ function seed() {
     { id:'DEP004', date: D.addWorkdays(today, 7), personneId:'P003', origineId:'L_FINI',    destinationId:'L_LIVR',    motif:'Livraison interne',    projetId:'PRJ_A', duree:'30min'},
   ];
 
-  // Commandes (avec workflow "4A")
+  // Commandes (avec workflow "4A") — montants en CHF, TVA suisse 8,1 %
   // Règle: une commande doit être validée par 4 axes/rôles avant engagement:
   // A1 Chef de projet, A2 Logistique, A3 Direction technique, A4 Contrôle budget.
+  const TVA = 8.1;
   const commandes = [
-    { id:'CMD001', ref:'CMD-2026-001', fournisseur:'AcierPlus', projetId:'PRJ_A', montant:  8400, dateDemande: D.addDays(today,-5), validations:{A1:true,A2:true,A3:true,A4:true},  statut:'engagée',   lignes:[{articleId:'ART001',qte:20}]},
-    { id:'CMD002', ref:'CMD-2026-002', fournisseur:'SoudElec',  projetId:'PRJ_C', montant:  1200, dateDemande: D.addDays(today,-3), validations:{A1:true,A2:true,A3:false,A4:false},statut:'en-attente',lignes:[{articleId:'ART005',qte:10}]},
-    { id:'CMD003', ref:'CMD-2026-003', fournisseur:'PaintCo',   projetId:'PRJ_D', montant:  3600, dateDemande: D.addDays(today,-2), validations:{A1:true,A2:false,A3:false,A4:false},statut:'en-attente',lignes:[{articleId:'ART006',qte:30}]},
-    { id:'CMD004', ref:'CMD-2026-004', fournisseur:'JointsPlus',projetId:'PRJ_C', montant:   640, dateDemande: D.addDays(today,-1), validations:{A1:false,A2:false,A3:false,A4:false},statut:'brouillon', lignes:[{articleId:'ART008',qte:40}]},
+    { id:'CMD001', ref:'CMD-2026-001', fournisseur:'Acier Romand SA', projetId:'PRJ_A', montantHT:  8400, tauxTVA: TVA, dateDemande: D.addWorkdays(today,-5), validations:{A1:true,A2:true,A3:true,A4:true},  statut:'engagée',   lignes:[{articleId:'ART001',qte:20}]},
+    { id:'CMD002', ref:'CMD-2026-002', fournisseur:'SoudElec SA',     projetId:'PRJ_C', montantHT:  1200, tauxTVA: TVA, dateDemande: D.addWorkdays(today,-3), validations:{A1:true,A2:true,A3:false,A4:false},statut:'en-attente',lignes:[{articleId:'ART005',qte:10}]},
+    { id:'CMD003', ref:'CMD-2026-003', fournisseur:'Peinture Vaud',   projetId:'PRJ_D', montantHT:  3600, tauxTVA: TVA, dateDemande: D.addWorkdays(today,-2), validations:{A1:true,A2:false,A3:false,A4:false},statut:'en-attente',lignes:[{articleId:'ART006',qte:30}]},
+    { id:'CMD004', ref:'CMD-2026-004', fournisseur:'Joints Helvetia', projetId:'PRJ_C', montantHT:   640, tauxTVA: TVA, dateDemande: D.addWorkdays(today,-1), validations:{A1:false,A2:false,A3:false,A4:false},statut:'brouillon', lignes:[{articleId:'ART008',qte:40}]},
   ];
 
   return {

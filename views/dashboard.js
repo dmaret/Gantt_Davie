@@ -62,17 +62,20 @@ App.views.dashboard = {
   renderCommandes(s) {
     if (!s.commandes.length) return `<p class="muted">Aucune commande.</p>`;
     return `<table class="data">
-      <thead><tr><th>Réf</th><th>Fournisseur</th><th>Projet</th><th>Montant</th><th>A1</th><th>A2</th><th>A3</th><th>A4</th><th>Statut</th></tr></thead>
+      <thead><tr><th>Réf</th><th>Fournisseur</th><th>Projet</th><th class="right">HT</th><th class="right">TTC</th><th>A1</th><th>A2</th><th>A3</th><th>A4</th><th>Statut</th></tr></thead>
       <tbody>
       ${s.commandes.map(c => {
         const prj = DB.projet(c.projetId);
+        const ht = c.montantHT !== undefined ? c.montantHT : (c.montant || 0);
+        const taux = c.tauxTVA !== undefined ? c.tauxTVA : 8.1;
         const cell = k => c.validations[k] ? '<span class="badge good">✓</span>' : '<span class="badge muted">·</span>';
         const statutBadge = c.statut==='engagée' ? 'good' : c.statut==='en-attente' ? 'warn' : 'muted';
         return `<tr>
           <td class="mono">${c.ref}</td>
           <td>${c.fournisseur}</td>
           <td>${prj?prj.code:'—'}</td>
-          <td class="right">${c.montant.toLocaleString('fr-CH')} CHF</td>
+          <td class="right">${Money.chf(ht)}</td>
+          <td class="right"><strong>${Money.chf(Money.ttc(ht,taux))}</strong></td>
           <td>${cell('A1')}</td><td>${cell('A2')}</td><td>${cell('A3')}</td><td>${cell('A4')}</td>
           <td><span class="badge ${statutBadge}">${c.statut}</span></td>
         </tr>`;

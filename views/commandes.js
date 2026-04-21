@@ -6,6 +6,7 @@ App.views.commandes = {
         <strong>Commandes</strong>
         <span class="muted small">Règle « ${s.regle4A.libelle} » : engagement bloqué tant que les ${s.regle4A.axes.length} axes ne sont pas tous validés.</span>
         <span class="spacer"></span>
+        <button class="btn-ghost" id="c-csv">⤓ Exporter CSV</button>
         <button class="btn" id="c-add">+ Nouvelle commande</button>
       </div>
 
@@ -19,10 +20,18 @@ App.views.commandes = {
       <div class="card"><div id="c-table"></div></div>
     `;
     document.getElementById('c-add').onclick = () => this.openForm(null);
+    document.getElementById('c-csv').onclick = () => this.exportCSV();
     this.draw();
+  },
+  migrate(c) {
+    // Compat ancienne structure sans HT/TVA
+    if (c.montantHT === undefined) { c.montantHT = c.montant || 0; }
+    if (c.tauxTVA === undefined) { c.tauxTVA = 8.1; }
+    return c;
   },
   draw() {
     const s = DB.state;
+    s.commandes.forEach(c => this.migrate(c));
     const rows = s.commandes.slice().sort((a,b)=>b.dateDemande.localeCompare(a.dateDemande)).map(c => {
       const prj = DB.projet(c.projetId);
       const axes = s.regle4A.axes;
@@ -34,11 +43,15 @@ App.views.commandes = {
         return `<td style="text-align:center"><button class="btn-ghost axe-tg" data-cmd="${c.id}" data-axe="${a.code}" title="${a.nom}" style="padding:2px 8px">${ok?'<span class="badge good">✓</span>':'<span class="badge muted">·</span>'}</button></td>`;
       };
       const statutBadge = c.statut==='engagée' ? 'good' : c.statut==='en-attente' ? 'warn' : 'muted';
+      const tva = Money.tva(c.montantHT, c.tauxTVA);
+      const ttc = Money.ttc(c.montantHT, c.tauxTVA);
       return `<tr data-id="${c.id}">
         <td class="mono">${c.ref}</td>
         <td>${c.fournisseur}</td>
         <td>${prj?`<span class="badge" style="background:${prj.couleur}22;color:${prj.couleur}">${prj.code}</span>`:'—'}</td>
-        <td class="right">${c.montant.toLocaleString('fr-CH')} CHF</td>
+        <td class="right">${Money.chf(c.montantHT)}</td>
+        <td class="right muted small">${c.tauxTVA}% · ${Money.chf(tva)}</td>
+        <td class="right"><strong>${Money.chf(ttc)}</strong></td>
         <td class="mono small">${D.fmt(c.dateDemande)}</td>
         ${axes.map(cellAxe).join('')}
         <td><div class="bar-inline ${pct<100?'warn':''}"><div class="fill" style="width:${pct}%;background:${pct===100?'var(--success)':'var(--warning)'}"></div></div></td>
@@ -53,7 +66,9 @@ App.views.commandes = {
     document.getElementById('c-table').innerHTML = `
       <table class="data">
         <thead><tr>
-          <th>Réf</th><th>Fournisseur</th><th>Projet</th><th class="right">Montant</th><th>Demande</th>
+          <th>Réf</th><th>Fournisseur</th><th>Projet</th>
+          <th class="right">HT</th><th class="right">TVA</th><th class="right">TTC</th>
+          <th>Demande</th>
           ${DB.state.regle4A.axes.map(a=>`<th title="${a.nom}">${a.code}</th>`).join('')}
           <th>Progression</th><th>Statut</th><th></th>
         </tr></thead>
@@ -100,8 +115,10 @@ App.views.commandes = {
       </div>
       <div class="row">
         <div class="field"><label>Fournisseur</label><input id="cf-four" value="${c.fournisseur||''}"></div>
-        <div class="field"><label>Montant (CHF)</label><input type="number" id="cf-mont" value="${c.montant||0}"></div>
+        <div class="field"><label>Montant HT (CHF)</label><input type="number" step="0.01" id="cf-ht" value="${c.montantHT||0}"></div>
+        <div class="field"><label>Taux TVA (%)</label><input type="number" step="0.1" id="cf-tva" value="${c.tauxTVA!==undefined?c.tauxTVA:8.1}"></div>
       </div>
+      <div class="muted small" id="cf-ttc-line" style="margin:-6px 0 10px 0">TVA · TTC calculés automatiquement</div>
       <div class="field"><label>Projet</label>
         <select id="cf-prj">${s.projets.map(p=>`<option value="${p.id}" ${p.id===c.projetId?'selected':''}>${p.code} — ${p.nom}</option>`).join('')}</select>
       </div>
@@ -125,12 +142,23 @@ App.views.commandes = {
       c.lignes.push({ articleId: s.stock[0].id, qte: 1 });
       lignesEl.insertAdjacentHTML('beforeend', this.ligneRow(c.lignes[idx], idx));
     };
+    const refreshTTC = () => {
+      const ht = +document.getElementById('cf-ht').value;
+      const taux = +document.getElementById('cf-tva').value;
+      document.getElementById('cf-ttc-line').textContent = `TVA ${taux}% = ${Money.chf(Money.tva(ht,taux))} · TTC = ${Money.chf(Money.ttc(ht,taux))}`;
+    };
+    document.getElementById('cf-ht').oninput = refreshTTC;
+    document.getElementById('cf-tva').oninput = refreshTTC;
+    refreshTTC();
+
     document.getElementById('cf-cancel').onclick = () => App.closeModal();
     document.getElementById('cf-save').onclick = () => {
       c.ref = document.getElementById('cf-ref').value.trim();
       c.dateDemande = document.getElementById('cf-date').value;
       c.fournisseur = document.getElementById('cf-four').value.trim();
-      c.montant = +document.getElementById('cf-mont').value;
+      c.montantHT = +document.getElementById('cf-ht').value;
+      c.tauxTVA = +document.getElementById('cf-tva').value;
+      delete c.montant; // ancienne clé obsolète
       c.projetId = document.getElementById('cf-prj').value;
       document.querySelectorAll('[data-axe]').forEach(cb => c.validations[cb.dataset.axe] = cb.checked);
       // Collect lines
@@ -150,6 +178,26 @@ App.views.commandes = {
       s.commandes = s.commandes.filter(x => x.id !== c.id);
       DB.save(); App.closeModal(); App.refresh();
     };
+  },
+  exportCSV() {
+    const s = DB.state;
+    const head = ['Réf','Fournisseur','Projet','Date demande','Montant HT','Taux TVA','TVA','TTC','Statut','A1','A2','A3','A4','Bloquée'];
+    const rows = [head];
+    s.commandes.forEach(c => {
+      this.migrate(c);
+      const prj = DB.projet(c.projetId);
+      const axes = s.regle4A.axes;
+      const blocked = axes.some(a => !c.validations[a.code]) && c.statut !== 'brouillon';
+      rows.push([
+        c.ref, c.fournisseur, prj?prj.code:'', c.dateDemande,
+        c.montantHT, c.tauxTVA, Money.tva(c.montantHT,c.tauxTVA), Money.ttc(c.montantHT,c.tauxTVA),
+        c.statut,
+        c.validations.A1?'OUI':'', c.validations.A2?'OUI':'', c.validations.A3?'OUI':'', c.validations.A4?'OUI':'',
+        blocked?'OUI':''
+      ]);
+    });
+    CSV.download('commandes-' + D.today() + '.csv', rows);
+    App.toast('Export CSV téléchargé','success');
   },
   ligneRow(l, i) {
     const s = DB.state;

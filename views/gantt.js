@@ -38,6 +38,7 @@ App.views.gantt = {
           <button class="btn-ghost" id="g-next">▶</button>
           <button class="btn-ghost" id="g-today">Aujourd'hui</button>
           <span class="spacer"></span>
+          <button class="btn-ghost" id="g-csv">⤓ Exporter CSV</button>
           <button class="btn" id="g-add">+ Nouvelle tâche</button>
         </div>
         <div class="gantt-scroll"><div id="g-table"></div></div>
@@ -59,6 +60,19 @@ App.views.gantt = {
     document.getElementById('g-next').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, 14); this.draw(); };
     document.getElementById('g-today').onclick = () => { st.rangeStart = D.addDays(D.today(), -7); this.draw(); };
     document.getElementById('g-add').onclick = () => this.openTacheForm(null);
+    document.getElementById('g-csv').onclick = () => {
+      const head = ['Projet','Tâche','Début','Fin','Durée j. ouvrés','Lieu','Machine','Assignés','Avancement','Jalon'];
+      const rows = [head];
+      DB.state.taches.slice().sort((a,b)=>a.projetId.localeCompare(b.projetId)||a.debut.localeCompare(b.debut)).forEach(t => {
+        const prj = DB.projet(t.projetId);
+        const lieu = DB.lieu(t.lieuId);
+        const mach = DB.machine(t.machineId);
+        const pers = (t.assignes||[]).map(pid => App.personneLabel(DB.personne(pid))).join(', ');
+        rows.push([prj?prj.code:'', t.nom, t.debut, t.fin, D.workdaysBetween(t.debut,t.fin), lieu?lieu.nom:'', mach?mach.nom:'', pers, (t.avancement||0)+'%', t.jalon?'OUI':'']);
+      });
+      CSV.download('planning-' + D.today() + '.csv', rows);
+      App.toast('Export CSV téléchargé','success');
+    };
 
     this.draw();
   },
