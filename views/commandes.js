@@ -24,10 +24,15 @@ App.views.commandes = {
     this.draw();
   },
   migrate(c) {
-    // Compat ancienne structure sans HT/TVA
     if (c.montantHT === undefined) { c.montantHT = c.montant || 0; }
     if (c.tauxTVA === undefined) { c.tauxTVA = 8.1; }
+    if (!c.validationLog) c.validationLog = [];
     return c;
+  },
+  currentUser() { return localStorage.getItem('atelier_user') || 'Anonyme'; },
+  setUser() {
+    const u = prompt('Votre nom (pour signer les validations 4A) :', this.currentUser());
+    if (u && u.trim()) { localStorage.setItem('atelier_user', u.trim()); App.toast('Signé comme ' + u.trim(), 'success'); }
   },
   draw() {
     const s = DB.state;
@@ -77,12 +82,14 @@ App.views.commandes = {
     `;
     document.querySelectorAll('.axe-tg').forEach(b => b.onclick = () => {
       const c = DB.state.commandes.find(x => x.id === b.dataset.cmd);
-      c.validations[b.dataset.axe] = !c.validations[b.dataset.axe];
+      this.migrate(c);
+      const axe = b.dataset.axe;
+      c.validations[axe] = !c.validations[axe];
+      c.validationLog.push({ axe, action: c.validations[axe]?'validé':'invalidé', valideur: this.currentUser(), date: new Date().toISOString() });
       const axes = DB.state.regle4A.axes;
       if (axes.every(a => c.validations[a.code])) {
         if (c.statut === 'brouillon') c.statut = 'en-attente';
       } else if (c.statut === 'engagée') {
-        // invalidation after engagement
         c.statut = 'en-attente';
       } else if (c.statut === 'en-attente' && Object.values(c.validations).every(v=>!v)) {
         c.statut = 'brouillon';
@@ -91,10 +98,12 @@ App.views.commandes = {
     });
     document.querySelectorAll('[data-engage]').forEach(b => b.onclick = () => {
       const c = DB.state.commandes.find(x => x.id === b.dataset.engage);
+      this.migrate(c);
       const axes = DB.state.regle4A.axes;
       const missing = axes.filter(a => !c.validations[a.code]);
       if (missing.length) { App.toast(`Bloqué · manque ${missing.map(a=>a.code).join(', ')}`, 'error'); return; }
       c.statut = 'engagée';
+      c.validationLog.push({ axe: '—', action: 'engagement', valideur: this.currentUser(), date: new Date().toISOString() });
       DB.save(); this.draw();
       App.toast(`Commande ${c.ref} engagée`,'success');
     });
@@ -125,10 +134,12 @@ App.views.commandes = {
       <h3 style="margin-top:10px">Lignes</h3>
       <div id="cf-lignes">${(c.lignes||[]).map((l,i)=>this.ligneRow(l,i)).join('')}</div>
       <button class="btn btn-secondary" id="cf-add-ligne" style="margin-top:6px">+ Ligne</button>
-      <h3 style="margin-top:14px">Validations 4A</h3>
+      <h3 style="margin-top:14px">Validations 4A <span class="muted small">· signé par <strong>${this.currentUser()}</strong> <button class="btn-ghost" id="cf-user" style="padding:1px 8px">changer</button></span></h3>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         ${s.regle4A.axes.map(a => `<label class="chip"><input type="checkbox" data-axe="${a.code}" ${c.validations[a.code]?'checked':''}> ${a.code} · ${a.nom}</label>`).join('')}
       </div>
+      ${(c.validationLog||[]).length ? `<h3 style="margin-top:14px">Historique (${c.validationLog.length})</h3>
+      <ul class="list" style="max-height:160px;overflow:auto">${c.validationLog.slice().reverse().map(l => `<li style="font-size:12px"><div><strong>${l.axe}</strong> · ${l.action}</div><div class="muted small">${l.valideur} · ${new Date(l.date).toLocaleString('fr-CH')}</div></li>`).join('')}</ul>` : ''}
     `;
     const foot = `${!isNew?'<button class="btn btn-danger" id="cf-del">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="cf-cancel">Annuler</button>
@@ -150,6 +161,8 @@ App.views.commandes = {
     document.getElementById('cf-ht').oninput = refreshTTC;
     document.getElementById('cf-tva').oninput = refreshTTC;
     refreshTTC();
+    const userBtn = document.getElementById('cf-user');
+    if (userBtn) userBtn.onclick = () => { this.setUser(); App.closeModal(); this.openForm(id); };
 
     document.getElementById('cf-cancel').onclick = () => App.closeModal();
     document.getElementById('cf-save').onclick = () => {
