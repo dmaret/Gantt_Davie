@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atelier — Planification</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <span class="title">Atelier · Planification</span>
+    </div>
+    <nav class="nav">
+      <button data-view="dashboard" class="nav-btn active">Tableau de bord</button>
+      <button data-view="gantt" class="nav-btn">Gantt</button>
+      <button data-view="personnes" class="nav-btn">Personnes</button>
+      <button data-view="lieux" class="nav-btn">Lieux</button>
+      <button data-view="projets" class="nav-btn">Projets</button>
+      <button data-view="stock" class="nav-btn">Stock</button>
+      <button data-view="deplacements" class="nav-btn">Déplacements</button>
+      <button data-view="commandes" class="nav-btn">Commandes</button>
+    </nav>
+    <div class="actions">
+      <input type="file" id="import-file" accept=".json" hidden>
+      <button id="btn-import" class="btn-ghost" title="Importer un JSON">Importer</button>
+      <button id="btn-export" class="btn-ghost" title="Exporter en JSON">Exporter</button>
+      <button id="btn-reset" class="btn-ghost" title="Réinitialiser aux données de démonstration">Reset</button>
+      <button id="btn-theme" class="btn-ghost" title="Basculer thème">☾</button>
+    </div>
+  </header>
+
+  <main id="view-root"></main>
+
+  <div id="modal-root" class="modal-root hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <header class="modal-head">
+        <h3 id="modal-title">Titre</h3>
+        <button class="modal-close" aria-label="Fermer">×</button>
+      </header>
+      <div class="modal-body" id="modal-body"></div>
+      <footer class="modal-foot" id="modal-foot"></footer>
+    </div>
+  </div>
+
+  <div id="toast-root" class="toast-root"></div>
+</div>
+
+<script src="data.js"></script>
+<script src="views/dashboard.js"></script>
+<script src="views/gantt.js"></script>
+<script src="views/personnes.js"></script>
+<script src="views/lieux.js"></script>
+<script src="views/projets.js"></script>
+<script src="views/stock.js"></script>
+<script src="views/deplacements.js"></script>
+<script src="views/commandes.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
