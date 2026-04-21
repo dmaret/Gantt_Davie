@@ -39,11 +39,28 @@ const D = {
   addDays(s, n) { const d = D.parse(s); d.setDate(d.getDate()+n); return D.iso(d); },
   diffDays(a, b) { return Math.round((D.parse(b)-D.parse(a))/86400000); },
   isWeekend(s) { const d = D.parse(s).getDay(); return d===0 || d===6; },
+  isWorkday(s) { return !D.isWeekend(s); },
+  // Ajuste au premier jour ouvré >= s
+  nextWorkday(s) { let cur = s; while (D.isWeekend(cur)) cur = D.addDays(cur, 1); return cur; },
+  // Renvoie la date située n jours ouvrés après s (s compte comme jour 0).
+  // Ex: addWorkdays(lundi, 6) = mardi suivant (donc durée 7 jours ouvrés du lundi au mardi).
+  addWorkdays(s, n) {
+    let cur = D.nextWorkday(s);
+    let added = 0;
+    while (added < n) {
+      cur = D.addDays(cur, 1);
+      if (!D.isWeekend(cur)) added++;
+    }
+    return cur;
+  },
+  // Nombre de jours ouvrés entre a et b (inclusif)
   weekdaysBetween(a,b) {
+    if (a > b) return 0;
     let n=0, cur=a;
     while (cur <= b) { if (!D.isWeekend(cur)) n++; cur = D.addDays(cur,1); }
     return n;
   },
+  workdaysBetween(a,b) { return D.weekdaysBetween(a,b); },
   fmt(s) {
     const d = D.parse(s);
     return d.toLocaleDateString('fr-FR', { day:'2-digit', month:'short' });
@@ -131,14 +148,15 @@ function seed() {
     });
   }
 
-  // 6 projets actifs
+  // 6 projets actifs — toutes les durées en jours ouvrés
+  const startWD = D.nextWorkday(start);
   const projets = [
-    { id:'PRJ_A', code:'PRJ-A', nom:'Châssis série A',      client:'Dupuis SA',   couleur:'#2c5fb3', debut: start,                    fin: D.addDays(start, 55), etage:'1er', priorite:'haute', statut:'en-cours'},
-    { id:'PRJ_B', code:'PRJ-B', nom:'Prototype B-Quantum',  client:'Nexalys',     couleur:'#7c3aed', debut: D.addDays(start, 5),      fin: D.addDays(start, 38), etage:'2e',  priorite:'haute', statut:'en-cours'},
-    { id:'PRJ_C', code:'PRJ-C', nom:'Refonte ligne C',      client:'Interne',     couleur:'#1f8a4c', debut: D.addDays(start, -3),     fin: D.addDays(start, 45), etage:'1er', priorite:'moyenne', statut:'en-cours'},
-    { id:'PRJ_D', code:'PRJ-D', nom:'Série D — Export',     client:'Orion GmbH',  couleur:'#c47800', debut: D.addDays(start, 10),     fin: D.addDays(start, 60), etage:'2e',  priorite:'haute', statut:'planifié'},
-    { id:'PRJ_E', code:'PRJ-E', nom:'Maintenance E',        client:'Interne',     couleur:'#c43b3b', debut: D.addDays(start, 20),     fin: D.addDays(start, 35), etage:'1er', priorite:'basse', statut:'planifié'},
-    { id:'PRJ_F', code:'PRJ-F', nom:'Étude F — Nouveau',    client:'VertMétal',   couleur:'#0ea5b7', debut: D.addDays(start, 25),     fin: D.addDays(start, 70), etage:'2e',  priorite:'moyenne', statut:'planifié'},
+    { id:'PRJ_A', code:'PRJ-A', nom:'Châssis série A',      client:'Dupuis SA',   couleur:'#2c5fb3', debut: startWD,                      fin: D.addWorkdays(startWD, 39), etage:'1er', priorite:'haute', statut:'en-cours'},
+    { id:'PRJ_B', code:'PRJ-B', nom:'Prototype B-Quantum',  client:'Nexalys',     couleur:'#7c3aed', debut: D.addWorkdays(startWD, 4),    fin: D.addWorkdays(startWD, 27), etage:'2e',  priorite:'haute', statut:'en-cours'},
+    { id:'PRJ_C', code:'PRJ-C', nom:'Refonte ligne C',      client:'Interne',     couleur:'#1f8a4c', debut: D.nextWorkday(D.addDays(startWD,-3)), fin: D.addWorkdays(startWD, 32), etage:'1er', priorite:'moyenne', statut:'en-cours'},
+    { id:'PRJ_D', code:'PRJ-D', nom:'Série D — Export',     client:'Orion GmbH',  couleur:'#c47800', debut: D.addWorkdays(startWD, 7),    fin: D.addWorkdays(startWD, 43), etage:'2e',  priorite:'haute', statut:'planifié'},
+    { id:'PRJ_E', code:'PRJ-E', nom:'Maintenance E',        client:'Interne',     couleur:'#c43b3b', debut: D.addWorkdays(startWD, 14),   fin: D.addWorkdays(startWD, 24), etage:'1er', priorite:'basse', statut:'planifié'},
+    { id:'PRJ_F', code:'PRJ-F', nom:'Étude F — Nouveau',    client:'VertMétal',   couleur:'#0ea5b7', debut: D.addWorkdays(startWD, 18),   fin: D.addWorkdays(startWD, 50), etage:'2e',  priorite:'moyenne', statut:'planifié'},
   ];
 
   // Tâches pour chaque projet, affectations et machines/lieux
@@ -158,10 +176,11 @@ function seed() {
   ];
 
   projets.forEach((prj, pi) => {
-    let cur = prj.debut;
+    let cur = D.nextWorkday(prj.debut);
     tpl.forEach((t, ti) => {
       if (D.parse(cur) > D.parse(prj.fin)) return;
-      const fin = D.addDays(cur, t.duree);
+      // Durée en jours ouvrés : t.duree inclut le jour de début → fin = debut + (duree-1)
+      const fin = D.addWorkdays(cur, Math.max(0, t.duree - 1));
       // Choisit 1-3 personnes avec la compétence si possible
       const cand = personnes.filter(p => p.competences.includes(t.comp));
       const team = [];
@@ -183,7 +202,8 @@ function seed() {
         jalon: false,
         dependances: ti > 0 ? ['T' + String(tCount-1).padStart(4,'0')] : [],
       });
-      cur = D.addDays(fin, 1);
+      // Prochain jour ouvré après fin
+      cur = D.addWorkdays(fin, 1);
     });
     // jalon final
     taches.push({
@@ -212,12 +232,12 @@ function seed() {
     { id:'ART012', ref:'PRODUIT-NETT', nom:'Solvant nettoyage',        unite:'L',  quantite:38, seuilAlerte:15, lieuId:'S_REZ_CHIM',projetsLies:[]},
   ];
 
-  // Déplacements prévus
+  // Déplacements prévus (dates sur jours ouvrés)
   const deplacements = [
-    { id:'DEP001', date: D.addDays(today, 2), personneId:'P001', origineId:'L_ATEL_2A', destinationId:'L_ATEL_1A', motif:'Installation machine', projetId:'PRJ_A', duree:'2h'},
-    { id:'DEP002', date: D.addDays(today, 3), personneId:'P010', origineId:'L_MONT_1',  destinationId:'L_FINI',    motif:'Transfert pièces',     projetId:'PRJ_C', duree:'1h'},
-    { id:'DEP003', date: D.addDays(today, 5), personneId:'P020', origineId:'L_ATEL_2B', destinationId:'L_ATEL_1B', motif:'Entretien',            projetId:null,    duree:'3h'},
-    { id:'DEP004', date: D.addDays(today, 7), personneId:'P003', origineId:'L_FINI',    destinationId:'L_LIVR',    motif:'Livraison interne',    projetId:'PRJ_A', duree:'30min'},
+    { id:'DEP001', date: D.addWorkdays(today, 2), personneId:'P001', origineId:'L_ATEL_2A', destinationId:'L_ATEL_1A', motif:'Installation machine', projetId:'PRJ_A', duree:'2h'},
+    { id:'DEP002', date: D.addWorkdays(today, 3), personneId:'P010', origineId:'L_MONT_1',  destinationId:'L_FINI',    motif:'Transfert pièces',     projetId:'PRJ_C', duree:'1h'},
+    { id:'DEP003', date: D.addWorkdays(today, 5), personneId:'P020', origineId:'L_ATEL_2B', destinationId:'L_ATEL_1B', motif:'Entretien',            projetId:null,    duree:'3h'},
+    { id:'DEP004', date: D.addWorkdays(today, 7), personneId:'P003', origineId:'L_FINI',    destinationId:'L_LIVR',    motif:'Livraison interne',    projetId:'PRJ_A', duree:'30min'},
   ];
 
   // Commandes (avec workflow "4A")

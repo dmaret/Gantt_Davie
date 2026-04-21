@@ -5,7 +5,8 @@ App.views.dashboard = {
     const today = D.today();
 
     const projetsEnCours = s.projets.filter(p => p.statut === 'en-cours').length;
-    const tachesSemaine = s.taches.filter(t => t.fin >= today && t.debut <= D.addDays(today,7)).length;
+    const horizon = D.addWorkdays(today, 7);
+    const tachesSemaine = s.taches.filter(t => t.fin >= today && t.debut <= horizon).length;
     const stockBas = s.stock.filter(x => x.quantite < x.seuilAlerte).length;
     const cmdBloq = s.commandes.filter(c => c.statut !== 'engagée').length;
 
@@ -13,7 +14,7 @@ App.views.dashboard = {
       <div class="grid grid-4">
         <div class="kpi"><div class="label">Personnes</div><div class="value">${s.personnes.length}</div><div class="sub">dans ${s.lieux.filter(l=>l.type==='production').length} lieux de production</div></div>
         <div class="kpi"><div class="label">Projets en cours</div><div class="value">${projetsEnCours}</div><div class="sub">${s.projets.length} au total</div></div>
-        <div class="kpi ${tachesSemaine>20?'warn':''}"><div class="label">Tâches 7 jours</div><div class="value">${tachesSemaine}</div><div class="sub">à venir ou en cours</div></div>
+        <div class="kpi ${tachesSemaine>20?'warn':''}"><div class="label">Tâches 7 j. ouvrés</div><div class="value">${tachesSemaine}</div><div class="sub">à venir ou en cours</div></div>
         <div class="kpi ${stockBas>0?'bad':'good'}"><div class="label">Alertes stock</div><div class="value">${stockBas}</div><div class="sub">sous seuil</div></div>
       </div>
 
@@ -31,7 +32,7 @@ App.views.dashboard = {
 
       <div class="grid grid-2" style="margin-top:16px">
         <div class="card">
-          <h2>🗓 Prochaines tâches (7 jours)</h2>
+          <h2>🗓 Prochaines tâches (7 jours ouvrés)</h2>
           ${this.renderNextTasks(s, today)}
         </div>
         <div class="card">
@@ -41,7 +42,7 @@ App.views.dashboard = {
       </div>
 
       <div class="card" style="margin-top:16px">
-        <h2>📊 Charge par lieu de production (semaine)</h2>
+        <h2>📊 Charge par lieu de production (5 jours ouvrés)</h2>
         ${this.renderChargeLieux(s, today)}
       </div>
     `;
@@ -81,7 +82,7 @@ App.views.dashboard = {
 
   renderNextTasks(s, today) {
     const ts = s.taches
-      .filter(t => t.fin >= today && t.debut <= D.addDays(today, 7) && !t.jalon)
+      .filter(t => t.fin >= today && t.debut <= D.addWorkdays(today, 7) && !t.jalon)
       .sort((a,b) => a.debut.localeCompare(b.debut))
       .slice(0, 8);
     if (!ts.length) return `<p class="muted">Rien à venir cette semaine.</p>`;
@@ -120,10 +121,15 @@ App.views.dashboard = {
 
   renderChargeLieux(s, today) {
     const lieuxProd = s.lieux.filter(l => l.type === 'production');
-    const end = D.addDays(today, 7);
+    const end = D.addWorkdays(today, 4); // 5 jours ouvrés (jour 0 inclus + 4)
     const rows = lieuxProd.map(l => {
       const tasks = s.taches.filter(t => t.lieuId === l.id && t.fin >= today && t.debut <= end);
-      const jours = tasks.reduce((n,t) => n + Math.max(1, D.diffDays(t.debut, t.fin)+1), 0);
+      // Calcul en jours ouvrés seulement
+      const jours = tasks.reduce((n,t) => {
+        const a = t.debut < today ? today : t.debut;
+        const b = t.fin > end ? end : t.fin;
+        return n + D.workdaysBetween(a, b);
+      }, 0);
       const capa = l.capacite * 5; // 5 jours ouvrés
       const pct = Math.min(100, Math.round(jours / capa * 100));
       const cls = pct > 90 ? 'bad' : pct > 70 ? 'warn' : '';

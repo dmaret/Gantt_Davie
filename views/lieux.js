@@ -22,7 +22,7 @@ App.views.lieux = {
               ${prod.map(l => {
                 const machines = s.machines.filter(m => m.lieuId === l.id).map(m => `<span class="chip">${m.nom}</span>`).join('') || '<span class="muted small">—</span>';
                 const today = D.today();
-                const ts = s.taches.filter(t => t.lieuId === l.id && t.fin >= today && t.debut <= D.addDays(today,7)).length;
+                const ts = s.taches.filter(t => t.lieuId === l.id && t.fin >= today && t.debut <= D.addWorkdays(today,7)).length;
                 return `<tr data-id="${l.id}" style="cursor:pointer"><td><strong>${l.nom}</strong></td><td>${l.etage}</td><td>${l.capacite}</td><td>${machines}</td><td>${ts}</td></tr>`;
               }).join('')}
             </tbody>

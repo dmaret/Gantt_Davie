@@ -25,7 +25,7 @@ App.views.personnes = {
     if (st.roleFilter) list = list.filter(p => p.role === st.roleFilter);
     if (st.lieuFilter) list = list.filter(p => p.lieuPrincipalId === st.lieuFilter);
 
-    const today = D.today(), end = D.addDays(today, 7);
+    const today = D.today(), end = D.addWorkdays(today, 4); // 5 jours ouvrés
     const rows = list.map(p => {
       const ts = s.taches.filter(t => (t.assignes||[]).includes(p.id) && t.fin >= today && t.debut <= end);
       const heures = ts.reduce((n,t) => n + (D.weekdaysBetween(t.debut > today ? t.debut : today, t.fin < end ? t.fin : end)) * 7, 0);

@@ -203,10 +203,16 @@ App.views.gantt = {
         const deltaDays = Math.round(moved / cellW);
         if (deltaDays !== 0) {
           const t = DB.tache(el.dataset.tid);
-          t.debut = D.addDays(t.debut, deltaDays);
-          t.fin = D.addDays(t.fin, deltaDays);
+          const subWorkdays = (iso, n) => {
+            let cur = iso; let done = 0;
+            while (done < n) { cur = D.addDays(cur, -1); if (!D.isWeekend(cur)) done++; }
+            return cur;
+          };
+          const moveWD = (iso, n) => n >= 0 ? D.addWorkdays(iso, n) : subWorkdays(iso, -n);
+          t.debut = moveWD(t.debut, deltaDays);
+          t.fin   = moveWD(t.fin,   deltaDays);
           DB.save();
-          App.toast(`Tâche déplacée de ${deltaDays > 0 ? '+' : ''}${deltaDays} j`, 'success');
+          App.toast(`Tâche déplacée de ${deltaDays > 0 ? '+' : ''}${deltaDays} j ouvrés`, 'success');
           this.draw();
         }
       };
