@@ -42,6 +42,39 @@ Cette app est déployée automatiquement depuis la branche `main`.
 - **Suggestions d'affectation** : score combinant compétence (+100), charge (-5/h), proximité géographique (+10)
 - **Prédiction fin de projet** par ratio de vélocité (temps consommé / avancement)
 - **Alertes proactives** : stock vs BOM, conflits machine, surcharge personne, retard projet
+- **Notifications en tête** : cloche 🔔 avec badge compteur (rouge si critique), rafraîchie toutes les 30 s
+
+### Multi-utilisateur léger
+Sélecteur d'utilisateur dans la topbar. Chaque utilisateur se voit attribuer les **axes 4A qu'il est autorisé à signer**. Les chips non autorisés apparaissent désactivés et grisés. L'historique de validation enregistre le **nom du signataire** et l'**horodatage ISO** pour chaque action.
+
+Utilisateurs par défaut :
+
+| ID | Nom | Rôle | Axes autorisés |
+|---|---|---|---|
+| U_CP | Alice Chef-Projet | Chef de projet | A1 |
+| U_LOG | Bruno Logistique | Logistique | A2 |
+| U_TECH | Carla Tech | Direction technique | A3 |
+| U_BUD | David Budget | Contrôle budget | A4 |
+| U_DIR | Elena Direction | Direction | A1, A2, A3, A4 |
+
+Configurable dans `state.utilisateurs`.
+
+### Rapport PDF projet
+Bouton **⎙ Rapport** sur chaque carte projet. Ouvre une fenêtre A4 paysage avec :
+- KPI (avancement, tâches, budget HT, budget TTC)
+- Prédiction de fin avec écart en jours et vitesse d'exécution
+- Gantt simplifié en barres horizontales
+- BOM avec ruptures détectées
+- Liste des commandes avec totaux
+- Impression automatique déclenchée au chargement
+
+### Ma semaine (planning personnel)
+Bouton 📅 sur chaque ligne de la vue **Personnes**. Modale récapitulative avec :
+- Cette semaine + semaine prochaine
+- Tâches colorées par projet avec dates et lieux
+- Déplacements prévus
+- Charge en heures avec barre de remplissage
+- Imprimable pour affichage atelier
 
 ### Workflow 4A (« 4A n'engage pas la commande »)
 Une commande doit être validée par les 4 axes obligatoires avant engagement :
@@ -69,6 +102,8 @@ Montants affichés en **CHF** (format suisse). TVA au taux standard **8.1 %** av
 - **Importer** remplace les données par un fichier JSON
 - **Reset** recharge le jeu de démonstration
 - **Impression** (⎙) génère un PDF A4 paysage via `@media print`
+- **Rapport projet** (⎙ Rapport sur une carte) génère un PDF dédié par projet
+- **Export CSV** disponible pour commandes, machines, stock, planning
 
 ### Mode tablette
 Bouton 📋 : interface agrandie en lecture seule avec rafraîchissement automatique, pour écran d'atelier.
@@ -122,7 +157,7 @@ views/
   whatif.js         Snapshot + diff + commit
 ```
 
-**Persistance** : `localStorage['atelier_plan_v3']`. Le numéro de version (`v3`) est incrémenté lorsque le modèle de données évolue, pour invalider les anciennes sauvegardes.
+**Persistance** : `localStorage['atelier_plan_v3']`. Le numéro de version (`v3`) est incrémenté lorsque le modèle de données évolue, pour invalider les anciennes sauvegardes. Les ajouts rétrocompatibles passent par `DB.migrate()` afin de préserver les données existantes.
 
 **Dates en UTC** : toutes les manipulations de date passent par `D.parse`, `D.iso`, `D.addDays`, etc. qui utilisent `Date.UTC()` et `getUTCDate()`. Cela évite les décalages d'un jour lors d'un changement d'heure ou d'un fuseau non-UTC (bug historique en CEST/Zurich).
 
