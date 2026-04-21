@@ -252,8 +252,17 @@ table.data tr:hover td { background: var(--surface-2); }
 .gantt-cell.label.group { background: var(--surface-2); font-weight: 600; }
 .gantt-cell.head { background: var(--surface-2); font-weight: 600; color: var(--text-muted); position: sticky; top: 0; z-index: 3; border-bottom: 1px solid var(--border); }
 .gantt-cell.head.label { z-index: 4; }
-.gantt-cell.day-weekend { background: var(--surface-2); }
+.gantt-cell.day-weekend { background: repeating-linear-gradient(45deg, var(--surface-2) 0 4px, transparent 4px 8px), var(--surface-2); }
 .gantt-cell.day-today { background: var(--primary-weak); }
+.gantt-cell.day-monweek { border-left: 2px solid var(--border); }
+.gantt-cell.head.day-monweek { border-left: 2px solid var(--text-muted); }
+.gantt-cell.head.day-cell { padding: 2px 0 !important; text-align: center; line-height: 1.1; }
+.gantt-cell.head.day-cell .day-num { font-size: 11px; font-weight: 600; color: var(--text); }
+.gantt-cell.head.day-cell .day-num .day-month { color: var(--text-muted); font-size: 9px; font-weight: 500; }
+.gantt-cell.head.day-cell .day-dow { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.gantt-cell.head.day-cell.day-weekend .day-num, .gantt-cell.head.day-cell.day-weekend .day-dow { opacity: 0.45; }
+.gantt-cell.head.day-cell.day-today { background: var(--primary-weak); }
+.gantt-cell.head.day-cell.day-today .day-num { color: var(--primary); }
 .gantt-bar {
   position: absolute;
   top: 6px; bottom: 6px;

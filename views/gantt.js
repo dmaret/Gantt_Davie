@@ -146,16 +146,30 @@ App.views.gantt = {
     const groups = this.buildGroups();
     const CELL_W = 28;  // largeur jour
     const LABEL_W = 220;
-    const bgRow = d => D.isWeekend(d) ? 'day-weekend' : (d === D.today() ? 'day-today' : '');
+    const dowLetters = ['D','L','M','M','J','V','S']; // dim=0, lun=1, …, sam=6
+    const dayClasses = d => {
+      const dt = D.parse(d);
+      const dow = dt.getUTCDay();
+      const cls = [];
+      if (dow === 0 || dow === 6) cls.push('day-weekend');
+      if (dow === 1) cls.push('day-monweek'); // séparateur gauche début de semaine
+      if (d === D.today()) cls.push('day-today');
+      return cls.join(' ');
+    };
 
-    // Header
+    // Header (une cellule par jour : numéro + lettre du jour)
     const headerCells = [];
     headerCells.push(`<div class="gantt-cell head label">Élément</div>`);
     for (let i=0; i<days; i++) {
       const d = D.addDays(start, i);
       const dt = D.parse(d);
-      const show = i===0 || dt.getUTCDate()===1 || dt.getUTCDay()===1;
-      headerCells.push(`<div class="gantt-cell head ${bgRow(d)}" style="padding:4px 2px;font-size:10px">${show ? dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',timeZone:'UTC'}) : ''}</div>`);
+      const dow = dt.getUTCDay();
+      const dayNum = dt.getUTCDate();
+      const firstOfMonth = dayNum === 1;
+      headerCells.push(`<div class="gantt-cell head day-cell ${dayClasses(d)}">
+        <div class="day-num">${dayNum}${firstOfMonth ? '<span class="day-month">/' + (dt.getUTCMonth()+1) + '</span>' : ''}</div>
+        <div class="day-dow">${dowLetters[dow]}</div>
+      </div>`);
     }
 
     // Body rows
@@ -163,12 +177,12 @@ App.views.gantt = {
     groups.forEach(g => {
       // entête de groupe
       rows.push(`<div class="gantt-cell label group" style="grid-column:1/span 1">${g.label}</div>`);
-      for (let i=0; i<days; i++) rows.push(`<div class="gantt-cell group ${bgRow(D.addDays(start,i))}"></div>`);
+      for (let i=0; i<days; i++) rows.push(`<div class="gantt-cell group ${dayClasses(D.addDays(start,i))}"></div>`);
 
       g.items.forEach(it => {
         const t = it.tache;
         const rowCells = [`<div class="gantt-cell label" title="${t.nom}">${t.nom}</div>`];
-        for (let i=0; i<days; i++) rowCells.push(`<div class="gantt-cell ${bgRow(D.addDays(start,i))}"></div>`);
+        for (let i=0; i<days; i++) rowCells.push(`<div class="gantt-cell ${dayClasses(D.addDays(start,i))}"></div>`);
         rows.push(...rowCells);
 
         // Placement de la barre par overlay position-absolute dans le label row : on va utiliser le premier cell de ligne comme conteneur sticky mais les barres comme éléments absolus à l'intérieur de la grille globale via un wrap. Simplification : on injecte la barre dans la 2e cellule (premier jour visible) en position absolue relative au .gantt-table.
