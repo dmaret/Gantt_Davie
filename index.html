@@ -26,6 +26,8 @@
       <button data-view="bom" class="nav-btn">BOM</button>
       <button data-view="deplacements" class="nav-btn">Déplacements</button>
       <button data-view="commandes" class="nav-btn">Commandes</button>
+      <button data-view="capacite" class="nav-btn">Capacité</button>
+      <button data-view="whatif" class="nav-btn">What-if</button>
     </nav>
     <div class="actions">
       <input type="file" id="import-file" accept=".json" hidden>
@@ -33,6 +35,7 @@
       <button id="btn-export" class="btn-ghost" title="Exporter en JSON">Exporter</button>
       <button id="btn-print" class="btn-ghost" title="Imprimer la vue (PDF)">⎙</button>
       <button id="btn-help" class="btn-ghost" title="Raccourcis clavier (?)">?</button>
+      <button id="btn-tablette" class="btn-ghost" title="Mode tablette atelier (lecture seule)">📋</button>
       <button id="btn-reset" class="btn-ghost" title="Réinitialiser aux données de démonstration">Reset</button>
       <button id="btn-theme" class="btn-ghost" title="Basculer thème">☾</button>
     </div>
@@ -68,5 +71,7 @@
 <script src="views/bom.js"></script>
 <script src="views/deplacements.js"></script>
 <script src="views/commandes.js"></script>
+<script src="views/capacite.js"></script>
+<script src="views/whatif.js"></script>
 </body>
 </html>

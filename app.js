@@ -28,6 +28,21 @@ const App = {
     });
     document.getElementById('btn-print').addEventListener('click', () => window.print());
     document.getElementById('btn-help').addEventListener('click', () => this.showHelp());
+    document.getElementById('btn-tablette').addEventListener('click', () => {
+      document.body.classList.toggle('tablette');
+      const on = document.body.classList.contains('tablette');
+      localStorage.setItem('tablette', on ? '1' : '0');
+      if (on) {
+        this.tabletteRefresh = setInterval(() => this.refresh(), 60000);
+        this.toast('Mode tablette · refresh auto 60s','info');
+      } else {
+        clearInterval(this.tabletteRefresh);
+      }
+    });
+    if (localStorage.getItem('tablette') === '1') {
+      document.body.classList.add('tablette');
+      this.tabletteRefresh = setInterval(() => this.refresh(), 60000);
+    }
     // Modal close
     document.querySelector('.modal-close').addEventListener('click', () => this.closeModal());
     document.querySelector('.modal-backdrop').addEventListener('click', () => this.closeModal());
