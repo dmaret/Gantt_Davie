@@ -1,5 +1,5 @@
 // Données + persistance localStorage + seed réaliste
-const STORAGE_KEY = 'atelier_plan_v1';
+const STORAGE_KEY = 'atelier_plan_v2';
 
 const DB = {
   state: null,
