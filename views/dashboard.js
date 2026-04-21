@@ -24,6 +24,17 @@ App.views.dashboard = {
           ${this.renderConflicts(conflicts)}
         </div>
         <div class="card">
+          <h2>🔔 Alertes proactives (10 j ouvrés)</h2>
+          ${this.renderProactive()}
+        </div>
+      </div>
+
+      <div class="grid grid-2" style="margin-top:16px">
+        <div class="card">
+          <h2>📈 Prédiction fin de projet</h2>
+          ${this.renderPredictions(s)}
+        </div>
+        <div class="card">
           <h2>📦 Commandes — workflow 4A</h2>
           <p class="muted small" style="margin-top:-4px">${s.regle4A.libelle}. Une commande n'est engagée qu'après validation des 4 axes obligatoires.</p>
           ${this.renderCommandes(s)}
@@ -46,6 +57,33 @@ App.views.dashboard = {
         ${this.renderChargeLieux(s, today)}
       </div>
     `;
+  },
+
+  renderProactive() {
+    const alerts = App.proactiveAlerts();
+    if (!alerts.length) return `<p class="muted">Tout est bon. ✔</p>`;
+    return `<ul class="list">${alerts.slice(0, 10).map(a => `<li><span class="badge ${a.niveau}">${a.kind}</span> <span>${a.msg}</span></li>`).join('')}</ul>${alerts.length > 10 ? `<p class="muted small">+${alerts.length-10} autre(s)</p>` : ''}`;
+  },
+
+  renderPredictions(s) {
+    const active = s.projets.filter(p => p.statut === 'en-cours');
+    if (!active.length) return `<p class="muted">Aucun projet en cours.</p>`;
+    return `<table class="data">
+      <thead><tr><th>Projet</th><th>Fin planifiée</th><th>Fin prédite</th><th class="right">Écart</th><th class="right">Vitesse</th></tr></thead>
+      <tbody>${active.map(p => {
+        const pr = App.predictProjectEnd(p.id);
+        if (!pr || !pr.predEnd) return `<tr><td>${p.code}</td><td colspan="4" class="muted">—</td></tr>`;
+        const badge = pr.delayDays >= 3 ? 'bad' : pr.delayDays >= 1 ? 'warn' : pr.delayDays <= -1 ? 'good' : 'muted';
+        const sign = pr.delayDays > 0 ? '+' : '';
+        return `<tr>
+          <td><span class="badge" style="background:${p.couleur}22;color:${p.couleur}">${p.code}</span> ${p.nom}</td>
+          <td>${D.fmt(p.fin)}</td>
+          <td><strong>${D.fmt(pr.predEnd)}</strong></td>
+          <td class="right"><span class="badge ${badge}">${sign}${pr.delayDays} j</span></td>
+          <td class="right muted">${pr.vitesse}×</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
   },
 
   renderConflicts(c) {

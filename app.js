@@ -193,6 +193,118 @@ const App = {
   personneLabel(p) { return p ? (p.prenom + ' ' + p.nom) : '—'; },
   lieuLabel(l) { return l ? l.nom : '—'; },
   projetLabel(p) { return p ? p.code + ' — ' + p.nom : '—'; },
+
+  // Suggestions d'affectation basées sur compétence requise + charge actuelle
+  suggestAssignees(task, n = 3) {
+    const s = DB.state;
+    const needed = this.competenceForTask(task);
+    const today = D.today();
+    const end = task.fin || D.addWorkdays(today, 4);
+    return s.personnes
+      .map(p => {
+        const compMatch = needed && (p.competences||[]).includes(needed) ? 2 : 0;
+        const ts = s.taches.filter(t => (t.assignes||[]).includes(p.id) && t.fin >= task.debut && t.debut <= end);
+        const charge = ts.reduce((n,t) => n + D.workdaysBetween(
+          t.debut > task.debut ? t.debut : task.debut,
+          t.fin < end ? t.fin : end), 0);
+        const lieuMatch = task.lieuId && p.lieuPrincipalId === task.lieuId ? 1 : 0;
+        const score = compMatch * 100 - charge * 5 + lieuMatch * 10;
+        return { p, score, charge, compMatch: !!compMatch };
+      })
+      .sort((a,b) => b.score - a.score)
+      .slice(0, n);
+  },
+  competenceForTask(t) {
+    // Déduire de type + machine/lieu
+    if (t.machineId) {
+      const m = DB.machine(t.machineId);
+      if (m) return m.type;
+    }
+    const map = { etude:'CAO', appro:'Logistique', livraison:'Logistique' };
+    return map[t.type] || null;
+  },
+
+  // Prédiction de date de fin basée sur avancement vs. temps écoulé
+  predictProjectEnd(projetId) {
+    const p = DB.projet(projetId);
+    if (!p) return null;
+    const tasks = DB.state.taches.filter(t => t.projetId === projetId && !t.jalon);
+    if (!tasks.length) return p.fin;
+    const totalPlanned = tasks.reduce((n,t) => n + Math.max(1, D.workdaysBetween(t.debut,t.fin)), 0);
+    const today = D.today();
+    const inProgress = tasks.filter(t => t.debut <= today && t.fin >= today);
+    const done = tasks.filter(t => t.avancement >= 100);
+    const donePlanned = done.reduce((n,t) => n + Math.max(1, D.workdaysBetween(t.debut,t.fin)), 0);
+    const ipProgress = inProgress.reduce((n,t) => n + Math.max(1, D.workdaysBetween(t.debut,t.fin)) * (t.avancement||0) / 100, 0);
+    const advancedJ = donePlanned + ipProgress;
+    // Temps écoulé vs. tâches attendues à ce jour
+    const expectedJ = tasks.reduce((n,t) => {
+      if (t.fin < today) return n + Math.max(1, D.workdaysBetween(t.debut,t.fin));
+      if (t.debut > today) return n;
+      return n + D.workdaysBetween(t.debut, today);
+    }, 0);
+    if (expectedJ === 0) return p.fin;
+    const vitesse = advancedJ / expectedJ; // 1.0 = à l'heure, <1 = en retard
+    const restantPlanned = totalPlanned - advancedJ;
+    const restantReel = vitesse > 0 ? restantPlanned / vitesse : restantPlanned * 2;
+    const predEnd = D.addWorkdays(today, Math.round(restantReel));
+    const delayDays = D.diffDays(p.fin, predEnd);
+    return { predEnd, delayDays, vitesse: Math.round(vitesse*100)/100 };
+  },
+
+  // Alertes proactives
+  proactiveAlerts() {
+    const s = DB.state;
+    const today = D.today();
+    const horizon = D.addWorkdays(today, 10);
+    const alerts = [];
+
+    // 1) Tâches de production démarrant bientôt avec stock requis insuffisant
+    s.taches.forEach(t => {
+      if (t.jalon) return;
+      if (t.debut < today || t.debut > horizon) return;
+      const prj = DB.projet(t.projetId);
+      if (!prj || !prj.bom) return;
+      prj.bom.forEach(l => {
+        const art = DB.stock(l.articleId);
+        if (art && art.quantite < l.quantite) {
+          const j = D.workdaysBetween(today, t.debut);
+          alerts.push({ kind:'stock-bom', niveau:'bad', msg:`J-${j} · ${t.nom} (${prj.code}) · stock ${art.ref} insuffisant (${art.quantite}/${l.quantite})` });
+        }
+      });
+    });
+
+    // 2) Machines avec conflit dans les 10 j ouvrés
+    const confs = this.detectConflicts().machines;
+    confs.forEach(c => {
+      const t1 = DB.tache(c.t1);
+      if (t1 && t1.debut >= today && t1.debut <= horizon) {
+        const m = DB.machine(c.machineId);
+        alerts.push({ kind:'machine-conflit', niveau:'warn', msg:`Conflit ${m?.nom} entre « ${DB.tache(c.t1)?.nom} » et « ${DB.tache(c.t2)?.nom} »` });
+      }
+    });
+
+    // 3) Personnes saturées (>100% semaine prochaine)
+    const weekStart = D.addWorkdays(today, 1);
+    const weekEnd = D.addWorkdays(weekStart, 4);
+    s.personnes.forEach(p => {
+      const ts = s.taches.filter(t => (t.assignes||[]).includes(p.id) && t.fin >= weekStart && t.debut <= weekEnd);
+      const h = ts.reduce((n,t) => n + D.workdaysBetween(t.debut > weekStart ? t.debut : weekStart, t.fin < weekEnd ? t.fin : weekEnd) * 7, 0);
+      if (h > (p.capaciteHebdo||35)) {
+        alerts.push({ kind:'person-surcharge', niveau:'warn', msg:`${this.personneLabel(p)} saturé·e semaine prochaine (${h}h/${p.capaciteHebdo}h)` });
+      }
+    });
+
+    // 4) Projets avec retard prédit > 3 jours
+    s.projets.filter(p => p.statut === 'en-cours').forEach(p => {
+      const pr = this.predictProjectEnd(p.id);
+      if (pr && pr.delayDays >= 3) {
+        alerts.push({ kind:'project-delay', niveau:'bad', msg:`${p.code} : retard prédit +${pr.delayDays} j (fin → ${D.fmt(pr.predEnd)})` });
+      }
+    });
+
+    return alerts;
+  },
 };
 
 // Lance après que tous les scripts de vue sont chargés

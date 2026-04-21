@@ -366,6 +366,7 @@ App.views.gantt = {
           ${s.personnes.map(p => `<option value="${p.id}" ${(t.assignes||[]).includes(p.id)?'selected':''}>${App.personneLabel(p)} · ${p.role}</option>`).join('')}
         </select>
       </div>
+      <div id="f-sugg" class="muted small" style="margin-top:-4px"></div>
       <div class="field"><label>Dépendances (tâches dont celle-ci dépend)</label>
         <select id="f-deps" multiple size="5">
           ${s.taches.filter(x => x.id !== t.id && x.projetId === t.projetId).sort((a,b)=>a.debut.localeCompare(b.debut)).map(x => `<option value="${x.id}" ${(t.dependances||[]).includes(x.id)?'selected':''}>${x.nom} · ${D.fmt(x.debut)}→${D.fmt(x.fin)}</option>`).join('')}
@@ -380,6 +381,19 @@ App.views.gantt = {
       <button class="btn" id="f-save">${isNew?'Créer':'Enregistrer'}</button>
     `;
     App.openModal(isNew ? 'Nouvelle tâche' : 'Tâche — ' + t.nom, body, foot);
+
+    // Suggestions d'affectation
+    const renderSugg = () => {
+      const pseudo = { debut: document.getElementById('f-debut').value, fin: document.getElementById('f-fin').value, machineId: document.getElementById('f-machine').value || null, lieuId: document.getElementById('f-lieu').value || null, type: document.getElementById('f-type').value };
+      const sugg = App.suggestAssignees(pseudo, 3);
+      document.getElementById('f-sugg').innerHTML = '💡 Suggestions : ' + sugg.map(x => `<button type="button" class="chip" data-sugg="${x.p.id}" style="cursor:pointer">${App.personneLabel(x.p)}${x.compMatch?' ✓':''} · charge ${x.charge}j</button>`).join(' ');
+      document.querySelectorAll('[data-sugg]').forEach(b => b.onclick = () => {
+        const sel = document.getElementById('f-assignes');
+        Array.from(sel.options).forEach(o => { if (o.value === b.dataset.sugg) o.selected = true; });
+      });
+    };
+    renderSugg();
+    ['f-debut','f-fin','f-machine','f-lieu','f-type'].forEach(id => { const el = document.getElementById(id); if (el) el.onchange = renderSugg; });
 
     document.getElementById('f-cancel').onclick = () => App.closeModal();
     document.getElementById('f-save').onclick = () => {
