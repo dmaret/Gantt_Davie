@@ -347,8 +347,9 @@ body.dark .h-cell[data-lvl="1"] { background: #254a77; color: #cfe4ff; }
 .gantt-deps path.critical { stroke: var(--danger); stroke-width: 2; opacity: .9; }
 .gantt-bar.critical { box-shadow: 0 0 0 2px var(--danger) inset; }
 
-/* Mode tablette atelier */
-body.tablette .topbar .actions, body.tablette .nav-btn:not(.active) { display: none; }
+/* Mode tablette atelier — UI agrandie, nav + sortie toujours accessibles */
+body.tablette .topbar .actions > :not(#btn-tablette):not(#btn-theme) { display: none; }
+body.tablette #btn-tablette { background: var(--primary-weak); color: var(--primary); border-color: var(--primary); }
 body.tablette main#view-root { padding: 30px; font-size: 18px; }
 body.tablette .kpi .value { font-size: 40px; }
 body.tablette .card h2 { font-size: 22px; }
