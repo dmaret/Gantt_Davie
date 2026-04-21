@@ -230,7 +230,7 @@ table.data tr:hover td { background: var(--surface-2); }
 .gantt-scroll { overflow: auto; max-height: calc(100vh - 240px); }
 .gantt-table { display: grid; position: relative; font-size: 12px; min-width: 100%; }
 .gantt-row { display: contents; }
-.gantt-cell { border-bottom: 1px solid var(--border); padding: 6px 10px; background: var(--surface); position: relative; }
+.gantt-cell { border-bottom: 1px solid var(--border); padding: 6px 10px; background: var(--surface); position: relative; height: 30px; box-sizing: border-box; overflow: hidden; }
 .gantt-cell.label { position: sticky; left: 0; background: var(--surface); border-right: 1px solid var(--border); z-index: 2; font-weight: 500; }
 .gantt-cell.label.group { background: var(--surface-2); font-weight: 600; }
 .gantt-cell.head { background: var(--surface-2); font-weight: 600; color: var(--text-muted); position: sticky; top: 0; z-index: 3; border-bottom: 1px solid var(--border); }
