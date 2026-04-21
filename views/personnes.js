@@ -25,29 +25,48 @@ App.views.personnes = {
     if (st.roleFilter) list = list.filter(p => p.role === st.roleFilter);
     if (st.lieuFilter) list = list.filter(p => p.lieuPrincipalId === st.lieuFilter);
 
-    const today = D.today(), end = D.addWorkdays(today, 4); // 5 jours ouvrés
+    const today = D.today();
+    // Charge sur 4 semaines glissantes
+    const weeks = [];
+    let weekStart = today;
+    for (let w=0; w<4; w++) {
+      const weekEnd = D.addWorkdays(weekStart, 4);
+      weeks.push({ start: weekStart, end: weekEnd });
+      weekStart = D.addWorkdays(weekEnd, 1);
+    }
     const rows = list.map(p => {
-      const ts = s.taches.filter(t => (t.assignes||[]).includes(p.id) && t.fin >= today && t.debut <= end);
-      const heures = ts.reduce((n,t) => n + (D.weekdaysBetween(t.debut > today ? t.debut : today, t.fin < end ? t.fin : end)) * 7, 0);
-      const pct = Math.min(100, Math.round(heures / p.capaciteHebdo * 100));
-      const cls = pct > 95 ? 'bad' : pct > 80 ? 'warn' : '';
+      const ts = s.taches.filter(t => (t.assignes||[]).includes(p.id));
+      const perWeek = weeks.map(w => {
+        const inW = ts.filter(t => t.fin >= w.start && t.debut <= w.end);
+        const h = inW.reduce((n,t) => n + (D.weekdaysBetween(t.debut > w.start ? t.debut : w.start, t.fin < w.end ? t.fin : w.end)) * 7, 0);
+        const pct = Math.min(100, Math.round(h / p.capaciteHebdo * 100));
+        return { h, pct };
+      });
+      const totalH = perWeek.reduce((n,w) => n + w.h, 0);
+      const avgPct = Math.round(perWeek.reduce((n,w) => n + w.pct, 0) / weeks.length);
+      const tsNow = ts.filter(t => t.fin >= today && t.debut <= D.addWorkdays(today, 4));
+      const cells = perWeek.map(w => {
+        const cls = w.pct > 95 ? 'bad' : w.pct > 80 ? 'warn' : '';
+        return `<div class="bar-inline ${cls}" title="${w.h}h"><div class="fill" style="width:${w.pct}%"></div></div>`;
+      }).join('');
+      const avgCls = avgPct > 95 ? 'bad' : avgPct > 80 ? 'warn' : '';
       return `<tr data-id="${p.id}" style="cursor:pointer">
         <td><strong>${App.personneLabel(p)}</strong></td>
         <td>${p.role}</td>
         <td><span class="muted">${DB.lieu(p.lieuPrincipalId)?.nom || '—'}</span></td>
         <td>${(p.competences||[]).map(c => `<span class="chip">${c}</span>`).join('')}</td>
-        <td>${ts.length}</td>
-        <td><div class="bar-inline ${cls}"><div class="fill" style="width:${pct}%"></div></div></td>
-        <td class="right">${heures}h / ${p.capaciteHebdo}h</td>
+        <td>${tsNow.length}</td>
+        <td><div style="display:flex;gap:3px">${cells}</div></td>
+        <td class="right"><span class="badge ${avgCls==='bad'?'bad':avgCls==='warn'?'warn':'good'}">${avgPct}%</span></td>
       </tr>`;
     }).join('');
 
     document.getElementById('p-table').innerHTML = `
       <table class="data">
-        <thead><tr><th>Personne</th><th>Rôle</th><th>Lieu principal</th><th>Compétences</th><th>Tâches 7j</th><th>Charge</th><th class="right">Heures</th></tr></thead>
+        <thead><tr><th>Personne</th><th>Rôle</th><th>Lieu principal</th><th>Compétences</th><th>Tâches 7j</th><th>Charge 4 semaines</th><th class="right">Moy.</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="muted small" style="margin-top:10px">${list.length} personne(s) · cliquer pour éditer</p>
+      <p class="muted small" style="margin-top:10px">${list.length} personne(s) · 4 barres = 4 semaines glissantes · cliquer pour éditer</p>
     `;
     document.querySelectorAll('#p-table tbody tr').forEach(tr => tr.onclick = () => this.openForm(tr.dataset.id));
   },

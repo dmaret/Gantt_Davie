@@ -26,9 +26,43 @@ const App = {
         DB.reset(); this.refresh(); this.toast('Données réinitialisées', 'success');
       }
     });
+    document.getElementById('btn-print').addEventListener('click', () => window.print());
+    document.getElementById('btn-help').addEventListener('click', () => this.showHelp());
     // Modal close
     document.querySelector('.modal-close').addEventListener('click', () => this.closeModal());
     document.querySelector('.modal-backdrop').addEventListener('click', () => this.closeModal());
+    // Raccourcis clavier
+    document.addEventListener('keydown', e => this.handleKey(e));
+  },
+
+  handleKey(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const map = { d:'dashboard', g:'gantt', c:'calendrier', p:'personnes', l:'lieux', m:'machines', j:'projets', s:'stock', v:'deplacements', o:'commandes', b:'bom', x:'capacite', w:'whatif' };
+    if (map[e.key]) { this.navigate(map[e.key]); e.preventDefault(); return; }
+    if (e.key === '?') { this.showHelp(); e.preventDefault(); return; }
+    if (e.key === 'n' && this.views[this.view].newItem) { this.views[this.view].newItem(); e.preventDefault(); return; }
+    if (e.key === '/') { const s = document.querySelector('input[type=search]'); if (s) { s.focus(); e.preventDefault(); } return; }
+    if (e.key === 'Escape') this.closeModal();
+  },
+
+  showHelp() {
+    const el = document.getElementById('help-overlay');
+    if (el) { el.classList.toggle('hidden'); return; }
+    const o = document.createElement('div');
+    o.id = 'help-overlay';
+    o.className = 'help-overlay';
+    o.innerHTML = `<div class="help-card">
+      <h2 style="margin-top:0">Raccourcis clavier</h2>
+      <p><kbd>D</kbd> Dashboard · <kbd>G</kbd> Gantt · <kbd>C</kbd> Calendrier · <kbd>P</kbd> Personnes</p>
+      <p><kbd>L</kbd> Lieux · <kbd>M</kbd> Machines · <kbd>J</kbd> Projets · <kbd>S</kbd> Stock</p>
+      <p><kbd>V</kbd> Déplacements · <kbd>O</kbd> Commandes · <kbd>B</kbd> BOM · <kbd>X</kbd> Capacité · <kbd>W</kbd> What-if</p>
+      <p><kbd>/</kbd> Recherche · <kbd>N</kbd> Nouveau · <kbd>?</kbd> Aide · <kbd>Esc</kbd> Fermer</p>
+      <p style="text-align:right;margin:14px 0 0 0"><button class="btn" id="help-close">OK</button></p>
+    </div>`;
+    document.body.appendChild(o);
+    o.querySelector('#help-close').onclick = () => o.classList.add('hidden');
+    o.onclick = (ev) => { if (ev.target === o) o.classList.add('hidden'); };
   },
 
   applyTheme(theme) {

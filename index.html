@@ -17,6 +17,7 @@
     <nav class="nav">
       <button data-view="dashboard" class="nav-btn active">Tableau de bord</button>
       <button data-view="gantt" class="nav-btn">Gantt</button>
+      <button data-view="calendrier" class="nav-btn">Calendrier</button>
       <button data-view="personnes" class="nav-btn">Personnes</button>
       <button data-view="lieux" class="nav-btn">Lieux</button>
       <button data-view="machines" class="nav-btn">Machines</button>
@@ -29,6 +30,8 @@
       <input type="file" id="import-file" accept=".json" hidden>
       <button id="btn-import" class="btn-ghost" title="Importer un JSON">Importer</button>
       <button id="btn-export" class="btn-ghost" title="Exporter en JSON">Exporter</button>
+      <button id="btn-print" class="btn-ghost" title="Imprimer la vue (PDF)">⎙</button>
+      <button id="btn-help" class="btn-ghost" title="Raccourcis clavier (?)">?</button>
       <button id="btn-reset" class="btn-ghost" title="Réinitialiser aux données de démonstration">Reset</button>
       <button id="btn-theme" class="btn-ghost" title="Basculer thème">☾</button>
     </div>
@@ -55,6 +58,7 @@
 <script src="app.js"></script>
 <script src="views/dashboard.js"></script>
 <script src="views/gantt.js"></script>
+<script src="views/calendrier.js"></script>
 <script src="views/personnes.js"></script>
 <script src="views/lieux.js"></script>
 <script src="views/machines.js"></script>
