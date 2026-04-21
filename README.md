@@ -1,72 +1,131 @@
 # Atelier — Planification
 
-Application web de planification pour atelier multi-sites : personnes, projets, machines, lieux de production, stockages, stocks, déplacements, commandes.
+Application web de planification pour atelier multi-sites. Personnes, projets, machines, lieux de production, zones de stockage, stocks, BOM, déplacements, commandes avec workflow de validation 4A, prédictions et simulations.
 
-## Utilisation
+**Zéro dépendance. Zéro installation. Un navigateur suffit.**
 
-**Option 1 — local (aucune installation)**
-Ouvrir `index.html` par double-clic dans le navigateur. Les données sont sauvegardées dans le `localStorage` du navigateur. Utiliser les boutons **Exporter / Importer** en haut à droite pour des sauvegardes JSON.
+## Démarrage
 
-**Option 2 — serveur web institutionnel**
-Copier tous les fichiers (`index.html`, `styles.css`, `app.js`, `data.js`, dossier `views/`) sur n'importe quel serveur statique (IIS, Apache, Nginx, etc.). Aucune dépendance serveur — rien à installer.
+**Option 1 — local (recommandé)**
+Double-cliquer sur `index.html`. L'application s'ouvre dans le navigateur. Les données sont sauvegardées dans le `localStorage` (persistance locale au navigateur).
 
-## Données
+**Option 2 — serveur statique**
+Copier `index.html`, `styles.css`, `app.js`, `data.js` et le dossier `views/` sur n'importe quel serveur statique (IIS, Apache, Nginx, GitHub Pages, Netlify…). Aucune configuration côté serveur.
 
-Le jeu de démonstration contient :
-- **70 personnes** avec rôles, compétences, lieu principal, capacité hebdomadaire
-- **7 lieux de production** répartis sur 3 étages (2e, 1er, Rez)
-- **12 zones de stockage** (Rez arrivages & expédition, sous-sol tampon & archives, 1er matières/consommables/outillage, 2e matières/consommables/prototypes, produits chimiques)
-- **10 machines** (CNC, laser, plieuses, soudure, peinture, montage, test)
-- **6 projets** en parallèle avec tâches générées automatiquement et jalons
-- **12 articles de stock** avec seuils d'alerte et projets liés
-- **Commandes** avec workflow de validation **4A**
+**Option 3 — GitHub Pages**
+Cette app est déployée automatiquement depuis la branche `main`.
 
-## Modules
+## Modules (13 vues)
 
-| Onglet | Contenu |
-|---|---|
-| **Tableau de bord** | KPI, conflits, prochaines tâches, déplacements à venir, charge par lieu |
-| **Gantt** | Vue chronologique, regroupement par projet / personne / machine / lieu, glisser-déposer pour replanifier, barres colorées par projet, jalons en losange, conflits en rouge |
-| **Personnes** | Annuaire, compétences, charge sur 7 jours |
-| **Lieux** | Production + stockages arborescents par étage |
-| **Projets** | Cartes projet avec avancement, priorité, retard éventuel |
-| **Stock** | Articles, seuils d'alerte, stockage, projets liés |
-| **Déplacements** | Mouvements entre sites, personnes, motifs |
-| **Commandes** | Saisie, workflow **4A n'engage pas la commande** |
+| Raccourci | Onglet | Contenu |
+|:-:|---|---|
+| `D` | Tableau de bord | KPI, conflits, alertes proactives, prédiction fin de projet, prochaines tâches, charge par lieu |
+| `G` | Gantt | Vue chronologique, regroupement par projet / personne / machine / lieu, glisser-déposer, dépendances SVG, chemin critique, cascade automatique |
+| `C` | Calendrier | Vues mois / semaine, événements colorés par projet, modale détaillée au clic |
+| `P` | Personnes | Annuaire, compétences, charge glissante 4 semaines, suggestions d'affectation |
+| `L` | Lieux | Production + stockages arborescents par étage |
+| `M` | Machines | 10 machines, charge 7 jours, conflits, CRUD, export CSV |
+| `J` | Projets | Cartes projet, avancement, priorité, retard |
+| `S` | Stock | Articles, seuils d'alerte, stockage, projets liés |
+| `B` | BOM | Bill of Materials : besoin projet ↔ solde stock, ruptures prévues |
+| `V` | Déplacements | Mouvements entre sites, personnes, motifs |
+| `O` | Commandes | Workflow 4A, TVA suisse, historique signé et horodaté |
+| `X` | Capacité | Heatmap capacité sur 8 / 12 / 24 semaines (par lieu, machine ou personne) |
+| `W` | What-if | Snapshot, modifications, diff, commit ou rollback |
 
-## Règle « 4A n'engage pas la commande »
+## Fonctionnalités clés
 
-Une commande doit être validée par les **4 axes obligatoires** avant engagement :
+### Planification intelligente
+- **Dépendances visuelles** (SVG) entre tâches avec flèches orientées
+- **Chemin critique** calculé par DP sur DAG pondéré, surligné en rouge
+- **Cascade automatique** : déplacer une tâche décale ses dépendantes
+- **Suggestions d'affectation** : score combinant compétence (+100), charge (-5/h), proximité géographique (+10)
+- **Prédiction fin de projet** par ratio de vélocité (temps consommé / avancement)
+- **Alertes proactives** : stock vs BOM, conflits machine, surcharge personne, retard projet
+
+### Workflow 4A (« 4A n'engage pas la commande »)
+Une commande doit être validée par les 4 axes obligatoires avant engagement :
 
 - **A1** — Chef de projet
 - **A2** — Logistique
 - **A3** — Direction technique
 - **A4** — Contrôle budget
 
-Tant que les 4 ne sont pas cochés, le bouton **Engager** n'apparaît pas et la commande reste bloquée avec le badge « bloquée ». Les axes peuvent être cochés/décochés depuis la liste des commandes ou le formulaire d'édition. Si une validation est retirée après engagement, la commande repasse en attente.
+Tant que les 4 cases ne sont pas cochées, le bouton **Engager** reste inaccessible. Chaque cochage/décochage est **journalisé** (valideur + horodatage ISO). Les intitulés sont personnalisables dans `state.regle4A.axes`.
 
-Les intitulés des axes sont configurables dans le JSON (`state.regle4A.axes`).
+### Détection de conflits (automatique)
+- **Personnes** — même personne sur des tâches qui se chevauchent
+- **Machines** — même machine utilisée simultanément
+- **Stock** — articles sous le seuil d'alerte
+- **Commandes** — demandes sans validation 4A complète
 
-## Détection de conflits (automatique)
+Les tâches en conflit sont cerclées de rouge dans le Gantt.
 
-- **Personnes** : même personne assignée à des tâches qui se chevauchent
-- **Machines** : même machine utilisée simultanément
-- **Stock** : articles sous le seuil d'alerte
-- **Commandes** : demandes sans validation 4A complète
+### Devises & TVA suisse
+Montants affichés en **CHF** (format suisse). TVA au taux standard **8.1 %** avec calcul HT / TVA / TTC.
 
-Les tâches en conflit apparaissent cerclées de rouge dans le Gantt.
+### Import / Export
+- **Exporter** télécharge un JSON daté (`atelier-plan-YYYY-MM-DD.json`)
+- **Importer** remplace les données par un fichier JSON
+- **Reset** recharge le jeu de démonstration
+- **Impression** (⎙) génère un PDF A4 paysage via `@media print`
 
-## Données & sauvegardes
+### Mode tablette
+Bouton 📋 : interface agrandie en lecture seule avec rafraîchissement automatique, pour écran d'atelier.
 
-- Toutes les données sont stockées dans `localStorage` (clé `atelier_plan_v1`).
-- **Exporter** télécharge un fichier JSON daté (`atelier-plan-YYYY-MM-DD.json`).
-- **Importer** remplace les données par le contenu d'un fichier JSON.
-- **Reset** recharge le jeu de démonstration.
+### Thème clair / sombre
+Bouton ☾ / ☀ : bascule instantanée, persisté en localStorage.
 
-## Extensions possibles (non livrées)
+## Raccourcis clavier
 
-- Authentification multi-utilisateur (nécessite un backend)
-- Impression PDF du Gantt
-- Notifications/rappels par e-mail
-- Intégration API avec un ERP existant
-- Historique/journal des modifications
+| Touche | Action |
+|:-:|---|
+| `D` `G` `C` `P` `L` `M` `J` `S` `B` `V` `O` `X` `W` | Navigation directe vers un onglet |
+| `N` | Nouvel élément (dans la vue courante) |
+| `/` | Focus sur la barre de recherche |
+| `?` | Afficher l'aide des raccourcis |
+| `Esc` | Fermer la modale / l'aide |
+
+> Sur macOS, les raccourcis sont identiques. Les modificateurs (`Cmd`, `Ctrl`, `Alt`) sont ignorés pour éviter les collisions avec le navigateur.
+
+## Données de démonstration
+
+- **70 personnes** — rôles, compétences, lieu principal, capacité hebdomadaire
+- **7 lieux de production** sur 3 étages (2e, 1er, Rez)
+- **12 zones de stockage** (arrivages, expédition, tampons, matières, consommables, outillage, prototypes, produits chimiques)
+- **10 machines** — CNC, laser, plieuses, soudure, peinture, montage, bancs de test
+- **6 projets** en parallèle, tâches auto-générées avec jalons et dépendances
+- **12 articles de stock** — seuils d'alerte, projets liés, BOM
+- **Commandes** — fournisseurs suisses, workflow 4A, TVA 8.1 %
+
+## Architecture
+
+```
+index.html          Shell + topbar + modal root + script tags
+styles.css          Thème clair/sombre, grille Gantt, heatmap, print
+data.js             DB, seed, utilitaires dates (UTC), STORAGE_KEY
+app.js              Router, modal, toast, raccourcis, conflits,
+                    suggestions, prédictions, alertes proactives
+views/
+  dashboard.js      KPI + conflits + alertes + prédictions + charge
+  gantt.js          Grille CSS + overlay SVG + drag-to-reschedule
+  calendrier.js     Mois / semaine
+  personnes.js      Annuaire + charge 4 semaines
+  lieux.js          Arbres de stockage par étage
+  machines.js       CRUD + charge + export CSV
+  projets.js        Cartes
+  stock.js          Articles + seuils
+  bom.js            Bill of Materials projet ↔ stock
+  deplacements.js   Liste + création
+  commandes.js      4A + historique signé
+  capacite.js       Heatmap
+  whatif.js         Snapshot + diff + commit
+```
+
+**Persistance** : `localStorage['atelier_plan_v3']`. Le numéro de version (`v3`) est incrémenté lorsque le modèle de données évolue, pour invalider les anciennes sauvegardes.
+
+**Dates en UTC** : toutes les manipulations de date passent par `D.parse`, `D.iso`, `D.addDays`, etc. qui utilisent `Date.UTC()` et `getUTCDate()`. Cela évite les décalages d'un jour lors d'un changement d'heure ou d'un fuseau non-UTC (bug historique en CEST/Zurich).
+
+## Licence & crédits
+
+Application développée sur mesure. Aucune dépendance tierce.
