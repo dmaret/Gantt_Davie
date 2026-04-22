@@ -236,6 +236,25 @@ body {
 }
 .chip.small { font-size: 10px; padding: 1px 6px; }
 
+/* Overlay de conflit (au-dessus du modal d'édition de tâche) */
+.conflict-overlay {
+  position: fixed; inset: 0; z-index: 11000;
+  background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.conflict-card {
+  background: var(--surface); color: var(--text);
+  border-radius: 10px; width: min(620px, 100%);
+  max-height: 80vh; display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  border: 2px solid var(--warning);
+}
+.conflict-head { padding: 14px 18px; border-bottom: 1px solid var(--border); background: var(--warning); color: #fff; border-radius: 8px 8px 0 0; }
+.conflict-head h3 { margin: 0; font-size: 16px; }
+.conflict-body { padding: 14px 18px; overflow: auto; }
+.conflict-foot { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; background: var(--surface-2); border-radius: 0 0 8px 8px; }
+
 /* Tableau de bord — cartes réorganisables (drag & drop admin) */
 .dashboard-grid {
   display: grid;

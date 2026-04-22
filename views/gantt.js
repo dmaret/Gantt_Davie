@@ -493,7 +493,7 @@ App.views.gantt = {
     renderSugg();
     ['f-debut','f-fin','f-machine','f-lieu','f-type'].forEach(id => { const el = document.getElementById(id); if (el) el.onchange = renderSugg; });
 
-    // Pré-remplissage par équipe
+    // Pré-remplissage par équipe — avec détection de conflit et popup de choix
     document.getElementById('f-eq-apply').onclick = () => {
       const eqId = document.getElementById('f-equipe').value;
       if (!eqId) { App.toast('Choisir une équipe','error'); return; }
@@ -501,17 +501,103 @@ App.views.gantt = {
       const fin = document.getElementById('f-fin').value;
       const prop = App.views.equipes.proposerAffectation(eqId, debut, fin);
       if (!prop) { App.toast('Équipe introuvable','error'); return; }
-      const selectedIds = new Set();
-      const missing = [];
+
+      // Détecte les conflits : personnes sélectionnées déjà affectées à d'autres tâches qui chevauchent
+      const conflicts = [];
       prop.slots.forEach(sl => {
-        sl.selected.forEach(c => selectedIds.add(c.p.id));
-        if (sl.selected.length < sl.n) missing.push(`${sl.competence} : ${sl.selected.length}/${sl.n}`);
+        sl.selected.forEach(c => {
+          if (c.libre) return;
+          const others = DB.state.taches.filter(tt =>
+            tt.id !== t.id &&
+            (tt.assignes||[]).includes(c.p.id) &&
+            tt.fin >= debut && tt.debut <= fin && !tt.jalon
+          );
+          if (others.length) conflicts.push({ personne: c.p, competence: sl.competence, otherTasks: others });
+        });
       });
-      const sel = document.getElementById('f-assignes');
-      Array.from(sel.options).forEach(o => o.selected = selectedIds.has(o.value));
-      const totalPers = selectedIds.size;
-      const msg = `${totalPers} personne(s) affectée(s)` + (missing.length ? ` · manque : ${missing.join(', ')}` : '');
-      App.toast(msg, missing.length ? 'warn' : 'success');
+
+      const applyFinal = (moves) => {
+        // moves = Set<personneId> des personnes à déplacer (retirées des autres tâches)
+        moves = moves || new Set();
+        // skips = personnes à ne pas affecter à cette tâche
+        const selectedIds = new Set();
+        prop.slots.forEach(sl => sl.selected.forEach(c => selectedIds.add(c.p.id)));
+        // Si la personne a un conflit non résolu (pas dans moves), on la retire de l'affectation
+        conflicts.forEach(cf => {
+          if (!moves.has(cf.personne.id)) selectedIds.delete(cf.personne.id);
+        });
+        // Retirer la personne des autres tâches pour les moves
+        moves.forEach(pid => {
+          DB.state.taches.forEach(tt => {
+            if (tt.id === t.id) return;
+            if (tt.fin >= debut && tt.debut <= fin) {
+              tt.assignes = (tt.assignes||[]).filter(x => x !== pid);
+            }
+          });
+        });
+        const sel = document.getElementById('f-assignes');
+        Array.from(sel.options).forEach(o => o.selected = selectedIds.has(o.value));
+        const missing = [];
+        prop.slots.forEach(sl => {
+          const got = sl.selected.filter(c => selectedIds.has(c.p.id)).length;
+          if (got < sl.n) missing.push(`${sl.competence} : ${got}/${sl.n}`);
+        });
+        const totalPers = selectedIds.size;
+        const msg = `${totalPers} personne(s) affectée(s)` + (moves.size ? ` · ${moves.size} déplacée(s)` : '') + (missing.length ? ` · manque : ${missing.join(', ')}` : '');
+        App.toast(msg, missing.length ? 'warn' : 'success');
+        if (moves.size) DB.save();
+      };
+
+      if (!conflicts.length) {
+        applyFinal(new Set());
+        return;
+      }
+
+      // Overlay personnalisé au-dessus de la modale de tâche (préserve le form)
+      const overlay = document.createElement('div');
+      overlay.className = 'conflict-overlay';
+      overlay.innerHTML = `<div class="conflict-card">
+        <header class="conflict-head"><h3>⚠ Conflit d'affectation détecté</h3></header>
+        <div class="conflict-body">
+          <p>${conflicts.length} personne(s) proposée(s) ont déjà des tâches qui chevauchent :</p>
+          <ul class="list" style="max-height:320px;overflow:auto;margin:10px 0">
+            ${conflicts.map(cf => {
+              const autres = cf.otherTasks.map(tt => {
+                const prj = DB.projet(tt.projetId);
+                return `<span class="badge" style="background:${prj?prj.couleur+'33':''};color:${prj?prj.couleur:''}">${prj?prj.code:''}</span> ${tt.nom} · ${D.fmt(tt.debut)}→${D.fmt(tt.fin)}`;
+              }).join(' · ');
+              return `<li style="align-items:start">
+                <div style="flex:1">
+                  <strong>${App.personneLabel(cf.personne)}</strong> <span class="muted small">(slot ${cf.competence})</span>
+                  <div class="small muted" style="margin-top:3px">⚠ Déjà prévue pour : ${autres}</div>
+                </div>
+                <label class="chip" style="cursor:pointer"><input type="checkbox" class="conf-move" data-pid="${cf.personne.id}" checked> Déplacer ici</label>
+              </li>`;
+            }).join('')}
+          </ul>
+          <p class="muted small">« Déplacer ici » = retire la personne des tâches concurrentes et l'affecte à celle-ci. Décocher = la laisser sur son autre tâche.</p>
+        </div>
+        <footer class="conflict-foot">
+          <button class="btn btn-secondary" id="conf-none">Garder tout</button>
+          <button class="btn btn-secondary" id="conf-all">Tout déplacer</button>
+          <span class="spacer" style="flex:1"></span>
+          <button class="btn btn-secondary" id="conf-cancel">Annuler</button>
+          <button class="btn" id="conf-ok">Appliquer</button>
+        </footer>
+      </div>`;
+      document.body.appendChild(overlay);
+      const close = () => overlay.remove();
+      document.getElementById('conf-none').onclick = () => { applyFinal(new Set()); close(); };
+      document.getElementById('conf-all').onclick = () => {
+        const all = new Set(conflicts.map(cf => cf.personne.id));
+        applyFinal(all); close();
+      };
+      document.getElementById('conf-cancel').onclick = close;
+      document.getElementById('conf-ok').onclick = () => {
+        const moves = new Set();
+        overlay.querySelectorAll('.conf-move:checked').forEach(cb => moves.add(cb.dataset.pid));
+        applyFinal(moves); close();
+      };
     };
 
     document.getElementById('f-cancel').onclick = () => App.closeModal();

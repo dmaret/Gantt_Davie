@@ -51,9 +51,25 @@ App.views.equipes = {
     const eq = id ? s.equipes.find(x => x.id === id) : { id: DB.uid('EQ'), nom:'', couleur:'#2c5fb3', slots:[] };
     const allComps = [...new Set(s.personnes.flatMap(p => p.competences||[]))].sort();
     const slotsHtml = (eq.slots||[]).map((sl,i) => this.slotRow(sl, i, allComps)).join('');
+    const suggestedNames = [
+      'Ligne 1','Ligne 2','Ligne 3','Ligne 4',
+      'Valmont','Valmont A','Valmont B',
+      'Logistique 1','Logistique 2','Logistique 3',
+      'Assemblage','Assemblage A','Assemblage B',
+      'Montage','Peinture','Soudure',
+      'Contrôle qualité','Maintenance','Emballage','Expédition',
+      'Prototypage','Atelier matières','Réception',
+    ];
+    const existingNames = new Set((s.equipes||[]).filter(x => x.id !== eq.id).map(x => x.nom.toLowerCase()));
     const body = `
       <div class="row">
-        <div class="field"><label>Nom</label><input id="ef-nom" value="${eq.nom||''}"></div>
+        <div class="field"><label>Nom</label>
+          <input id="ef-nom" list="ef-nom-suggestions" value="${eq.nom||''}" placeholder="Ligne 1, Logistique 2, Assemblage…">
+          <datalist id="ef-nom-suggestions">
+            ${suggestedNames.filter(n => !existingNames.has(n.toLowerCase())).map(n => `<option value="${n}">`).join('')}
+          </datalist>
+          <div id="ef-nom-hint" class="muted small" style="margin-top:4px"></div>
+        </div>
         <div class="field"><label>Couleur</label><input type="color" id="ef-color" value="${eq.couleur||'#2c5fb3'}"></div>
       </div>
       <h3 style="margin-top:14px">Slots (compétence × nombre)</h3>
@@ -65,6 +81,20 @@ App.views.equipes = {
       <button class="btn btn-secondary" id="ef-cancel">Annuler</button>
       <button class="btn" id="ef-save">${isNew?'Créer':'Enregistrer'}</button>`;
     App.openModal(isNew?'Nouvelle équipe':eq.nom, body, foot);
+
+    // Alerte si le nom existe déjà
+    const nomInput = document.getElementById('ef-nom');
+    const hint = document.getElementById('ef-nom-hint');
+    const checkNom = () => {
+      const v = nomInput.value.trim().toLowerCase();
+      if (v && existingNames.has(v)) {
+        hint.innerHTML = '<span class="badge warn">⚠ Nom déjà utilisé par une autre équipe</span>';
+      } else {
+        hint.innerHTML = '';
+      }
+    };
+    nomInput.oninput = checkNom;
+    checkNom();
 
     const slotsEl = document.getElementById('ef-slots');
     document.getElementById('ef-add-slot').onclick = () => {
@@ -78,6 +108,9 @@ App.views.equipes = {
       eq.nom = document.getElementById('ef-nom').value.trim();
       eq.couleur = document.getElementById('ef-color').value;
       if (!eq.nom) { App.toast('Nom requis','error'); return; }
+      if (existingNames.has(eq.nom.toLowerCase())) {
+        if (!confirm('Une autre équipe porte déjà ce nom. Continuer quand même ?')) return;
+      }
       const slots = [];
       document.querySelectorAll('.eq-slot-row').forEach(row => {
         const c = row.querySelector('[data-k="comp"]').value;
