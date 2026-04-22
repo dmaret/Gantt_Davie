@@ -52,7 +52,9 @@ App.views.personnes = {
       const avgCls = avgPct > 95 ? 'bad' : avgPct > 80 ? 'warn' : '';
       const h = p.horaires || defaultHoraires();
       const canEdit = App.can('edit');
-      const hMini = `<div class="horaires-mini" title="${canEdit?'Clic pour basculer matin/après-midi':'Profil de travail hebdomadaire'}">${JOURS_SEMAINE.map((j,i) => {
+      // N'afficher que les jours ouvrés (lun-ven) dans la mini cartographie
+      const joursAffichage = JOURS_SEMAINE.slice(0, 5);
+      const hMini = `<div class="horaires-mini" title="${canEdit?'Clic pour basculer matin/après-midi':'Profil de travail hebdomadaire'}">${joursAffichage.map((j,i) => {
         const atts = (slot) => canEdit ? `data-pid="${p.id}" data-jour="${j}" data-slot="${slot}"` : '';
         const cls = (on) => `h-slot ${on?'on':''} ${canEdit?'clickable':''}`;
         return `<div class="h-day"><div class="h-label">${JOURS_COURT[i]}</div><div class="${cls(h[j]?.matin)}" ${atts('matin')} title="${j} matin"></div><div class="${cls(h[j]?.aprem)}" ${atts('aprem')} title="${j} après-midi"></div></div>`;
