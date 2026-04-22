@@ -194,8 +194,10 @@ body {
 .horaires-mini { display: flex; gap: 3px; }
 .horaires-mini .h-day { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .horaires-mini .h-label { font-size: 9px; color: var(--text-muted); font-weight: 600; }
-.horaires-mini .h-slot { width: 10px; height: 8px; border-radius: 2px; background: var(--border); }
+.horaires-mini .h-slot { width: 14px; height: 10px; border-radius: 2px; background: var(--border); transition: transform .08s, box-shadow .08s; }
 .horaires-mini .h-slot.on { background: var(--success); }
+.horaires-mini .h-slot.clickable { cursor: pointer; }
+.horaires-mini .h-slot.clickable:hover { transform: scale(1.25); box-shadow: 0 0 0 1px var(--primary); }
 
 /* Éditeur horaires (form personne) */
 .horaires-editor { border-collapse: separate; border-spacing: 2px; margin-top: 4px; }

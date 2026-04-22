@@ -51,7 +51,12 @@ App.views.personnes = {
       }).join('');
       const avgCls = avgPct > 95 ? 'bad' : avgPct > 80 ? 'warn' : '';
       const h = p.horaires || defaultHoraires();
-      const hMini = `<div class="horaires-mini" title="Profil de travail hebdomadaire">${JOURS_SEMAINE.map((j,i) => `<div class="h-day"><div class="h-label">${JOURS_COURT[i]}</div><div class="h-slot ${h[j]?.matin?'on':''}"></div><div class="h-slot ${h[j]?.aprem?'on':''}"></div></div>`).join('')}</div>`;
+      const canEdit = App.can('edit');
+      const hMini = `<div class="horaires-mini" title="${canEdit?'Clic pour basculer matin/après-midi':'Profil de travail hebdomadaire'}">${JOURS_SEMAINE.map((j,i) => {
+        const atts = (slot) => canEdit ? `data-pid="${p.id}" data-jour="${j}" data-slot="${slot}"` : '';
+        const cls = (on) => `h-slot ${on?'on':''} ${canEdit?'clickable':''}`;
+        return `<div class="h-day"><div class="h-label">${JOURS_COURT[i]}</div><div class="${cls(h[j]?.matin)}" ${atts('matin')} title="${j} matin"></div><div class="${cls(h[j]?.aprem)}" ${atts('aprem')} title="${j} après-midi"></div></div>`;
+      }).join('')}</div>`;
       return `<tr data-id="${p.id}">
         <td><strong class="p-name" style="cursor:pointer">${App.personneLabel(p)}</strong></td>
         <td>${p.role}</td>
@@ -74,6 +79,18 @@ App.views.personnes = {
     `;
     document.querySelectorAll('#p-table tbody .p-name').forEach(el => el.onclick = () => this.openForm(el.closest('tr').dataset.id));
     document.querySelectorAll('#p-table tbody .p-semaine').forEach(b => b.onclick = e => { e.stopPropagation(); this.openSemaine(b.dataset.id); });
+    document.querySelectorAll('#p-table tbody .h-slot.clickable').forEach(el => {
+      el.onclick = e => {
+        e.stopPropagation();
+        const p = DB.personne(el.dataset.pid);
+        if (!p) return;
+        if (!p.horaires) p.horaires = defaultHoraires();
+        const j = el.dataset.jour, sl = el.dataset.slot;
+        p.horaires[j][sl] = !p.horaires[j][sl];
+        DB.save();
+        el.classList.toggle('on');
+      };
+    });
   },
 
   openSemaine(id) {
