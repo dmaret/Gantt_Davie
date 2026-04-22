@@ -268,6 +268,21 @@ body {
 .conflict-body { padding: 14px 18px; overflow: auto; }
 .conflict-foot { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; background: var(--surface-2); border-radius: 0 0 8px 8px; }
 
+/* Listes cliquables (alertes, conflits, prochaines tâches…) */
+.list.list-clickable li { transition: background .12s; }
+.alert-row {
+  cursor: pointer; display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 6px;
+}
+.alert-row:hover { background: var(--surface-2); }
+.alert-row:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.alert-row .alert-msg { flex: 1; }
+.alert-row .alert-arrow {
+  color: var(--text-muted); font-size: 18px; font-weight: 600;
+  padding: 0 6px; transition: transform .12s, color .12s;
+}
+.alert-row:hover .alert-arrow { color: var(--primary); transform: translateX(2px); }
+
 /* Overlay générique (popup posée sur un modal) */
 .app-overlay {
   position: fixed; inset: 0; z-index: 11000;

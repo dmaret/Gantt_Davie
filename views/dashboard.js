@@ -138,12 +138,13 @@ App.views.dashboard = {
   renderConflicts(c) {
     const total = c.personnes.length + c.machines.length + c.stock.length + c.commandes.length;
     if (total === 0) return `<p class="muted">Aucun conflit détecté. ✔</p>`;
+    const row = (badge, kind, text, view) => `<li class="alert-row" onclick="App.navigateToTarget({view:'${view}'})" role="button" tabindex="0"><span class="badge ${badge}">${kind}</span> <span class="alert-msg">${text}</span> <span class="alert-arrow">›</span></li>`;
     const rows = [];
-    if (c.personnes.length) rows.push(`<li><span class="badge bad">Personnes</span> ${c.personnes.length} chevauchement(s) d'affectation</li>`);
-    if (c.machines.length)  rows.push(`<li><span class="badge bad">Machines</span> ${c.machines.length} conflit(s) d'utilisation</li>`);
-    if (c.stock.length)     rows.push(`<li><span class="badge warn">Stock</span> ${c.stock.length} article(s) sous seuil</li>`);
-    if (c.commandes.length) rows.push(`<li><span class="badge warn">Commandes</span> ${c.commandes.length} en attente de validations 4A</li>`);
-    return `<ul class="list">${rows.join('')}</ul>`;
+    if (c.personnes.length) rows.push(row('bad','Personnes',`${c.personnes.length} chevauchement(s) d'affectation`, 'gantt'));
+    if (c.machines.length)  rows.push(row('bad','Machines', `${c.machines.length} conflit(s) d'utilisation`, 'machines'));
+    if (c.stock.length)     rows.push(row('warn','Stock',   `${c.stock.length} article(s) sous seuil`, 'stock'));
+    if (c.commandes.length) rows.push(row('warn','Commandes',`${c.commandes.length} en attente de validations 4A`, 'commandes'));
+    return `<ul class="list list-clickable">${rows.join('')}</ul>`;
   },
 
   renderCommandes(s) {
@@ -176,11 +177,11 @@ App.views.dashboard = {
       .sort((a,b) => a.debut.localeCompare(b.debut))
       .slice(0, 8);
     if (!ts.length) return `<p class="muted">Rien à venir cette semaine.</p>`;
-    return `<ul class="list">${ts.map(t => {
+    return `<ul class="list list-clickable">${ts.map(t => {
       const prj = DB.projet(t.projetId);
       const lieu = DB.lieu(t.lieuId);
       const assigns = (t.assignes||[]).map(id => App.personneLabel(DB.personne(id))).join(', ');
-      return `<li>
+      return `<li class="alert-row" onclick="App.navigateToTarget({view:'gantt',tacheId:'${t.id}'})" role="button" tabindex="0">
         <div>
           <div><strong>${t.nom}</strong> · <span class="muted small">${prj?prj.code:''}</span></div>
           <div class="small muted">${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${lieu?lieu.nom:'—'} · ${assigns||'—'}</div>

@@ -238,10 +238,54 @@ const App = {
   },
   showBellPanel() {
     const alerts = this.proactiveAlerts();
+    this._lastAlerts = alerts;
     const body = alerts.length
-      ? `<ul class="list">${alerts.map(a => `<li><span class="badge ${a.niveau}">${a.kind}</span> <span>${a.msg}</span></li>`).join('')}</ul>`
+      ? `<ul class="list list-clickable">${alerts.map((a,i) => `
+          <li class="alert-row" data-idx="${i}" ${a.target?'role="button" tabindex="0"':''}>
+            <span class="badge ${a.niveau}">${a.kind}</span>
+            <span class="alert-msg">${a.msg}</span>
+            ${a.target ? '<span class="alert-arrow" title="Ouvrir la vue concernée">›</span>' : ''}
+          </li>`).join('')}</ul>
+          <p class="muted small" style="margin-top:8px">Clic sur une ligne pour ouvrir l'élément concerné.</p>`
       : `<p class="muted">Aucune alerte. ✔</p>`;
     this.openModal(`Alertes proactives (${alerts.length})`, body, `<span class="spacer" style="flex:1"></span><button class="btn" onclick="App.closeModal()">Fermer</button>`);
+    document.querySelectorAll('.alert-row').forEach(li => {
+      li.addEventListener('click', () => {
+        const a = this._lastAlerts[+li.dataset.idx];
+        if (!a || !a.target) return;
+        this.closeModal();
+        this.navigateToTarget(a.target);
+      });
+    });
+  },
+
+  // Navigue vers l'entité décrite par `target` puis ouvre son formulaire si possible.
+  // target: { view, projetId?, personneId?, tacheId?, articleId?, machineId?, lieuId?, commandeId? }
+  navigateToTarget(target) {
+    if (!target || !target.view) return;
+    this.navigate(target.view);
+    // Laisser le temps à la vue de se rendre avant d'ouvrir le form
+    setTimeout(() => {
+      try {
+        if (target.view === 'projets' && target.projetId && this.views.projets?.openForm) {
+          this.views.projets.openForm(target.projetId);
+        } else if (target.view === 'personnes' && target.personneId && this.views.personnes?.openForm) {
+          this.views.personnes.openForm(target.personneId);
+        } else if (target.view === 'gantt' && target.tacheId && this.views.gantt?.openTacheForm) {
+          this.views.gantt.openTacheForm(target.tacheId);
+        } else if (target.view === 'stock' && target.articleId && this.views.stock?.openForm) {
+          this.views.stock.openForm(target.articleId);
+        } else if (target.view === 'machines' && target.machineId && this.views.machines?.openForm) {
+          this.views.machines.openForm(target.machineId);
+        } else if (target.view === 'commandes' && target.commandeId && this.views.commandes?.openForm) {
+          this.views.commandes.openForm(target.commandeId);
+        } else if (target.view === 'lieux' && target.lieuId && this.views.lieux?.openForm) {
+          this.views.lieux.openForm(target.lieuId);
+        }
+      } catch (err) {
+        console.warn('navigateToTarget:', err);
+      }
+    }, 60);
   },
 
   bindTopbar() {
@@ -679,7 +723,11 @@ const App = {
         const art = DB.stock(l.articleId);
         if (art && art.quantite < l.quantite) {
           const j = D.workdaysBetween(today, t.debut);
-          alerts.push({ kind:'stock-bom', niveau:'bad', msg:`J-${j} · ${t.nom} (${prj.code}) · stock ${art.ref} insuffisant (${art.quantite}/${l.quantite})` });
+          alerts.push({
+            kind:'stock-bom', niveau:'bad',
+            msg:`J-${j} · ${t.nom} (${prj.code}) · stock ${art.ref} insuffisant (${art.quantite}/${l.quantite})`,
+            target: { view: 'bom', projetId: prj.id, articleId: art.id },
+          });
         }
       });
     });
@@ -690,7 +738,11 @@ const App = {
       const t1 = DB.tache(c.t1);
       if (t1 && t1.debut >= today && t1.debut <= horizon) {
         const m = DB.machine(c.machineId);
-        alerts.push({ kind:'machine-conflit', niveau:'warn', msg:`Conflit ${m?.nom} entre « ${DB.tache(c.t1)?.nom} » et « ${DB.tache(c.t2)?.nom} »` });
+        alerts.push({
+          kind:'machine-conflit', niveau:'warn',
+          msg:`Conflit ${m?.nom} entre « ${DB.tache(c.t1)?.nom} » et « ${DB.tache(c.t2)?.nom} »`,
+          target: { view: 'gantt', tacheId: c.t1, machineId: c.machineId },
+        });
       }
     });
 
@@ -701,7 +753,11 @@ const App = {
       const ts = s.taches.filter(t => (t.assignes||[]).includes(p.id) && t.fin >= weekStart && t.debut <= weekEnd);
       const h = ts.reduce((n,t) => n + D.workdaysBetween(t.debut > weekStart ? t.debut : weekStart, t.fin < weekEnd ? t.fin : weekEnd) * 7, 0);
       if (h > (p.capaciteHebdo||35)) {
-        alerts.push({ kind:'person-surcharge', niveau:'warn', msg:`${this.personneLabel(p)} saturé·e semaine prochaine (${h}h/${p.capaciteHebdo}h)` });
+        alerts.push({
+          kind:'person-surcharge', niveau:'warn',
+          msg:`${this.personneLabel(p)} saturé·e semaine prochaine (${h}h/${p.capaciteHebdo}h)`,
+          target: { view: 'personnes', personneId: p.id },
+        });
       }
     });
 
@@ -709,7 +765,11 @@ const App = {
     s.projets.filter(p => p.statut === 'en-cours').forEach(p => {
       const pr = this.predictProjectEnd(p.id);
       if (pr && pr.delayDays >= 3) {
-        alerts.push({ kind:'project-delay', niveau:'bad', msg:`${p.code} : retard prédit +${pr.delayDays} j (fin → ${D.fmt(pr.predEnd)})` });
+        alerts.push({
+          kind:'project-delay', niveau:'bad',
+          msg:`${p.code} : retard prédit +${pr.delayDays} j (fin → ${D.fmt(pr.predEnd)})`,
+          target: { view: 'projets', projetId: p.id },
+        });
       }
     });
 
