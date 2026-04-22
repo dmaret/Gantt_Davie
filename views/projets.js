@@ -186,6 +186,7 @@ App.views.projets = {
       ${!isNew ? `
         <div style="display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap">
           <h3 style="margin:0;flex:1">👥 Tâches & ressources (${taches.length})</h3>
+          <button class="btn-ghost" id="pf-export-csv" title="Exporter les tâches de ce projet en CSV (ouvrable dans Excel)">⬇ CSV</button>
           ${canEdit && (s.equipes||[]).length ? `
             <select id="pf-equipe-sel" class="small">
               <option value="">— choisir une équipe —</option>
@@ -228,7 +229,29 @@ App.views.projets = {
       this.bindTasksList(p.id, canEdit);
       const applyBtn = document.getElementById('pf-apply-eq');
       if (applyBtn) applyBtn.onclick = () => this.applyEquipeToProject(p.id);
+      const csvBtn = document.getElementById('pf-export-csv');
+      if (csvBtn) csvBtn.onclick = () => this.exportTachesCSV(p.id);
     }
+  },
+
+  exportTachesCSV(projetId) {
+    const p = DB.projet(projetId);
+    if (!p) return;
+    const tasks = DB.tachesDuProjet(projetId).sort((a,b) => a.debut.localeCompare(b.debut));
+    const rows = [['Code','Projet','Tâche','Type','Début','Fin','Durée (j)','Avancement (%)','Jalon','Machine','Lieu','Personnes','Dépendances','Notes']];
+    tasks.forEach(t => {
+      const m = DB.machine(t.machineId), l = DB.lieu(t.lieuId);
+      const persons = (t.assignes||[]).map(id => App.personneLabel(DB.personne(id))).join(' | ');
+      const deps = (t.dependances||[]).map(id => DB.tache(id)?.nom).filter(Boolean).join(' | ');
+      rows.push([
+        p.code, p.nom, t.nom, t.type||'',
+        D.fmt(t.debut), D.fmt(t.fin), D.diffDays(t.debut, t.fin),
+        t.avancement||0, t.jalon?'oui':'',
+        m?m.nom:'', l?l.nom:'', persons, deps, t.notes||'',
+      ]);
+    });
+    CSV.download(`${p.code}-taches-${D.iso(new Date())}.csv`, rows);
+    App.toast('Tâches exportées en CSV','success');
   },
 
   renderTasksList(projetId, canEdit) {

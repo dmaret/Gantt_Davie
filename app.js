@@ -347,7 +347,7 @@ const App = {
     }
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const map = { d:'dashboard', g:'gantt', c:'calendrier', p:'personnes', l:'lieux', m:'machines', j:'projets', s:'stock', v:'deplacements', o:'commandes', b:'bom', x:'capacite', w:'whatif', r:'ressources', e:'equipes', a:'plan', f:'absences', h:'audit' };
+    const map = { d:'dashboard', g:'gantt', c:'calendrier', p:'personnes', l:'lieux', m:'machines', j:'projets', s:'stock', v:'deplacements', o:'commandes', b:'bom', x:'capacite', w:'whatif', r:'ressources', e:'equipes', a:'plan', f:'absences', h:'audit', t:'modeles' };
     if (map[e.key]) { this.navigate(map[e.key]); e.preventDefault(); return; }
     if (e.key === '?') { this.showHelp(); e.preventDefault(); return; }
     if (e.key === 'n' && this.views[this.view].newItem) { this.views[this.view].newItem(); e.preventDefault(); return; }

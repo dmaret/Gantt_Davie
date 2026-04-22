@@ -8,6 +8,7 @@ App.views.personnes = {
         <select id="p-role"><option value="">Tous rôles</option>${[...new Set(s.personnes.map(p=>p.role))].map(r=>`<option>${r}</option>`).join('')}</select>
         <select id="p-lieu"><option value="">Tous lieux</option>${s.lieux.filter(l=>l.type==='production').map(l=>`<option value="${l.id}">${l.nom}</option>`).join('')}</select>
         <span class="spacer"></span>
+        <button class="btn-ghost" id="p-export" title="Exporter le planning hebdomadaire en CSV (ouvrable dans Excel)">⬇ Planning CSV</button>
         <button class="btn" id="p-add">+ Ajouter une personne</button>
       </div>
       <div class="card"><div id="p-table"></div></div>
@@ -16,6 +17,7 @@ App.views.personnes = {
     document.getElementById('p-role').onchange = e => { this.state.roleFilter = e.target.value; this.draw(); };
     document.getElementById('p-lieu').onchange = e => { this.state.lieuFilter = e.target.value; this.draw(); };
     document.getElementById('p-add').onclick = () => this.openForm(null);
+    document.getElementById('p-export').onclick = () => this.exportPlanningCSV();
     this.draw();
   },
   draw() {
@@ -233,5 +235,45 @@ App.views.personnes = {
         DB.save(); App.closeModal(); App.toast('Supprimée','info'); App.refresh();
       };
     }
+  },
+
+  // Export CSV planning hebdomadaire (ouvrable dans Excel)
+  exportPlanningCSV() {
+    const s = DB.state;
+    const today = D.today();
+    const weekEnd = D.addWorkdays(today, 4);
+    const rows = [['Personne','Rôle','Lieu','Jour','Date','Tâches','Déplacements','Absent','Heures']];
+    const days = [];
+    let cur = today; while (cur <= weekEnd) { days.push(cur); cur = D.addDays(cur, 1); }
+    s.personnes.forEach(p => {
+      days.forEach(d => {
+        const absent = DB.personneAbsenteLe(p.id, d);
+        const absInfo = absent ? (p.absences||[]).find(a => a.debut <= d && a.fin >= d) : null;
+        const ts = s.taches.filter(t => (t.assignes||[]).includes(p.id) && t.debut <= d && t.fin >= d && !t.jalon);
+        const deps = s.deplacements.filter(x => x.personneId === p.id && x.date === d);
+        const tNames = ts.map(t => {
+          const prj = DB.projet(t.projetId);
+          return (prj?prj.code+' · ':'')+t.nom;
+        }).join(' | ');
+        const dNames = deps.map(x => {
+          const o = DB.lieu(x.origineId), de = DB.lieu(x.destinationId);
+          return `${x.motif} (${o?o.nom:''} → ${de?de.nom:''})`;
+        }).join(' | ');
+        const dow = JOURS_SEMAINE[(D.parse(d).getUTCDay()+6)%7];
+        const h = p.horaires || defaultHoraires();
+        const demiJ = ((h[dow]?.matin?1:0) + (h[dow]?.aprem?1:0));
+        const heures = absent ? 0 : demiJ * 3.5 * (ts.length?1:0);
+        rows.push([
+          App.personneLabel(p), p.role, DB.lieu(p.lieuPrincipalId)?.nom||'',
+          JOURS_COURT[(D.parse(d).getUTCDay()+6)%7], D.fmt(d),
+          tNames, dNames,
+          absent ? absInfo.motif : '',
+          heures.toFixed(1).replace('.', ','),
+        ]);
+      });
+      rows.push([]); // ligne vide entre personnes
+    });
+    CSV.download(`planning-${D.iso(new Date())}.csv`, rows);
+    App.toast('Planning exporté en CSV','success');
   },
 };
