@@ -194,7 +194,7 @@ const App = {
     if (!sel) return;
     const users = DB.state.utilisateurs || [];
     const curId = this.currentUser().id;
-    sel.innerHTML = users.map(u => `<option value="${u.id}" ${u.id===curId?'selected':''}>${u.nom} · ${u.groupe||'—'}${u.axes.length?' ('+u.axes.join('/')+')':''}</option>`).join('');
+    sel.innerHTML = users.map(u => { const axes = u.axes || []; return `<option value="${u.id}" ${u.id===curId?'selected':''}>${u.nom} · ${u.groupe||'—'}${axes.length?' ('+axes.join('/')+')':''}</option>`; }).join('');
     sel.onchange = e => this.setCurrentUser(e.target.value);
     this.refreshUserBadge();
   },

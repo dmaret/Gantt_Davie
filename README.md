@@ -15,23 +15,26 @@ Copier `index.html`, `styles.css`, `app.js`, `data.js` et le dossier `views/` su
 **Option 3 — GitHub Pages**
 Cette app est déployée automatiquement depuis la branche `main`.
 
-## Modules (13 vues)
+## Modules (15 vues + Admin)
 
 | Raccourci | Onglet | Contenu |
 |:-:|---|---|
-| `D` | Tableau de bord | KPI, conflits, alertes proactives, prédiction fin de projet, prochaines tâches, charge par lieu |
-| `G` | Gantt | Vue chronologique, regroupement par projet / personne / machine / lieu, glisser-déposer, dépendances SVG, chemin critique, cascade automatique |
+| `D` | Tableau de bord | KPI, conflits, alertes proactives, prédiction fin de projet, prochaines tâches, charge par lieu — **cartes réorganisables par drag & drop pour les admins** |
+| `G` | Gantt | Vue chronologique, regroupement par projet / personne / machine / lieu, glisser-déposer, dépendances SVG, chemin critique, cascade automatique, menu contextuel clic-droit |
 | `C` | Calendrier | Vues mois / semaine, événements colorés par projet, modale détaillée au clic |
-| `P` | Personnes | Annuaire, compétences, charge glissante 4 semaines, suggestions d'affectation |
+| `P` | Personnes | Annuaire, compétences, **profil horaires hebdo cliquable**, charge glissante 4 semaines, Ma semaine |
 | `L` | Lieux | Production + stockages arborescents par étage |
 | `M` | Machines | 10 machines, charge 7 jours, conflits, CRUD, export CSV |
-| `J` | Projets | Cartes projet, avancement, priorité, retard |
-| `S` | Stock | Articles, seuils d'alerte, stockage, projets liés |
-| `B` | BOM | Bill of Materials : besoin projet ↔ solde stock, ruptures prévues |
+| `J` | Projets | Cartes projet, avancement, priorité, retard, rapport PDF |
+| `S` | Stock | Articles, seuils d'alerte, stockage, projets liés, édition inline |
+| `B` | BOM | Bill of Materials : besoin projet ↔ solde stock, ruptures prévues, édition inline |
 | `V` | Déplacements | Mouvements entre sites, personnes, motifs |
 | `O` | Commandes | Workflow 4A, TVA suisse, historique signé et horodaté |
 | `X` | Capacité | Heatmap capacité sur 8 / 12 / 24 semaines (par lieu, machine ou personne) |
+| `R` | **Ressources** | Matrice personnes × jours × demi-journées (dispo / occupé·e / off) |
+| `E` | **Équipes** | Définition d'équipes de production (Ligne 1, Valmont, Logistique, Assemblage…) avec slots de compétences |
 | `W` | What-if | Snapshot, modifications, diff, commit ou rollback |
+| ⚙ | Admin | Gestion utilisateurs, groupes d'accès, permissions, mots de passe |
 
 ## Fonctionnalités clés
 
@@ -43,6 +46,19 @@ Cette app est déployée automatiquement depuis la branche `main`.
 - **Prédiction fin de projet** par ratio de vélocité (temps consommé / avancement)
 - **Alertes proactives** : stock vs BOM, conflits machine, surcharge personne, retard projet
 - **Notifications en tête** : cloche 🔔 avec badge compteur (rouge si critique), rafraîchie toutes les 30 s
+
+### Ressources humaines : horaires, disponibilité, équipes
+- **Profil de travail hebdomadaire** par personne (grille 7 jours × matin/après-midi)
+- **Édition inline** : clic direct sur les carrés L/M/M/J/V/S/D dans la liste Personnes pour basculer matin ou après-midi, sauvegarde instantanée
+- **Vue Ressources** (raccourci R) : matrice personnes × jours × demi-journées avec 3 états (vert = dispo, orange = occupé·e, hachuré = off), filtres lieu/compétence/dispo aujourd'hui
+- **Équipes** (raccourci E) : 7 équipes par défaut (Ligne 1-2, Valmont, Logistique 1-3, Assemblage) composées de slots de compétences (ex. 1×Contrôle + 7×Montage)
+- **Pré-remplissage d'équipe** : depuis le formulaire d'une tâche Gantt, bouton « 🎯 Appliquer l'équipe » qui affecte automatiquement les N meilleures personnes par slot selon compétences + horaires + charge
+- **Détection de conflit** : si une personne proposée est déjà sur une tâche chevauchante, popup avec choix individuel « Déplacer ici » (retire de l'autre tâche) ou « Ignorer »
+
+### Authentification par mot de passe
+Login au démarrage avec SHA-256 (Web Crypto API). Un utilisateur sans mot de passe défini n'a pas de challenge (accès direct). Un admin (⚙) peut définir/retirer les mots de passe de tous les utilisateurs. Chaque utilisateur peut gérer son propre mot de passe via 🔑.
+
+> ⚠ **Limitation** : app statique sans backend. Les hashes sont stockés en `localStorage`, donc un utilisateur avec devtools peut contourner. Verrou visuel efficace contre l'usage non-technique, mais pas une vraie sécurité.
 
 ### Utilisateurs & groupes d'accès
 3 groupes avec **permissions paramétrables** (vue Admin ⚙) :
@@ -149,6 +165,8 @@ Bouton ☾ / ☀ : bascule instantanée, persisté en localStorage.
 | `Ctrl+K` / `Cmd+K` | **Recherche globale** (toutes entités) |
 | `Ctrl+Z` / `Cmd+Z` | **Annuler** la dernière modification |
 | `Ctrl+Shift+Z` | **Refaire** |
+| `R` | Vue Ressources |
+| `E` | Vue Équipes |
 | `?` | Afficher l'aide des raccourcis |
 | `Esc` | Fermer la modale / la recherche |
 
@@ -178,10 +196,13 @@ app.js              Router, modal, toast, raccourcis, conflits,
                     tutorial
 views/
   dashboard.js      KPI + conflits + alertes + prédictions + charge
+                    + cartes réorganisables par drag & drop (admin)
   gantt.js          Grille CSS + overlay SVG + drag-to-reschedule
-                    + menu contextuel clic-droit
+                    + menu contextuel clic-droit + pré-remplissage équipe
+                    + popup conflit d'affectation
   calendrier.js     Mois / semaine
   personnes.js      Annuaire + charge 4 semaines + Ma semaine
+                    + horaires cliquables en ligne
   lieux.js          Arbres de stockage par étage
   machines.js       CRUD + charge + export CSV
   projets.js        Cartes + rapport PDF
@@ -190,8 +211,10 @@ views/
   deplacements.js   Liste + création
   commandes.js      4A + historique signé + autorisation par axe
   capacite.js       Heatmap
+  ressources.js     Matrice personnes × jours × demi-journées
+  equipes.js        CRUD équipes + slots compétences + proposerAffectation
   whatif.js         Snapshot + diff + commit
-  admin.js          Gestion utilisateurs & permissions de groupes
+  admin.js          Gestion utilisateurs, groupes, permissions, mots de passe
 ```
 
 **Persistance** : `localStorage['atelier_plan_v3']`. Le numéro de version (`v3`) est incrémenté lorsque le modèle de données évolue, pour invalider les anciennes sauvegardes. Les ajouts rétrocompatibles passent par `DB.migrate()` afin de préserver les données existantes.

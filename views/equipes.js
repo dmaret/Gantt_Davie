@@ -98,10 +98,10 @@ App.views.equipes = {
 
     const slotsEl = document.getElementById('ef-slots');
     document.getElementById('ef-add-slot').onclick = () => {
+      // ⚠ Ne pas muter eq.slots ici — ef-save reconstruit depuis le DOM.
+      // Sinon, un Annuler laisserait des slots fantômes dans l'objet state.
       const newSl = { competence: allComps[0]||'', n: 1 };
-      eq.slots = eq.slots || [];
-      eq.slots.push(newSl);
-      slotsEl.insertAdjacentHTML('beforeend', this.slotRow(newSl, eq.slots.length-1, allComps));
+      slotsEl.insertAdjacentHTML('beforeend', this.slotRow(newSl, -1, allComps));
     };
     document.getElementById('ef-cancel').onclick = () => App.closeModal();
     document.getElementById('ef-save').onclick = () => {

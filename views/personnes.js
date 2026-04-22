@@ -86,6 +86,7 @@ App.views.personnes = {
         if (!p) return;
         if (!p.horaires) p.horaires = defaultHoraires();
         const j = el.dataset.jour, sl = el.dataset.slot;
+        if (!p.horaires[j]) p.horaires[j] = { matin:false, aprem:false };
         p.horaires[j][sl] = !p.horaires[j][sl];
         DB.save();
         el.classList.toggle('on');
@@ -151,8 +152,9 @@ App.views.personnes = {
   openForm(id) {
     const isNew = !id;
     const s = DB.state;
+    const firstProdLieu = s.lieux.find(l => l.type === 'production') || s.lieux[0];
     const p = id ? DB.personne(id) : {
-      id: DB.uid('P'), prenom:'', nom:'', role:'Technicien·ne', lieuPrincipalId:s.lieux[0].id, competences:[], capaciteHebdo:35, couleur:'#2c5fb3', horaires: defaultHoraires(),
+      id: DB.uid('P'), prenom:'', nom:'', role:'Technicien·ne', lieuPrincipalId: firstProdLieu?.id, competences:[], capaciteHebdo:35, couleur:'#2c5fb3', horaires: defaultHoraires(),
     };
     if (!p.horaires) p.horaires = defaultHoraires();
     const allComps = ['CNC','Laser','Pliage','Soudure','Peinture','Montage','Contrôle','Élec','CAO','Logistique','Management','Qualité'];

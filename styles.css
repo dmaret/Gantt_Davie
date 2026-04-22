@@ -422,6 +422,8 @@ table.data tr:hover td { background: var(--surface-2); }
 .toast.success { border-left: 3px solid var(--success); }
 .toast.error { border-left: 3px solid var(--danger); }
 .toast.info { border-left: 3px solid var(--primary); }
+.toast.warn { border-left: 3px solid var(--warning); }
+.toast.muted { border-left: 3px solid var(--text-muted); }
 
 /* Gantt */
 .gantt-wrap {

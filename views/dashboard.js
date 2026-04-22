@@ -94,9 +94,11 @@ App.views.dashboard = {
         const toId = el.dataset.panel;
         const order = DB.state.dashboardOrder.slice();
         const fromIdx = order.indexOf(fromId);
-        const toIdx = order.indexOf(toId);
+        let toIdx = order.indexOf(toId);
         if (fromIdx < 0 || toIdx < 0) return;
         order.splice(fromIdx, 1);
+        // Ajuste l'index cible si on déplace vers le bas (la suppression a décalé)
+        if (fromIdx < toIdx) toIdx--;
         order.splice(toIdx, 0, fromId);
         DB.state.dashboardOrder = order;
         DB.save();

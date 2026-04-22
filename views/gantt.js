@@ -217,7 +217,7 @@ App.views.gantt = {
         const isConflict = confPersons.has(t.id) || confMachines.has(t.id);
         const crit = isCritical(t);
         const color = prj ? prj.couleur : '#888';
-        const label = t.jalon ? '' : (t.nom + ' · ' + Math.round(t.avancement) + '%');
+        const label = t.jalon ? '' : (t.nom + ' · ' + Math.round(t.avancement||0) + '%');
         barPos[t.id] = { left, right: left + width, top: top + 11, mid: top + 11 };
 
         const cls = (isConflict?'conflict ':'') + (crit?'critical ':'');
@@ -423,6 +423,7 @@ App.views.gantt = {
   openTacheForm(tid) {
     const isNew = !tid;
     const s = DB.state;
+    if (isNew && !s.projets.length) { App.toast("Créer d'abord un projet",'error'); App.navigate('projets'); return; }
     const t = tid ? DB.tache(tid) : {
       id: DB.uid('T'), projetId: s.projets[0].id, nom:'', debut: D.today(), fin: D.addDays(D.today(),2),
       assignes:[], machineId:null, lieuId:null, type:'prod', avancement:0, jalon:false, dependances:[],
@@ -554,6 +555,7 @@ App.views.gantt = {
       }
 
       // Overlay personnalisé au-dessus de la modale de tâche (préserve le form)
+      if (document.querySelector('.conflict-overlay')) return;
       const overlay = document.createElement('div');
       overlay.className = 'conflict-overlay';
       overlay.innerHTML = `<div class="conflict-card">
