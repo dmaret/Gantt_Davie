@@ -458,6 +458,13 @@ App.views.gantt = {
         </select>
       </div>
       <div id="f-sugg" class="muted small" style="margin-top:-4px"></div>
+      <div class="field"><label>🎯 Pré-remplir avec une équipe</label>
+        <div class="row" style="gap:6px;align-items:end">
+          <select id="f-equipe" style="flex:3"><option value="">—</option>${(s.equipes||[]).map(eq => `<option value="${eq.id}">${eq.nom} · ${(eq.slots||[]).reduce((n,sl)=>n+sl.n,0)} pers.</option>`).join('')}</select>
+          <button type="button" class="btn btn-secondary" id="f-eq-apply" style="margin-bottom:0">Appliquer l'équipe</button>
+        </div>
+        <p class="muted small" style="margin-top:4px">Sélectionne automatiquement les personnes disponibles correspondant aux slots de l'équipe (horaires + compétences + charge).</p>
+      </div>
       <div class="field"><label>Dépendances (tâches dont celle-ci dépend)</label>
         <select id="f-deps" multiple size="5">
           ${s.taches.filter(x => x.id !== t.id && x.projetId === t.projetId).sort((a,b)=>a.debut.localeCompare(b.debut)).map(x => `<option value="${x.id}" ${(t.dependances||[]).includes(x.id)?'selected':''}>${x.nom} · ${D.fmt(x.debut)}→${D.fmt(x.fin)}</option>`).join('')}
@@ -485,6 +492,27 @@ App.views.gantt = {
     };
     renderSugg();
     ['f-debut','f-fin','f-machine','f-lieu','f-type'].forEach(id => { const el = document.getElementById(id); if (el) el.onchange = renderSugg; });
+
+    // Pré-remplissage par équipe
+    document.getElementById('f-eq-apply').onclick = () => {
+      const eqId = document.getElementById('f-equipe').value;
+      if (!eqId) { App.toast('Choisir une équipe','error'); return; }
+      const debut = document.getElementById('f-debut').value;
+      const fin = document.getElementById('f-fin').value;
+      const prop = App.views.equipes.proposerAffectation(eqId, debut, fin);
+      if (!prop) { App.toast('Équipe introuvable','error'); return; }
+      const selectedIds = new Set();
+      const missing = [];
+      prop.slots.forEach(sl => {
+        sl.selected.forEach(c => selectedIds.add(c.p.id));
+        if (sl.selected.length < sl.n) missing.push(`${sl.competence} : ${sl.selected.length}/${sl.n}`);
+      });
+      const sel = document.getElementById('f-assignes');
+      Array.from(sel.options).forEach(o => o.selected = selectedIds.has(o.value));
+      const totalPers = selectedIds.size;
+      const msg = `${totalPers} personne(s) affectée(s)` + (missing.length ? ` · manque : ${missing.join(', ')}` : '');
+      App.toast(msg, missing.length ? 'warn' : 'success');
+    };
 
     document.getElementById('f-cancel').onclick = () => App.closeModal();
     document.getElementById('f-save').onclick = () => {

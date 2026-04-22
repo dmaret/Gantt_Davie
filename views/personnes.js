@@ -50,11 +50,14 @@ App.views.personnes = {
         return `<div class="bar-inline ${cls}" title="${w.h}h"><div class="fill" style="width:${w.pct}%"></div></div>`;
       }).join('');
       const avgCls = avgPct > 95 ? 'bad' : avgPct > 80 ? 'warn' : '';
+      const h = p.horaires || defaultHoraires();
+      const hMini = `<div class="horaires-mini" title="Profil de travail hebdomadaire">${JOURS_SEMAINE.map((j,i) => `<div class="h-day"><div class="h-label">${JOURS_COURT[i]}</div><div class="h-slot ${h[j]?.matin?'on':''}"></div><div class="h-slot ${h[j]?.aprem?'on':''}"></div></div>`).join('')}</div>`;
       return `<tr data-id="${p.id}">
         <td><strong class="p-name" style="cursor:pointer">${App.personneLabel(p)}</strong></td>
         <td>${p.role}</td>
         <td><span class="muted">${DB.lieu(p.lieuPrincipalId)?.nom || '—'}</span></td>
         <td>${(p.competences||[]).map(c => `<span class="chip">${c}</span>`).join('')}</td>
+        <td>${hMini}</td>
         <td>${tsNow.length}</td>
         <td><div style="display:flex;gap:3px">${cells}</div></td>
         <td class="right"><span class="badge ${avgCls==='bad'?'bad':avgCls==='warn'?'warn':'good'}">${avgPct}%</span></td>
@@ -64,10 +67,10 @@ App.views.personnes = {
 
     document.getElementById('p-table').innerHTML = `
       <table class="data">
-        <thead><tr><th>Personne</th><th>Rôle</th><th>Lieu principal</th><th>Compétences</th><th>Tâches 7j</th><th>Charge 4 semaines</th><th class="right">Moy.</th><th></th></tr></thead>
+        <thead><tr><th>Personne</th><th>Rôle</th><th>Lieu principal</th><th>Compétences</th><th title="Profil hebdo (L M M J V S D × matin/aprem)">Horaires</th><th>Tâches 7j</th><th>Charge 4 semaines</th><th class="right">Moy.</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="muted small" style="margin-top:10px">${list.length} personne(s) · 4 barres = 4 semaines glissantes · cliquer sur le nom pour éditer · 📅 = planning personnel</p>
+      <p class="muted small" style="margin-top:10px">${list.length} personne(s) · carrés pleins = dispo · 📅 = planning personnel</p>
     `;
     document.querySelectorAll('#p-table tbody .p-name').forEach(el => el.onclick = () => this.openForm(el.closest('tr').dataset.id));
     document.querySelectorAll('#p-table tbody .p-semaine').forEach(b => b.onclick = e => { e.stopPropagation(); this.openSemaine(b.dataset.id); });
@@ -132,9 +135,20 @@ App.views.personnes = {
     const isNew = !id;
     const s = DB.state;
     const p = id ? DB.personne(id) : {
-      id: DB.uid('P'), prenom:'', nom:'', role:'Technicien·ne', lieuPrincipalId:s.lieux[0].id, competences:[], capaciteHebdo:35, couleur:'#2c5fb3',
+      id: DB.uid('P'), prenom:'', nom:'', role:'Technicien·ne', lieuPrincipalId:s.lieux[0].id, competences:[], capaciteHebdo:35, couleur:'#2c5fb3', horaires: defaultHoraires(),
     };
+    if (!p.horaires) p.horaires = defaultHoraires();
     const allComps = ['CNC','Laser','Pliage','Soudure','Peinture','Montage','Contrôle','Élec','CAO','Logistique','Management','Qualité'];
+    const horairesGrid = `
+      <table class="horaires-editor">
+        <thead><tr><th></th>${JOURS_SEMAINE.map((j,i) => `<th>${j.slice(0,3)}</th>`).join('')}</tr></thead>
+        <tbody>
+          <tr><td class="right muted small">Matin</td>${JOURS_SEMAINE.map(j => `<td><label class="h-tog"><input type="checkbox" data-jour="${j}" data-slot="matin" ${p.horaires[j]?.matin?'checked':''}></label></td>`).join('')}</tr>
+          <tr><td class="right muted small">Après-midi</td>${JOURS_SEMAINE.map(j => `<td><label class="h-tog"><input type="checkbox" data-jour="${j}" data-slot="aprem" ${p.horaires[j]?.aprem?'checked':''}></label></td>`).join('')}</tr>
+        </tbody>
+      </table>
+      <div class="muted small" style="margin-top:4px">Cocher = travaille sur cette demi-journée. Total : <span id="pf-dj">${horairesDemiJournees(p.horaires)}</span> demi-journées/semaine.</div>
+    `;
     const body = `
       <div class="row">
         <div class="field"><label>Prénom</label><input id="pf-prenom" value="${p.prenom||''}"></div>
@@ -152,6 +166,7 @@ App.views.personnes = {
           ${allComps.map(c => `<option value="${c}" ${(p.competences||[]).includes(c)?'selected':''}>${c}</option>`).join('')}
         </select>
       </div>
+      <div class="field"><label>Profil de travail hebdomadaire</label>${horairesGrid}</div>
     `;
     const foot = `
       ${!isNew?'<button class="btn btn-danger" id="pf-del">Supprimer</button>':''}
@@ -161,6 +176,13 @@ App.views.personnes = {
     `;
     App.openModal(isNew?'Nouvelle personne':App.personneLabel(p), body, foot);
     document.getElementById('pf-cancel').onclick = () => App.closeModal();
+    // Live recount des demi-journées
+    document.querySelectorAll('.horaires-editor input[data-jour]').forEach(cb => cb.onchange = () => {
+      const h = {};
+      JOURS_SEMAINE.forEach(j => h[j] = { matin:false, aprem:false });
+      document.querySelectorAll('.horaires-editor input[data-jour]').forEach(x => { if (x.checked) h[x.dataset.jour][x.dataset.slot] = true; });
+      document.getElementById('pf-dj').textContent = horairesDemiJournees(h);
+    });
     document.getElementById('pf-save').onclick = () => {
       p.prenom = document.getElementById('pf-prenom').value.trim();
       p.nom    = document.getElementById('pf-nom').value.trim();
@@ -168,6 +190,10 @@ App.views.personnes = {
       p.capaciteHebdo = +document.getElementById('pf-capa').value;
       p.lieuPrincipalId = document.getElementById('pf-lieu').value;
       p.competences = Array.from(document.getElementById('pf-comps').selectedOptions).map(o=>o.value);
+      const horaires = {};
+      JOURS_SEMAINE.forEach(j => horaires[j] = { matin:false, aprem:false });
+      document.querySelectorAll('.horaires-editor input[data-jour]').forEach(cb => { if (cb.checked) horaires[cb.dataset.jour][cb.dataset.slot] = true; });
+      p.horaires = horaires;
       if (!p.prenom || !p.nom) { App.toast('Prénom et nom requis','error'); return; }
       if (isNew) s.personnes.push(p);
       DB.save(); App.closeModal(); App.toast('Enregistré','success'); App.refresh();

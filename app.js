@@ -303,7 +303,7 @@ const App = {
     }
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const map = { d:'dashboard', g:'gantt', c:'calendrier', p:'personnes', l:'lieux', m:'machines', j:'projets', s:'stock', v:'deplacements', o:'commandes', b:'bom', x:'capacite', w:'whatif' };
+    const map = { d:'dashboard', g:'gantt', c:'calendrier', p:'personnes', l:'lieux', m:'machines', j:'projets', s:'stock', v:'deplacements', o:'commandes', b:'bom', x:'capacite', w:'whatif', r:'ressources', e:'equipes' };
     if (map[e.key]) { this.navigate(map[e.key]); e.preventDefault(); return; }
     if (e.key === '?') { this.showHelp(); e.preventDefault(); return; }
     if (e.key === 'n' && this.views[this.view].newItem) { this.views[this.view].newItem(); e.preventDefault(); return; }
@@ -448,6 +448,7 @@ const App = {
       <p><kbd>D</kbd> Dashboard · <kbd>G</kbd> Gantt · <kbd>C</kbd> Calendrier · <kbd>P</kbd> Personnes</p>
       <p><kbd>L</kbd> Lieux · <kbd>M</kbd> Machines · <kbd>J</kbd> Projets · <kbd>S</kbd> Stock</p>
       <p><kbd>V</kbd> Déplacements · <kbd>O</kbd> Commandes · <kbd>B</kbd> BOM · <kbd>X</kbd> Capacité · <kbd>W</kbd> What-if</p>
+      <p><kbd>R</kbd> Ressources · <kbd>E</kbd> Équipes</p>
       <p><kbd>Ctrl</kbd>+<kbd>K</kbd> Recherche globale · <kbd>/</kbd> Recherche vue · <kbd>N</kbd> Nouveau · <kbd>?</kbd> Aide</p>
       <p><kbd>Ctrl</kbd>+<kbd>Z</kbd> Annuler · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> Refaire · <kbd>Esc</kbd> Fermer</p>
       <p class="muted small">Clic-droit sur une barre Gantt pour un menu d'actions rapides.</p>

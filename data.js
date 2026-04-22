@@ -16,6 +16,9 @@ const DB = {
     if (!this.state.utilisateurs) this.state.utilisateurs = defaultUsers();
     if (!this.state.groupes) this.state.groupes = defaultGroupes();
     if (!this.state.dashboardOrder) this.state.dashboardOrder = defaultDashboardOrder();
+    if (!this.state.equipes) this.state.equipes = defaultEquipes();
+    // Horaires hebdomadaires : lundi→vendredi plein temps par défaut, weekend off
+    this.state.personnes.forEach(p => { if (!p.horaires) p.horaires = defaultHoraires(); });
     // Assigner un groupe par défaut aux utilisateurs qui n'en ont pas
     this.state.utilisateurs.forEach(u => {
       if (!u.groupe) {
@@ -177,6 +180,36 @@ function defaultGroupes() {
 // Ordre par défaut des cartes du tableau de bord (personnalisable par drag & drop admin)
 function defaultDashboardOrder() {
   return ['conflits','alertes','predictions','commandes-4a','next-tasks','next-moves','charge-lieux'];
+}
+
+// Horaires hebdomadaires par défaut (lundi→vendredi plein temps, weekend off)
+const JOURS_SEMAINE = ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'];
+const JOURS_COURT   = ['L','M','M','J','V','S','D'];
+function defaultHoraires() {
+  const h = {};
+  JOURS_SEMAINE.forEach((j, i) => {
+    const ouvre = i < 5;
+    h[j] = { matin: ouvre, aprem: ouvre };
+  });
+  return h;
+}
+// Totalise les demi-journées travaillées par semaine (0 à 14)
+function horairesDemiJournees(h) {
+  if (!h) return 10;
+  return JOURS_SEMAINE.reduce((n,j) => n + (h[j]?.matin?1:0) + (h[j]?.aprem?1:0), 0);
+}
+
+// Équipes par défaut — cartographie des ressources par activité
+function defaultEquipes() {
+  return [
+    { id:'EQ_L1',   nom:'Ligne 1',      couleur:'#2c5fb3', slots:[ { competence:'Contrôle', n:1 }, { competence:'Montage',  n:7 } ] },
+    { id:'EQ_L2',   nom:'Ligne 2',      couleur:'#7c3aed', slots:[ { competence:'Contrôle', n:1 }, { competence:'Montage',  n:6 } ] },
+    { id:'EQ_VAL',  nom:'Valmont',      couleur:'#c47800', slots:[ { competence:'CNC', n:2 }, { competence:'Soudure', n:3 } ] },
+    { id:'EQ_LOG1', nom:'Logistique 1', couleur:'#1f8a4c', slots:[ { competence:'Logistique', n:3 } ] },
+    { id:'EQ_LOG2', nom:'Logistique 2', couleur:'#1f8a4c', slots:[ { competence:'Logistique', n:2 } ] },
+    { id:'EQ_LOG3', nom:'Logistique 3', couleur:'#1f8a4c', slots:[ { competence:'Logistique', n:2 } ] },
+    { id:'EQ_ASM',  nom:'Assemblage',   couleur:'#0ea5b7', slots:[ { competence:'Montage', n:4 }, { competence:'Contrôle', n:1 } ] },
+  ];
 }
 
 function seed() {
