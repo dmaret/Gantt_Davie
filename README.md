@@ -234,6 +234,17 @@ views/
 
 **Dates en UTC** : toutes les manipulations de date passent par `D.parse`, `D.iso`, `D.addDays`, etc. qui utilisent `Date.UTC()` et `getUTCDate()`. Cela évite les décalages d'un jour lors d'un changement d'heure ou d'un fuseau non-UTC (bug historique en CEST/Zurich).
 
+## Utilisation & contact
+
+| | |
+|---|---|
+| **Responsable** | Davie MARET |
+| **Contexte** | Planification d'atelier de production multi-sites |
+| **Version** | 3.0 |
+| **Date** | Avril 2026 |
+
+Pour toute question relative à l'utilisation de cette application, contacter Davie MARET.
+
 ## Licence & crédits
 
-Application développée sur mesure. Aucune dépendance tierce.
+Application développée sur mesure pour Davie MARET. Aucune dépendance tierce.
