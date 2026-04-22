@@ -255,6 +255,30 @@ body {
 .conflict-body { padding: 14px 18px; overflow: auto; }
 .conflict-foot { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; background: var(--surface-2); border-radius: 0 0 8px 8px; }
 
+/* Plan 2D de l'atelier */
+.etage-pills { display: inline-flex; gap: 4px; }
+.etage-pills .pill {
+  background: var(--surface-2); border: 1px solid var(--border);
+  padding: 4px 10px; border-radius: 16px; cursor: pointer;
+  font-size: 12px; color: var(--text);
+}
+.etage-pills .pill.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+.plan-wrap { overflow: auto; max-height: calc(100vh - 200px); padding: 8px; }
+.plan-side { position: sticky; top: 16px; max-height: calc(100vh - 200px); overflow: auto; }
+.plan-svg { display: block; user-select: none; background: var(--surface); }
+.plan-etage-label { font-size: 11px; font-weight: 700; fill: var(--text-muted); text-transform: uppercase; }
+.plan-etage-line { stroke: var(--border); stroke-dasharray: 4 4; stroke-width: 1; }
+.plan-lieu { cursor: pointer; transition: filter .12s; }
+.plan-lieu:hover { filter: brightness(1.05) drop-shadow(0 2px 4px rgba(0,0,0,0.15)); }
+.plan-lieu.selected rect { stroke-width: 3; filter: drop-shadow(0 0 0 2px var(--primary)); }
+.plan-lieu.editable { cursor: move; }
+.plan-lieu.dragging { opacity: .7; }
+.plan-lieu-title { font-size: 13px; font-weight: 600; fill: var(--text); pointer-events: none; }
+.plan-lieu-meta { font-size: 11px; fill: var(--text-muted); pointer-events: none; }
+.plan-lieu-cap { font-size: 10px; fill: var(--text-muted); pointer-events: none; }
+.plan-person { stroke: #fff; stroke-width: 1.5; }
+.plan-person-more { font-size: 10px; font-weight: 700; fill: var(--text); pointer-events: none; }
+
 /* Tableau de bord — cartes réorganisables (drag & drop admin) */
 .dashboard-grid {
   display: grid;

@@ -19,6 +19,8 @@ const DB = {
     if (!this.state.equipes) this.state.equipes = defaultEquipes();
     // Horaires hebdomadaires : lundi→vendredi plein temps par défaut, weekend off
     this.state.personnes.forEach(p => { if (!p.horaires) p.horaires = defaultHoraires(); });
+    // Positions sur le plan 2D pour les lieux sans coordonnées
+    this.state.lieux.forEach(l => { if (l.x === undefined) Object.assign(l, autoPosition(l, this.state.lieux)); });
     // Assigner un groupe par défaut aux utilisateurs qui n'en ont pas
     this.state.utilisateurs.forEach(u => {
       if (!u.groupe) {
@@ -197,6 +199,29 @@ function defaultHoraires() {
 function horairesDemiJournees(h) {
   if (!h) return 10;
   return JOURS_SEMAINE.reduce((n,j) => n + (h[j]?.matin?1:0) + (h[j]?.aprem?1:0), 0);
+}
+
+// Positionnement auto sur le plan 2D : grille par étage
+// Ordre des étages (top → bottom) : 2e, 1er, Rez, S-sol
+const ETAGES_ORDER = ['2e','1er','Rez','S-sol'];
+function autoPosition(lieu, allLieux) {
+  const ETAGE_H = 260;      // hauteur d'un étage sur le plan
+  const LIEU_W = 180;
+  const LIEU_H = 110;
+  const PAD_X = 20;
+  const PAD_Y = 30;
+  const etageIdx = Math.max(0, ETAGES_ORDER.indexOf(lieu.etage));
+  // Index de ce lieu parmi ceux du même étage, typé prod puis stockage
+  const sameEtage = allLieux.filter(l => l.etage === lieu.etage);
+  sameEtage.sort((a,b) => (a.type === 'production' ? -1 : 1) - (b.type === 'production' ? -1 : 1));
+  const idx = sameEtage.indexOf(lieu);
+  const col = idx; // une seule rangée par étage
+  return {
+    x: PAD_X + col * (LIEU_W + 12),
+    y: PAD_Y + etageIdx * ETAGE_H,
+    w: LIEU_W,
+    h: LIEU_H,
+  };
 }
 
 // Équipes par défaut — cartographie des ressources par activité
