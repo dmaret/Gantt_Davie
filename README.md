@@ -168,24 +168,30 @@ Bouton ☾ / ☀ : bascule instantanée, persisté en localStorage.
 
 ```
 index.html          Shell + topbar + modal root + script tags
-styles.css          Thème clair/sombre, grille Gantt, heatmap, print
-data.js             DB, seed, utilitaires dates (UTC), STORAGE_KEY
+styles.css          Thème clair/sombre, grille Gantt, heatmap, print,
+                    recherche globale, menu contextuel, tutorial
+data.js             DB, seed, migrate, undo/redo, utilitaires dates
+                    (UTC), calculs CHF/TVA, export CSV
 app.js              Router, modal, toast, raccourcis, conflits,
-                    suggestions, prédictions, alertes proactives
+                    suggestions, prédictions, alertes proactives,
+                    permissions (can/applyPerms), recherche globale,
+                    tutorial
 views/
   dashboard.js      KPI + conflits + alertes + prédictions + charge
   gantt.js          Grille CSS + overlay SVG + drag-to-reschedule
+                    + menu contextuel clic-droit
   calendrier.js     Mois / semaine
-  personnes.js      Annuaire + charge 4 semaines
+  personnes.js      Annuaire + charge 4 semaines + Ma semaine
   lieux.js          Arbres de stockage par étage
   machines.js       CRUD + charge + export CSV
-  projets.js        Cartes
-  stock.js          Articles + seuils
-  bom.js            Bill of Materials projet ↔ stock
+  projets.js        Cartes + rapport PDF
+  stock.js          Articles + seuils + édition inline
+  bom.js            Bill of Materials projet ↔ stock + édition inline
   deplacements.js   Liste + création
-  commandes.js      4A + historique signé
+  commandes.js      4A + historique signé + autorisation par axe
   capacite.js       Heatmap
   whatif.js         Snapshot + diff + commit
+  admin.js          Gestion utilisateurs & permissions de groupes
 ```
 
 **Persistance** : `localStorage['atelier_plan_v3']`. Le numéro de version (`v3`) est incrémenté lorsque le modèle de données évolue, pour invalider les anciennes sauvegardes. Les ajouts rétrocompatibles passent par `DB.migrate()` afin de préserver les données existantes.
