@@ -87,6 +87,26 @@ body {
 }
 .bell-count.bad { background: var(--danger); }
 .bell-count.hidden { display: none; }
+.user-badge {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  color: #fff; padding: 2px 8px; border-radius: 10px; letter-spacing: .5px;
+}
+/* Tutorial */
+.tuto-step { text-align: center; padding: 10px 0; }
+.tuto-step .tuto-icon { font-size: 48px; margin-bottom: 8px; }
+.tuto-step h3 { margin: 0 0 8px 0; }
+.tuto-step p { margin: 6px 0; line-height: 1.5; color: var(--text); }
+.tuto-step code { background: var(--surface-2); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+.tuto-dot { display: inline-block; width: 8px; height: 8px; border-radius: 4px; background: var(--border); cursor: pointer; }
+.tuto-dot.on { background: var(--primary); }
+.tuto-dot:hover { background: var(--text-muted); }
+.inline-edit {
+  width: 70px; padding: 3px 6px; font-size: 13px;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: var(--surface); color: var(--text);
+  text-align: right; font-family: inherit;
+}
+.inline-edit:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: var(--primary); }
 
 /* Main */
 main#view-root {

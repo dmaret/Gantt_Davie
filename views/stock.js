@@ -40,6 +40,7 @@ App.views.stock = {
     if (st.projetFilter) list = list.filter(x => (x.projetsLies||[]).includes(st.projetFilter));
     if (st.onlyAlert) list = list.filter(x => x.quantite < x.seuilAlerte);
 
+    const canEdit = App.can('edit');
     const rows = list.map(x => {
       const pct = x.seuilAlerte ? Math.min(100, Math.round(x.quantite / (x.seuilAlerte*2) * 100)) : 100;
       const cls = x.quantite < x.seuilAlerte ? 'bad' : x.quantite < x.seuilAlerte*1.3 ? 'warn' : '';
@@ -48,14 +49,17 @@ App.views.stock = {
         const p = DB.projet(pid); return p ? `<span class="chip" style="background:${p.couleur}22;color:${p.couleur}">${p.code}</span>` : '';
       }).join('');
       const lieu = DB.lieu(x.lieuId);
-      return `<tr data-id="${x.id}" style="cursor:pointer">
-        <td class="mono">${x.ref}</td>
-        <td><strong>${x.nom}</strong> ${badge}</td>
-        <td>${lieu?lieu.nom:'—'}</td>
-        <td class="right">${x.quantite} ${x.unite}</td>
-        <td class="right">${x.seuilAlerte}</td>
-        <td><div class="bar-inline ${cls}"><div class="fill" style="width:${pct}%"></div></div></td>
-        <td>${projs || '<span class="muted small">—</span>'}</td>
+      const qteCell = canEdit
+        ? `<input type="number" class="inline-edit" data-stock-qte="${x.id}" value="${x.quantite}" step="1"> <span class="muted small">${x.unite}</span>`
+        : `${x.quantite} ${x.unite}`;
+      return `<tr data-id="${x.id}">
+        <td class="mono st-open">${x.ref}</td>
+        <td class="st-open"><strong>${x.nom}</strong> ${badge}</td>
+        <td class="st-open">${lieu?lieu.nom:'—'}</td>
+        <td class="right">${qteCell}</td>
+        <td class="right st-open">${x.seuilAlerte}</td>
+        <td class="st-open"><div class="bar-inline ${cls}"><div class="fill" style="width:${pct}%"></div></div></td>
+        <td class="st-open">${projs || '<span class="muted small">—</span>'}</td>
       </tr>`;
     }).join('');
     document.getElementById('st-table').innerHTML = `
@@ -65,7 +69,24 @@ App.views.stock = {
       </table>
       <p class="muted small" style="margin-top:10px">${list.length} article(s)</p>
     `;
-    document.querySelectorAll('#st-table tbody tr').forEach(tr => tr.onclick = () => this.openForm(tr.dataset.id));
+    document.querySelectorAll('#st-table tbody td.st-open').forEach(td => td.style.cursor = 'pointer');
+    document.querySelectorAll('#st-table tbody td.st-open').forEach(td => td.onclick = () => this.openForm(td.closest('tr').dataset.id));
+    document.querySelectorAll('[data-stock-qte]').forEach(inp => {
+      const commit = () => {
+        const art = DB.stock(inp.dataset.stockQte);
+        if (!art) return;
+        const v = +inp.value;
+        if (art.quantite !== v) {
+          art.quantite = v;
+          DB.save();
+          this.draw();
+          App.toast('Stock mis à jour', 'success');
+        }
+      };
+      inp.onblur = commit;
+      inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } };
+      inp.onclick = e => e.stopPropagation();
+    });
   },
   openForm(id) {
     const isNew = !id;

@@ -58,17 +58,21 @@ App.views.bom = {
     const prjList = st.projetFilter ? s.projets.filter(p => p.id === st.projetFilter) : s.projets;
     const prjHtml = prjList.map(p => {
       const bom = p.bom || [];
+      const canEdit = App.can('edit');
       const rows = bom.map(l => {
         const art = DB.stock(l.articleId);
         if (!art) return '';
         const rupture = art.quantite < l.quantite;
+        const qteCell = canEdit
+          ? `<input type="number" class="inline-edit" data-bom-qte="${p.id}:${l.articleId}" min="0" step="1" value="${l.quantite}"> <span class="muted small">${art.unite}</span>`
+          : `${l.quantite} ${art.unite}`;
         return `<tr>
           <td class="mono">${art.ref}</td>
           <td>${art.nom}</td>
-          <td class="right">${l.quantite} ${art.unite}</td>
+          <td class="right">${qteCell}</td>
           <td class="right ${rupture?'':'muted'}">${art.quantite} ${art.unite}</td>
           <td>${rupture?'<span class="badge bad">manque</span>':'<span class="badge good">OK</span>'}</td>
-          <td><button class="btn-ghost" data-rm="${p.id}:${l.articleId}" style="padding:2px 8px">✕</button></td>
+          <td>${canEdit ? `<button class="btn-ghost" data-rm="${p.id}:${l.articleId}" style="padding:2px 8px">✕</button>` : ''}</td>
         </tr>`;
       }).join('');
       return `<div style="margin-bottom:14px">
@@ -117,6 +121,33 @@ App.views.bom = {
       DB.save(); this.draw();
     });
     document.querySelectorAll('[data-add-bom]').forEach(b => b.onclick = () => this.addLigne(b.dataset.addBom));
+    // Édition inline de la quantité BOM
+    document.querySelectorAll('[data-bom-qte]').forEach(inp => {
+      const commit = () => {
+        const [pid, aid] = inp.dataset.bomQte.split(':');
+        const p = DB.projet(pid);
+        const line = (p.bom||[]).find(l => l.articleId === aid);
+        if (!line) return;
+        const v = +inp.value;
+        if (v <= 0) {
+          if (confirm('Quantité 0 → supprimer la ligne ?')) {
+            p.bom = p.bom.filter(l => l.articleId !== aid);
+            DB.save(); this.draw();
+          } else {
+            inp.value = line.quantite;
+          }
+          return;
+        }
+        if (line.quantite !== v) {
+          line.quantite = v;
+          DB.save();
+          this.draw();
+          App.toast('Quantité mise à jour', 'success');
+        }
+      };
+      inp.onblur = commit;
+      inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } };
+    });
   },
   addLigne(projetId) {
     const p = DB.projet(projetId);

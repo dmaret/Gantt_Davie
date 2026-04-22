@@ -10,7 +10,12 @@ const App = {
     this.populateUserSelect();
     this.updateBell();
     this.bellInterval = setInterval(() => this.updateBell(), 30000);
+    this.applyGroupUI();
     this.navigate(location.hash.replace('#','') || 'dashboard');
+    // Tutorial au premier démarrage
+    if (!localStorage.getItem('atelier_tuto_seen')) {
+      setTimeout(() => this.showTutorial(false), 400);
+    }
   },
 
   currentUser() {
@@ -20,18 +25,47 @@ const App = {
   setCurrentUser(id) {
     localStorage.setItem('atelier_user_id', id);
     this.toast('Signé comme ' + (this.currentUser().nom), 'success');
+    this.refreshUserBadge();
+    this.applyPerms();
+    this.applyGroupUI();
+    this.refresh();
   },
   populateUserSelect() {
     const sel = document.getElementById('user-select');
     if (!sel) return;
     const users = DB.state.utilisateurs || [];
     const curId = this.currentUser().id;
-    sel.innerHTML = users.map(u => `<option value="${u.id}" ${u.id===curId?'selected':''}>${u.nom} · ${u.axes.join('/')||'—'}</option>`).join('');
+    sel.innerHTML = users.map(u => `<option value="${u.id}" ${u.id===curId?'selected':''}>${u.nom} · ${u.groupe||'—'}${u.axes.length?' ('+u.axes.join('/')+')':''}</option>`).join('');
     sel.onchange = e => this.setCurrentUser(e.target.value);
+    this.refreshUserBadge();
+  },
+  refreshUserBadge() {
+    const b = document.getElementById('user-badge');
+    if (!b) return;
+    const g = this.currentUser().groupe || '—';
+    const map = { utilisateur:'var(--text-muted)', MSP:'var(--primary)', admin:'var(--danger)' };
+    b.textContent = g;
+    b.style.background = map[g] || 'var(--text-muted)';
   },
   canSignAxe(axeCode) {
     const u = this.currentUser();
+    if (!this.can('sign')) return false;
+    // admin : tous les axes ; MSP : axes listés dans u.axes
+    if (u.groupe === 'admin') return true;
     return (u.axes || []).includes(axeCode);
+  },
+  // Vérifie une permission logique contre le groupe de l'utilisateur courant
+  can(action) {
+    const u = this.currentUser();
+    const g = (DB.state.groupes || {})[u.groupe] || { perms:{} };
+    return !!g.perms[action];
+  },
+  // Applique les permissions aux éléments marqués data-perm dans le DOM
+  applyPerms() {
+    document.querySelectorAll('[data-perm]').forEach(el => {
+      const ok = this.can(el.dataset.perm);
+      el.style.display = ok ? '' : 'none';
+    });
   },
 
   updateBell() {
@@ -70,6 +104,8 @@ const App = {
     document.getElementById('btn-print').addEventListener('click', () => window.print());
     document.getElementById('btn-help').addEventListener('click', () => this.showHelp());
     document.getElementById('btn-bell').addEventListener('click', () => this.showBellPanel());
+    document.getElementById('btn-admin').addEventListener('click', () => this.views.admin && this.navigate('admin'));
+    document.getElementById('btn-tuto').addEventListener('click', () => this.showTutorial(true));
     document.getElementById('btn-tablette').addEventListener('click', () => {
       document.body.classList.toggle('tablette');
       const on = document.body.classList.contains('tablette');
@@ -101,6 +137,52 @@ const App = {
     if (e.key === 'n' && this.views[this.view].newItem) { this.views[this.view].newItem(); e.preventDefault(); return; }
     if (e.key === '/') { const s = document.querySelector('input[type=search]'); if (s) { s.focus(); e.preventDefault(); } return; }
     if (e.key === 'Escape') this.closeModal();
+  },
+
+  showTutorial(forceReplay) {
+    const steps = [
+      { icon:'👋', title:'Bienvenue sur Atelier · Planification',
+        body:'Application web 100% locale pour gérer personnes, projets, machines, lieux, stock, commandes et plannings.<br><br>Les données sont sauvegardées dans le navigateur (<code>localStorage</code>). Utilise <strong>Exporter</strong> régulièrement pour des sauvegardes JSON.' },
+      { icon:'🧭', title:'Navigation',
+        body:'Utilise les onglets en haut ou les <strong>raccourcis clavier</strong> : <kbd>G</kbd> Gantt, <kbd>P</kbd> Personnes, <kbd>J</kbd> Projets, <kbd>O</kbd> Commandes, etc.<br><br><kbd>?</kbd> affiche la liste complète, <kbd>N</kbd> crée un élément, <kbd>/</kbd> focus la recherche, <kbd>Ctrl+K</kbd> recherche globale.' },
+      { icon:'👥', title:'Utilisateurs & groupes',
+        body:'Chaque utilisateur appartient à un groupe :<br><strong>utilisateur</strong> : consultation seule<br><strong>MSP</strong> : édition + signature des axes qui lui sont attribués<br><strong>admin</strong> : tous droits<br><br>Sélectionne ton profil dans la topbar. L\'admin (⚙) peut créer et paramétrer les utilisateurs.' },
+      { icon:'📅', title:'Gantt & planification',
+        body:'Vue <strong>Gantt</strong> : glisse-dépose les barres pour replanifier. Active les <strong>dépendances</strong> et le <strong>chemin critique</strong>. La <strong>cascade auto</strong> décale les tâches dépendantes automatiquement.<br><br>Le jour courant est en bleu, les weekends hachurés.' },
+      { icon:'📦', title:'Stock & BOM',
+        body:'<strong>Stock</strong> : gestion des articles avec seuils d\'alerte.<br><strong>BOM</strong> (nomenclature) : besoins par projet vs. stock disponible. Les ruptures sont détectées automatiquement.' },
+      { icon:'✅', title:'Commandes — règle 4A',
+        body:'Une commande doit être validée par les <strong>4 axes obligatoires</strong> (A1 chef de projet, A2 logistique, A3 technique, A4 budget) avant d\'être engagée. Chaque signature est journalisée avec le nom du signataire.' },
+      { icon:'🔔', title:'Alertes proactives',
+        body:'La cloche dans la topbar liste : stocks insuffisants vs BOM, conflits de machines, personnes saturées, projets en retard prédit. Rafraîchie toutes les 30 s.' },
+      { icon:'🎯', title:'Tu es prêt !',
+        body:'Commence par explorer le <strong>tableau de bord</strong>. Les données actuelles sont un jeu de démo — clic sur <strong>Reset</strong> pour recommencer, ou <strong>Importer</strong> tes propres données JSON.<br><br>Ce tuto est accessible à tout moment via 🎓 dans la topbar.' },
+    ];
+    localStorage.setItem('atelier_tuto_seen', '1');
+    let i = 0;
+    const show = () => {
+      const s = steps[i];
+      const nav = `<div style="display:flex;gap:6px;margin-top:12px">
+        ${steps.map((_,k) => `<span class="tuto-dot ${k===i?'on':''}" data-k="${k}"></span>`).join('')}
+      </div>`;
+      const body = `<div class="tuto-step"><div class="tuto-icon">${s.icon}</div><h3>${s.title}</h3><p>${s.body}</p>${nav}</div>`;
+      const foot = `
+        <button class="btn btn-secondary" id="tuto-skip">Passer</button>
+        <span class="spacer" style="flex:1"></span>
+        ${i>0?'<button class="btn btn-secondary" id="tuto-prev">← Précédent</button>':''}
+        ${i<steps.length-1?'<button class="btn" id="tuto-next">Suivant →</button>':'<button class="btn" id="tuto-done">Terminer 🎉</button>'}
+      `;
+      this.openModal(`Mode d'emploi (${i+1}/${steps.length})`, body, foot);
+      document.getElementById('tuto-skip').onclick = () => this.closeModal();
+      const prev = document.getElementById('tuto-prev');
+      const next = document.getElementById('tuto-next');
+      const done = document.getElementById('tuto-done');
+      if (prev) prev.onclick = () => { i--; show(); };
+      if (next) next.onclick = () => { i++; show(); };
+      if (done) done.onclick = () => this.closeModal();
+      document.querySelectorAll('.tuto-dot').forEach(d => d.onclick = () => { i = +d.dataset.k; show(); });
+    };
+    show();
   },
 
   showHelp() {
@@ -141,6 +223,14 @@ const App = {
     root.innerHTML = '';
     this.views[this.view].render(root);
     this.updateBell();
+    this.applyPerms();
+    this.applyGroupUI();
+  },
+  // Marque <body> avec une classe selon le groupe, pour du style conditionnel en CSS
+  applyGroupUI() {
+    const g = this.currentUser().groupe || 'utilisateur';
+    document.body.classList.remove('group-utilisateur','group-MSP','group-admin');
+    document.body.classList.add('group-' + g);
   },
 
   // Modal helpers

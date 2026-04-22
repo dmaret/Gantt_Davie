@@ -14,6 +14,15 @@ const DB = {
   migrate() {
     // Ajouts rétrocompatibles sans invalider le localStorage
     if (!this.state.utilisateurs) this.state.utilisateurs = defaultUsers();
+    if (!this.state.groupes) this.state.groupes = defaultGroupes();
+    // Assigner un groupe par défaut aux utilisateurs qui n'en ont pas
+    this.state.utilisateurs.forEach(u => {
+      if (!u.groupe) {
+        if ((u.axes||[]).length >= 4) u.groupe = 'admin';
+        else if ((u.axes||[]).length > 0) u.groupe = 'MSP';
+        else u.groupe = 'utilisateur';
+      }
+    });
     this.state.commandes.forEach(c => { if (!c.validationLog) c.validationLog = []; });
   },
   save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state)); },
@@ -108,15 +117,26 @@ const CSV = {
   },
 };
 
-// Utilisateurs autorisés à signer les axes 4A (multi-utilisateur léger, sans backend)
+// Utilisateurs + groupes d'accès (multi-utilisateur léger, sans backend)
+// Groupes : utilisateur (lecture), MSP (édition + signature selon axes), admin (tout)
 function defaultUsers() {
   return [
-    { id:'U_CP',    nom:'Alice Chef-Projet',  role:'Chef de projet',     axes:['A1'] },
-    { id:'U_LOG',   nom:'Bruno Logistique',    role:'Logistique',         axes:['A2'] },
-    { id:'U_TECH',  nom:'Carla Tech',          role:'Direction technique',axes:['A3'] },
-    { id:'U_BUD',   nom:'David Budget',        role:'Contrôle budget',    axes:['A4'] },
-    { id:'U_DIR',   nom:'Elena Direction',     role:'Direction',          axes:['A1','A2','A3','A4'] },
+    { id:'U_CP',   nom:'Alice Chef-Projet',  role:'Chef de projet',     groupe:'MSP',         axes:['A1'] },
+    { id:'U_LOG',  nom:'Bruno Logistique',    role:'Logistique',         groupe:'MSP',         axes:['A2'] },
+    { id:'U_TECH', nom:'Carla Tech',          role:'Direction technique',groupe:'MSP',         axes:['A3'] },
+    { id:'U_BUD',  nom:'David Budget',        role:'Contrôle budget',    groupe:'MSP',         axes:['A4'] },
+    { id:'U_DIR',  nom:'Elena Direction',     role:'Direction',          groupe:'admin',       axes:['A1','A2','A3','A4'] },
+    { id:'U_OBS',  nom:'Frank Observateur',   role:'Consultation',       groupe:'utilisateur', axes:[] },
   ];
+}
+
+// Permissions par groupe (paramétrables via la vue Admin)
+function defaultGroupes() {
+  return {
+    utilisateur: { libelle:'Utilisateur', description:'Consultation seule', perms:{ read:true, edit:false, sign:false, engage:false, admin:false, whatif:false, reset:false } },
+    MSP:         { libelle:'MSP',         description:'Édition + signature des axes autorisés', perms:{ read:true, edit:true,  sign:true,  engage:true,  admin:false, whatif:true,  reset:false } },
+    admin:       { libelle:'Admin',       description:'Tous droits + gestion utilisateurs',     perms:{ read:true, edit:true,  sign:true,  engage:true,  admin:true,  whatif:true,  reset:true  } },
+  };
 }
 
 function seed() {
