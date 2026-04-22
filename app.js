@@ -497,6 +497,28 @@ const App = {
   },
   closeModal() { document.getElementById('modal-root').classList.add('hidden'); },
 
+  // Overlay = petite popup posée au-dessus d'une modale (préserve le form derrière)
+  openOverlay(title, bodyHTML, footerHTML) {
+    this.closeOverlay();
+    const ov = document.createElement('div');
+    ov.className = 'app-overlay';
+    ov.innerHTML = `
+      <div class="app-overlay-card">
+        <header class="app-overlay-head">
+          <h3>${title}</h3>
+          <button class="modal-close" id="app-overlay-close" aria-label="Fermer">×</button>
+        </header>
+        <div class="app-overlay-body">${bodyHTML}</div>
+        <footer class="app-overlay-foot">${footerHTML||''}</footer>
+      </div>`;
+    document.body.appendChild(ov);
+    document.getElementById('app-overlay-close').onclick = () => this.closeOverlay();
+  },
+  closeOverlay() {
+    const ov = document.querySelector('.app-overlay');
+    if (ov) ov.remove();
+  },
+
   toast(msg, kind='info') {
     const root = document.getElementById('toast-root');
     const el = document.createElement('div');
