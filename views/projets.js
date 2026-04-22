@@ -213,7 +213,8 @@ App.views.projets = {
       p.priorite = document.getElementById('pf-prio').value;
       p.statut = document.getElementById('pf-statut').value;
       if (!p.nom || !p.code) { App.toast('Code et nom requis','error'); return; }
-      if (isNew) s.projets.push(p);
+      if (isNew) { s.projets.push(p); DB.logAudit('create','projet',p.id,`${p.code} · ${p.nom}`); }
+      else DB.logAudit('update','projet',p.id,`${p.code} · ${p.nom}`);
       DB.save(); App.closeModal(); App.refresh();
     };
     if (!isNew) {
@@ -221,6 +222,7 @@ App.views.projets = {
         if (!confirm('Supprimer ce projet et toutes ses tâches ?')) return;
         s.projets = s.projets.filter(x => x.id !== p.id);
         s.taches = s.taches.filter(t => t.projetId !== p.id);
+        DB.logAudit('delete','projet',p.id,`${p.code} · ${p.nom}`);
         DB.save(); App.closeModal(); App.refresh();
       };
       this.bindTasksList(p.id, canEdit);

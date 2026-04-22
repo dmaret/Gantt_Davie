@@ -476,6 +476,9 @@ App.views.gantt = {
           ${s.taches.filter(x => x.id !== t.id && x.projetId === t.projetId).sort((a,b)=>a.debut.localeCompare(b.debut)).map(x => `<option value="${x.id}" ${(t.dependances||[]).includes(x.id)?'selected':''}>${x.nom} · ${D.fmt(x.debut)}→${D.fmt(x.fin)}</option>`).join('')}
         </select>
       </div>
+      <div class="field"><label>📝 Notes / consignes</label>
+        <textarea id="f-notes" rows="3" placeholder="Instructions d'exécution, références, points d'attention…">${t.notes||''}</textarea>
+      </div>
       <label class="small"><input type="checkbox" id="f-jalon" ${t.jalon?'checked':''}> Jalon</label>
     `;
     const foot = `
@@ -620,14 +623,17 @@ App.views.gantt = {
       t.assignes = Array.from(document.getElementById('f-assignes').selectedOptions).map(o => o.value);
       t.jalon = document.getElementById('f-jalon').checked;
       t.dependances = Array.from(document.getElementById('f-deps').selectedOptions).map(o => o.value);
+      t.notes = document.getElementById('f-notes').value;
       if (!t.nom) { App.toast('Nom requis','error'); return; }
-      if (isNew) DB.state.taches.push(t);
+      if (isNew) { DB.state.taches.push(t); DB.logAudit('create','tache',t.id,t.nom); }
+      else DB.logAudit('update','tache',t.id,t.nom);
       DB.save(); App.closeModal(); App.toast('Enregistré','success'); App.refresh();
     };
     if (!isNew) {
       document.getElementById('f-del').onclick = () => {
         if (!confirm('Supprimer cette tâche ?')) return;
         DB.state.taches = DB.state.taches.filter(x => x.id !== t.id);
+        DB.logAudit('delete','tache',t.id,t.nom);
         DB.save(); App.closeModal(); App.toast('Tâche supprimée','info'); App.refresh();
       };
     }

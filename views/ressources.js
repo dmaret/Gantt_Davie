@@ -11,7 +11,7 @@ App.views.ressources = {
         <select id="r-comp"><option value="">Toutes compétences</option>${[...new Set(s.personnes.flatMap(p=>p.competences||[]))].sort().map(c=>`<option value="${c}" ${c===this.state.compFilter?'selected':''}>${c}</option>`).join('')}</select>
         <label class="small"><input type="checkbox" id="r-dispo" ${this.state.onlyDispo?'checked':''}> Seulement les disponibles aujourd'hui</label>
         <span class="spacer"></span>
-        <span class="muted small">Cellule pleine = dispo · orange = occupé·e · grise = off</span>
+        <span class="muted small">🟢 dispo · 🟠 occupé·e · grise hachurée = off · violet hachuré = absent</span>
       </div>
       <div class="card"><div id="r-grid"></div></div>
     `;
@@ -67,11 +67,18 @@ App.views.ressources = {
         const dow = JOURS_SEMAINE[(D.parse(d).getUTCDay()+6)%7];
         const matinOn = !!h[dow]?.matin;
         const apremOn = !!h[dow]?.aprem;
-        const occupé = this.occupéCeJour(p, d);
-        if (matinOn) dispoCount++;
-        if (apremOn) dispoCount++;
-        const state = (on) => !on ? 'off' : (occupé ? 'busy' : 'free');
-        return `<td class="r-cell r-${state(matinOn)}" title="${p.prenom} ${p.nom} — ${dow} matin : ${matinOn?(occupé?'occupé·e':'dispo'):'off'}"></td><td class="r-cell r-${state(apremOn)}" title="${p.prenom} ${p.nom} — ${dow} après-midi : ${apremOn?(occupé?'occupé·e':'dispo'):'off'}"></td>`;
+        const absent = DB.personneAbsenteLe(p.id, d);
+        const absInfo = absent ? (p.absences||[]).find(a => a.debut <= d && a.fin >= d) : null;
+        const occupé = !absent && this.occupéCeJour(p, d);
+        if (matinOn && !absent) dispoCount++;
+        if (apremOn && !absent) dispoCount++;
+        const state = (on) => !on ? 'off' : (absent ? 'absent' : (occupé ? 'busy' : 'free'));
+        const mkCell = (on, label) => {
+          const st = state(on);
+          const tt = `${p.prenom} ${p.nom} — ${dow} ${label} : ${!on?'off':absent?'absent ('+absInfo.motif+')':occupé?'occupé·e':'dispo'}`;
+          return `<td class="r-cell r-${st}" title="${tt}"></td>`;
+        };
+        return mkCell(matinOn,'matin') + mkCell(apremOn,'après-midi');
       }).join('');
       const lieu = DB.lieu(p.lieuPrincipalId);
       return `<tr>

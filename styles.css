@@ -236,6 +236,7 @@ body {
 .ressources-grid .r-cell.r-free { background: var(--success); }
 .ressources-grid .r-cell.r-busy { background: var(--warning); }
 .ressources-grid .r-cell.r-off  { background: repeating-linear-gradient(45deg, var(--surface-2) 0 3px, transparent 3px 6px), var(--surface-2); }
+.ressources-grid .r-cell.r-absent { background: repeating-linear-gradient(-45deg, #9333ea 0 3px, #c084fc 3px 6px); }
 
 /* Vue Équipes */
 .eq-card { transition: box-shadow .12s; }
