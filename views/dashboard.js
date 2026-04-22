@@ -1,4 +1,17 @@
 App.views.dashboard = {
+  // Définition des cartes : id, titre, taille (1 = demi-largeur, 2 = pleine), rendu
+  panels: {
+    'conflits':    { title:'⚠ Conflits détectés',                          size:1, render(s, today, conflicts) { return App.views.dashboard.renderConflicts(conflicts); } },
+    'alertes':     { title:'🔔 Alertes proactives (10 j ouvrés)',          size:1, render() { return App.views.dashboard.renderProactive(); } },
+    'predictions': { title:'📈 Prédiction fin de projet',                   size:1, render(s) { return App.views.dashboard.renderPredictions(s); } },
+    'commandes-4a':{ title:'📦 Commandes — workflow 4A',                    size:1, render(s) {
+      return `<p class="muted small" style="margin-top:-4px">${s.regle4A.libelle}. Une commande n'est engagée qu'après validation des 4 axes obligatoires.</p>${App.views.dashboard.renderCommandes(s)}`;
+    } },
+    'next-tasks':  { title:'🗓 Prochaines tâches (7 jours ouvrés)',         size:1, render(s, today) { return App.views.dashboard.renderNextTasks(s, today); } },
+    'next-moves':  { title:'🚚 Déplacements à venir',                       size:1, render(s, today) { return App.views.dashboard.renderNextMoves(s, today); } },
+    'charge-lieux':{ title:'📊 Charge par lieu de production (5 j ouvrés)', size:2, render(s, today) { return App.views.dashboard.renderChargeLieux(s, today); } },
+  },
+
   render(root) {
     const s = DB.state;
     const conflicts = App.detectConflicts();
@@ -8,7 +21,24 @@ App.views.dashboard = {
     const horizon = D.addWorkdays(today, 7);
     const tachesSemaine = s.taches.filter(t => t.fin >= today && t.debut <= horizon).length;
     const stockBas = s.stock.filter(x => x.quantite < x.seuilAlerte).length;
-    const cmdBloq = s.commandes.filter(c => c.statut !== 'engagée').length;
+
+    // Ordre actuel, en gardant les cartes nouvelles non listées à la fin
+    if (!s.dashboardOrder) s.dashboardOrder = Object.keys(this.panels);
+    const known = new Set(Object.keys(this.panels));
+    const order = s.dashboardOrder.filter(id => known.has(id));
+    Object.keys(this.panels).forEach(id => { if (!order.includes(id)) order.push(id); });
+
+    const canDrag = App.can('admin');
+    const panelsHtml = order.map(id => {
+      const p = this.panels[id];
+      if (!p) return '';
+      const cls = p.size === 2 ? 'card panel panel-full' : 'card panel';
+      return `<div class="${cls}" data-panel="${id}" ${canDrag?'draggable="true"':''}>
+        ${canDrag ? '<span class="panel-handle" title="Glisser pour réorganiser">⋮⋮</span>' : ''}
+        <h2>${p.title}</h2>
+        ${p.render(s, today, conflicts)}
+      </div>`;
+    }).join('');
 
     root.innerHTML = `
       <div class="grid grid-4">
@@ -18,45 +48,62 @@ App.views.dashboard = {
         <div class="kpi ${stockBas>0?'bad':'good'}"><div class="label">Alertes stock</div><div class="value">${stockBas}</div><div class="sub">sous seuil</div></div>
       </div>
 
-      <div class="grid grid-2" style="margin-top:16px">
-        <div class="card">
-          <h2>⚠ Conflits détectés</h2>
-          ${this.renderConflicts(conflicts)}
-        </div>
-        <div class="card">
-          <h2>🔔 Alertes proactives (10 j ouvrés)</h2>
-          ${this.renderProactive()}
-        </div>
-      </div>
+      ${canDrag ? `<div class="muted small" style="margin:14px 0 -6px 0">🎛 Admin : glisse-dépose les cartes ci-dessous pour réorganiser ton tableau de bord. <button class="btn-ghost" id="db-reset" style="padding:2px 10px">Réinitialiser l'ordre</button></div>` : ''}
 
-      <div class="grid grid-2" style="margin-top:16px">
-        <div class="card">
-          <h2>📈 Prédiction fin de projet</h2>
-          ${this.renderPredictions(s)}
-        </div>
-        <div class="card">
-          <h2>📦 Commandes — workflow 4A</h2>
-          <p class="muted small" style="margin-top:-4px">${s.regle4A.libelle}. Une commande n'est engagée qu'après validation des 4 axes obligatoires.</p>
-          ${this.renderCommandes(s)}
-        </div>
-      </div>
-
-      <div class="grid grid-2" style="margin-top:16px">
-        <div class="card">
-          <h2>🗓 Prochaines tâches (7 jours ouvrés)</h2>
-          ${this.renderNextTasks(s, today)}
-        </div>
-        <div class="card">
-          <h2>🚚 Déplacements à venir</h2>
-          ${this.renderNextMoves(s, today)}
-        </div>
-      </div>
-
-      <div class="card" style="margin-top:16px">
-        <h2>📊 Charge par lieu de production (5 jours ouvrés)</h2>
-        ${this.renderChargeLieux(s, today)}
-      </div>
+      <div class="dashboard-grid" id="db-grid" style="margin-top:16px">${panelsHtml}</div>
     `;
+
+    if (canDrag) {
+      this.bindDnD();
+      const r = document.getElementById('db-reset');
+      if (r) r.onclick = () => {
+        DB.state.dashboardOrder = Object.keys(this.panels);
+        DB.save(); App.refresh(); App.toast('Ordre par défaut restauré','info');
+      };
+    }
+  },
+
+  bindDnD() {
+    const grid = document.getElementById('db-grid');
+    if (!grid) return;
+    let dragged = null;
+    grid.querySelectorAll('.panel').forEach(el => {
+      el.addEventListener('dragstart', e => {
+        dragged = el;
+        el.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', el.dataset.panel); } catch (err) {}
+      });
+      el.addEventListener('dragend', () => {
+        el.classList.remove('dragging');
+        grid.querySelectorAll('.panel').forEach(p => p.classList.remove('drop-target'));
+      });
+      el.addEventListener('dragover', e => {
+        if (!dragged || dragged === el) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        grid.querySelectorAll('.panel').forEach(p => p.classList.remove('drop-target'));
+        el.classList.add('drop-target');
+      });
+      el.addEventListener('dragleave', () => el.classList.remove('drop-target'));
+      el.addEventListener('drop', e => {
+        e.preventDefault();
+        el.classList.remove('drop-target');
+        if (!dragged || dragged === el) return;
+        const fromId = dragged.dataset.panel;
+        const toId = el.dataset.panel;
+        const order = DB.state.dashboardOrder.slice();
+        const fromIdx = order.indexOf(fromId);
+        const toIdx = order.indexOf(toId);
+        if (fromIdx < 0 || toIdx < 0) return;
+        order.splice(fromIdx, 1);
+        order.splice(toIdx, 0, fromId);
+        DB.state.dashboardOrder = order;
+        DB.save();
+        App.refresh();
+        App.toast('Ordre enregistré','success');
+      });
+    });
   },
 
   renderProactive() {
@@ -165,13 +212,12 @@ App.views.dashboard = {
     const end = D.addWorkdays(today, 4); // 5 jours ouvrés (jour 0 inclus + 4)
     const rows = lieuxProd.map(l => {
       const tasks = s.taches.filter(t => t.lieuId === l.id && t.fin >= today && t.debut <= end);
-      // Calcul en jours ouvrés seulement
       const jours = tasks.reduce((n,t) => {
         const a = t.debut < today ? today : t.debut;
         const b = t.fin > end ? end : t.fin;
         return n + D.workdaysBetween(a, b);
       }, 0);
-      const capa = l.capacite * 5; // 5 jours ouvrés
+      const capa = l.capacite * 5;
       const pct = Math.min(100, Math.round(jours / capa * 100));
       const cls = pct > 90 ? 'bad' : pct > 70 ? 'warn' : '';
       return `<tr>

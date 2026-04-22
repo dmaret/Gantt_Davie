@@ -15,6 +15,7 @@ const DB = {
     // Ajouts rétrocompatibles sans invalider le localStorage
     if (!this.state.utilisateurs) this.state.utilisateurs = defaultUsers();
     if (!this.state.groupes) this.state.groupes = defaultGroupes();
+    if (!this.state.dashboardOrder) this.state.dashboardOrder = defaultDashboardOrder();
     // Assigner un groupe par défaut aux utilisateurs qui n'en ont pas
     this.state.utilisateurs.forEach(u => {
       if (!u.groupe) {
@@ -171,6 +172,11 @@ function defaultGroupes() {
     MSP:         { libelle:'MSP',         description:'Édition + signature des axes autorisés', perms:{ read:true, edit:true,  sign:true,  engage:true,  admin:false, whatif:true,  reset:false } },
     admin:       { libelle:'Admin',       description:'Tous droits + gestion utilisateurs',     perms:{ read:true, edit:true,  sign:true,  engage:true,  admin:true,  whatif:true,  reset:true  } },
   };
+}
+
+// Ordre par défaut des cartes du tableau de bord (personnalisable par drag & drop admin)
+function defaultDashboardOrder() {
+  return ['conflits','alertes','predictions','commandes-4a','next-tasks','next-moves','charge-lieux'];
 }
 
 function seed() {

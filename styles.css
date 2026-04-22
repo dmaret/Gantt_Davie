@@ -156,6 +156,26 @@ body {
 .ctx-item.danger:hover { background: var(--danger); color: #fff; }
 .ctx-sep { height: 1px; background: var(--border); margin: 4px 0; }
 
+/* Tableau de bord — cartes réorganisables (drag & drop admin) */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.dashboard-grid .panel { position: relative; transition: opacity .12s, box-shadow .12s, transform .12s; }
+.dashboard-grid .panel.panel-full { grid-column: 1 / -1; }
+.dashboard-grid .panel[draggable="true"] { cursor: grab; }
+.dashboard-grid .panel[draggable="true"]:active { cursor: grabbing; }
+.dashboard-grid .panel.dragging { opacity: .4; }
+.dashboard-grid .panel.drop-target { box-shadow: 0 0 0 2px var(--primary) inset; }
+.dashboard-grid .panel-handle {
+  position: absolute; top: 10px; right: 12px;
+  color: var(--text-muted); font-size: 14px; letter-spacing: -2px;
+  cursor: grab; user-select: none;
+}
+.dashboard-grid .panel-handle:hover { color: var(--primary); }
+@media (max-width: 900px) { .dashboard-grid { grid-template-columns: 1fr; } .dashboard-grid .panel.panel-full { grid-column: 1; } }
+
 /* Main */
 main#view-root {
   flex: 1; overflow: auto; padding: 20px;
