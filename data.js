@@ -6,7 +6,7 @@ const DB = {
   load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) { this.state = JSON.parse(raw); this.migrate(); return; }
+      if (raw) { this.state = JSON.parse(raw); this.migrate(); this._pushHistory(); return; }
     } catch (e) { console.warn('load failed', e); }
     this.state = seed();
     this.save();
@@ -25,7 +25,41 @@ const DB = {
     });
     this.state.commandes.forEach(c => { if (!c.validationLog) c.validationLog = []; });
   },
-  save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state)); },
+  save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+    if (this._skipHistory) { this._skipHistory = false; return; }
+    this._pushHistory();
+  },
+  // Historique pour Undo/Redo (limité à 20 entrées)
+  _history: [], _future: [],
+  _pushHistory() {
+    try {
+      const snap = JSON.stringify(this.state);
+      if (this._history.length && this._history[this._history.length-1] === snap) return;
+      this._history.push(snap);
+      if (this._history.length > 20) this._history.shift();
+      this._future = []; // toute nouvelle action invalide le redo
+    } catch (e) {}
+  },
+  undo() {
+    if (this._history.length < 2) return false;
+    const current = this._history.pop();
+    this._future.push(current);
+    const prev = this._history[this._history.length - 1];
+    this.state = JSON.parse(prev);
+    this._skipHistory = true;
+    localStorage.setItem(STORAGE_KEY, prev);
+    return true;
+  },
+  redo() {
+    if (!this._future.length) return false;
+    const snap = this._future.pop();
+    this._history.push(snap);
+    this.state = JSON.parse(snap);
+    this._skipHistory = true;
+    localStorage.setItem(STORAGE_KEY, snap);
+    return true;
+  },
   reset() { this.state = seed(); this.save(); },
   importJSON(obj) { this.state = obj; this.save(); },
   exportJSON() { return JSON.stringify(this.state, null, 2); },

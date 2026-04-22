@@ -129,6 +129,17 @@ const App = {
   },
 
   handleKey(e) {
+    // Recherche globale (Ctrl+K / Cmd+K) — fonctionne même depuis un input
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault(); this.showGlobalSearch(); return;
+    }
+    // Undo / Redo (Ctrl+Z / Ctrl+Shift+Z)
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      e.preventDefault();
+      if (e.shiftKey) this.redo(); else this.undo();
+      return;
+    }
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const map = { d:'dashboard', g:'gantt', c:'calendrier', p:'personnes', l:'lieux', m:'machines', j:'projets', s:'stock', v:'deplacements', o:'commandes', b:'bom', x:'capacite', w:'whatif' };
@@ -136,7 +147,87 @@ const App = {
     if (e.key === '?') { this.showHelp(); e.preventDefault(); return; }
     if (e.key === 'n' && this.views[this.view].newItem) { this.views[this.view].newItem(); e.preventDefault(); return; }
     if (e.key === '/') { const s = document.querySelector('input[type=search]'); if (s) { s.focus(); e.preventDefault(); } return; }
-    if (e.key === 'Escape') this.closeModal();
+    if (e.key === 'Escape') { this.closeGlobalSearch(); this.closeModal(); }
+  },
+
+  undo() {
+    if (DB.undo()) { this.toast('Annulé','info'); this.refresh(); }
+    else this.toast('Rien à annuler','muted');
+  },
+  redo() {
+    if (DB.redo()) { this.toast('Refait','info'); this.refresh(); }
+    else this.toast('Rien à refaire','muted');
+  },
+
+  // Recherche globale — personnes, projets, articles, commandes, tâches, machines, lieux
+  showGlobalSearch() {
+    if (document.getElementById('global-search')) return;
+    const el = document.createElement('div');
+    el.id = 'global-search';
+    el.className = 'gs-overlay';
+    el.innerHTML = `<div class="gs-panel">
+      <input type="text" id="gs-input" placeholder="Rechercher une personne, un projet, un article, une commande, une tâche…" autofocus>
+      <div id="gs-results" class="gs-results"></div>
+      <div class="gs-hint muted small">↑↓ naviguer · Entrée ouvrir · Esc fermer</div>
+    </div>`;
+    document.body.appendChild(el);
+    el.onclick = ev => { if (ev.target === el) this.closeGlobalSearch(); };
+    const input = document.getElementById('gs-input');
+    input.oninput = () => this.renderGlobalSearch(input.value);
+    input.onkeydown = e => this.handleGlobalSearchKey(e);
+    this.gsSelected = 0;
+    this.renderGlobalSearch('');
+    setTimeout(() => input.focus(), 10);
+  },
+  closeGlobalSearch() {
+    const el = document.getElementById('global-search');
+    if (el) el.remove();
+  },
+  renderGlobalSearch(q) {
+    const results = this.searchAll(q, 20);
+    this.gsResults = results;
+    this.gsSelected = Math.min(this.gsSelected, Math.max(0, results.length - 1));
+    const html = results.length
+      ? results.map((r, i) => `<div class="gs-item ${i===this.gsSelected?'on':''}" data-i="${i}">
+          <span class="gs-kind">${r.kind}</span>
+          <span class="gs-label">${r.label}</span>
+          <span class="gs-meta muted small">${r.meta||''}</span>
+        </div>`).join('')
+      : q ? `<div class="muted small" style="padding:10px">Aucun résultat.</div>` : `<div class="muted small" style="padding:10px">Taper pour rechercher…</div>`;
+    document.getElementById('gs-results').innerHTML = html;
+    document.querySelectorAll('.gs-item').forEach(el => {
+      el.onclick = () => { this.gsSelected = +el.dataset.i; this.openGlobalSearchResult(); };
+    });
+  },
+  handleGlobalSearchKey(e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); this.gsSelected = Math.min((this.gsResults||[]).length - 1, this.gsSelected + 1); this.renderGlobalSearch(document.getElementById('gs-input').value); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); this.gsSelected = Math.max(0, this.gsSelected - 1); this.renderGlobalSearch(document.getElementById('gs-input').value); }
+    else if (e.key === 'Enter') { e.preventDefault(); this.openGlobalSearchResult(); }
+    else if (e.key === 'Escape') { e.preventDefault(); this.closeGlobalSearch(); }
+  },
+  openGlobalSearchResult() {
+    const r = (this.gsResults||[])[this.gsSelected];
+    if (!r) return;
+    this.closeGlobalSearch();
+    this.navigate(r.view);
+    if (r.onOpen) setTimeout(r.onOpen, 50);
+  },
+  searchAll(q, limit) {
+    const s = DB.state;
+    const ql = q.toLowerCase().trim();
+    const out = [];
+    const push = (r) => { if (!ql || r.label.toLowerCase().includes(ql) || (r.meta||'').toLowerCase().includes(ql)) out.push(r); };
+    s.personnes.forEach(p => push({ kind:'Personne', label:this.personneLabel(p), meta:`${p.role} · ${DB.lieu(p.lieuPrincipalId)?.nom||''} · ${(p.competences||[]).join(', ')}`, view:'personnes' }));
+    s.projets.forEach(p => push({ kind:'Projet',   label:`${p.code} — ${p.nom}`, meta:`${p.client||''} · ${p.statut}`, view:'projets' }));
+    s.stock.forEach(a => push({ kind:'Article',   label:`${a.ref} — ${a.nom}`, meta:`${a.quantite} ${a.unite} · ${DB.lieu(a.lieuId)?.nom||''}`, view:'stock' }));
+    s.commandes.forEach(c => push({ kind:'Commande', label:c.ref, meta:`${c.fournisseur} · ${c.statut}`, view:'commandes' }));
+    s.taches.forEach(t => {
+      const prj = DB.projet(t.projetId);
+      push({ kind:'Tâche', label:t.nom, meta:`${prj?prj.code:''} · ${D.fmt(t.debut)}→${D.fmt(t.fin)}`, view:'gantt' });
+    });
+    s.machines.forEach(m => push({ kind:'Machine', label:m.nom, meta:`${m.type} · ${DB.lieu(m.lieuId)?.nom||''}`, view:'machines' }));
+    s.lieux.forEach(l => push({ kind:'Lieu', label:l.nom, meta:`${l.type} · ${l.etage}`, view:l.type==='production'?'lieux':'lieux' }));
+    return out.slice(0, limit);
   },
 
   showTutorial(forceReplay) {
@@ -196,7 +287,9 @@ const App = {
       <p><kbd>D</kbd> Dashboard · <kbd>G</kbd> Gantt · <kbd>C</kbd> Calendrier · <kbd>P</kbd> Personnes</p>
       <p><kbd>L</kbd> Lieux · <kbd>M</kbd> Machines · <kbd>J</kbd> Projets · <kbd>S</kbd> Stock</p>
       <p><kbd>V</kbd> Déplacements · <kbd>O</kbd> Commandes · <kbd>B</kbd> BOM · <kbd>X</kbd> Capacité · <kbd>W</kbd> What-if</p>
-      <p><kbd>/</kbd> Recherche · <kbd>N</kbd> Nouveau · <kbd>?</kbd> Aide · <kbd>Esc</kbd> Fermer</p>
+      <p><kbd>Ctrl</kbd>+<kbd>K</kbd> Recherche globale · <kbd>/</kbd> Recherche vue · <kbd>N</kbd> Nouveau · <kbd>?</kbd> Aide</p>
+      <p><kbd>Ctrl</kbd>+<kbd>Z</kbd> Annuler · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> Refaire · <kbd>Esc</kbd> Fermer</p>
+      <p class="muted small">Clic-droit sur une barre Gantt pour un menu d'actions rapides.</p>
       <p style="text-align:right;margin:14px 0 0 0"><button class="btn" id="help-close">OK</button></p>
     </div>`;
     document.body.appendChild(o);

@@ -263,7 +263,84 @@ App.views.gantt = {
     overlay.querySelectorAll('.gantt-bar').forEach(el => {
       el.style.pointerEvents = 'auto';
       el.addEventListener('click', () => this.openTacheForm(el.dataset.tid));
+      el.addEventListener('contextmenu', e => { e.preventDefault(); this.showContextMenu(e, el.dataset.tid); });
       this.makeDraggable(el, CELL_W);
+    });
+  },
+
+  showContextMenu(e, tid) {
+    const t = DB.tache(tid);
+    if (!t) return;
+    const canEdit = App.can('edit');
+    const existing = document.getElementById('gantt-ctx');
+    if (existing) existing.remove();
+    const menu = document.createElement('div');
+    menu.id = 'gantt-ctx';
+    menu.className = 'ctx-menu';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+    const items = [
+      { label:'✎ Éditer', perm:true, act:() => this.openTacheForm(tid) },
+      { label:'✓ Marquer terminée (100%)', perm:canEdit, act:() => { t.avancement = 100; DB.save(); this.draw(); App.toast('Tâche terminée','success'); } },
+      { label:'◐ Avancement 50%', perm:canEdit, act:() => { t.avancement = 50; DB.save(); this.draw(); } },
+      { label:'○ Avancement 0%', perm:canEdit, act:() => { t.avancement = 0; DB.save(); this.draw(); } },
+      { sep:true },
+      { label:'⎘ Dupliquer', perm:canEdit, act:() => {
+        const copy = JSON.parse(JSON.stringify(t));
+        copy.id = DB.uid('T');
+        copy.nom = t.nom + ' (copie)';
+        copy.avancement = 0;
+        copy.dependances = [];
+        DB.state.taches.push(copy);
+        DB.save(); this.draw(); App.toast('Tâche dupliquée','success');
+      } },
+      { label:'👤 Suggérer des personnes', perm:canEdit, act:() => this.suggestForTask(tid) },
+      { sep:true },
+      { label:'✕ Supprimer', perm:canEdit, danger:true, act:() => {
+        if (!confirm('Supprimer « ' + t.nom + ' » ?')) return;
+        DB.state.taches = DB.state.taches.filter(x => x.id !== tid);
+        DB.state.taches.forEach(x => x.dependances = (x.dependances||[]).filter(d => d !== tid));
+        DB.save(); this.draw(); App.toast('Tâche supprimée','info');
+      } },
+    ];
+    menu.innerHTML = items.map((it, i) => {
+      if (it.sep) return '<div class="ctx-sep"></div>';
+      if (!it.perm) return '';
+      return `<div class="ctx-item ${it.danger?'danger':''}" data-i="${i}">${it.label}</div>`;
+    }).join('');
+    document.body.appendChild(menu);
+    // Repositionner si dépasse la fenêtre
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth - 10) menu.style.left = (window.innerWidth - rect.width - 10) + 'px';
+    if (rect.bottom > window.innerHeight - 10) menu.style.top = (window.innerHeight - rect.height - 10) + 'px';
+    menu.querySelectorAll('.ctx-item').forEach(el => {
+      el.onclick = () => { const it = items[+el.dataset.i]; menu.remove(); if (it && it.act) it.act(); };
+    });
+    const close = ev => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', close); } };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  },
+
+  suggestForTask(tid) {
+    const t = DB.tache(tid);
+    if (!t) return;
+    const sugg = App.suggestAssignees(t, 5);
+    const body = `<p class="muted">Score = compétence × 100 − charge × 5 + proximité × 10</p>
+      <table class="data">
+        <thead><tr><th>Personne</th><th>Rôle</th><th class="right">Score</th><th class="right">Charge</th><th>Compétence</th><th></th></tr></thead>
+        <tbody>${sugg.map(x => `<tr>
+          <td><strong>${App.personneLabel(x.p)}</strong></td>
+          <td>${x.p.role}</td>
+          <td class="right mono">${x.score}</td>
+          <td class="right">${x.charge}j</td>
+          <td>${x.compMatch ? '<span class="badge good">oui</span>' : '<span class="badge muted">non</span>'}</td>
+          <td><button class="btn" data-assign="${x.p.id}" style="padding:2px 10px">Affecter</button></td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    App.openModal('Suggestions pour : ' + t.nom, body, `<button class="btn btn-secondary" onclick="App.closeModal()">Fermer</button>`);
+    document.querySelectorAll('[data-assign]').forEach(b => b.onclick = () => {
+      const pid = b.dataset.assign;
+      t.assignes = Array.from(new Set([...(t.assignes||[]), pid]));
+      DB.save(); App.closeModal(); App.toast('Personne affectée','success'); this.draw();
     });
   },
 

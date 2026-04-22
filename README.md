@@ -44,20 +44,48 @@ Cette app est déployée automatiquement depuis la branche `main`.
 - **Alertes proactives** : stock vs BOM, conflits machine, surcharge personne, retard projet
 - **Notifications en tête** : cloche 🔔 avec badge compteur (rouge si critique), rafraîchie toutes les 30 s
 
-### Multi-utilisateur léger
-Sélecteur d'utilisateur dans la topbar. Chaque utilisateur se voit attribuer les **axes 4A qu'il est autorisé à signer**. Les chips non autorisés apparaissent désactivés et grisés. L'historique de validation enregistre le **nom du signataire** et l'**horodatage ISO** pour chaque action.
+### Utilisateurs & groupes d'accès
+3 groupes avec **permissions paramétrables** (vue Admin ⚙) :
 
-Utilisateurs par défaut :
+| Groupe | Lecture | Édition | Signer 4A | Engager | What-if | Reset | Admin |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| **utilisateur** | ✓ | | | | | | |
+| **MSP** | ✓ | ✓ | ✓ (axes attribués) | ✓ | ✓ | | |
+| **admin** | ✓ | ✓ | ✓ (tous axes) | ✓ | ✓ | ✓ | ✓ |
 
-| ID | Nom | Rôle | Axes autorisés |
+Les boutons marqués `data-perm` se masquent automatiquement selon le groupe. L'historique 4A enregistre le nom du signataire et l'horodatage ISO.
+
+Utilisateurs par défaut (éditables dans la vue Admin) :
+
+| Nom | Rôle | Groupe | Axes 4A |
 |---|---|---|---|
-| U_CP | Alice Chef-Projet | Chef de projet | A1 |
-| U_LOG | Bruno Logistique | Logistique | A2 |
-| U_TECH | Carla Tech | Direction technique | A3 |
-| U_BUD | David Budget | Contrôle budget | A4 |
-| U_DIR | Elena Direction | Direction | A1, A2, A3, A4 |
+| Alice Chef-Projet | Chef de projet | MSP | A1 |
+| Bruno Logistique | Logistique | MSP | A2 |
+| Carla Tech | Direction technique | MSP | A3 |
+| David Budget | Contrôle budget | MSP | A4 |
+| Elena Direction | Direction | admin | tous |
+| Frank Observateur | Consultation | utilisateur | — |
 
-Configurable dans `state.utilisateurs`.
+### Mode d'emploi interactif
+Au premier démarrage, un **tutoriel 8 étapes** s'affiche (bienvenue, navigation, groupes, Gantt, stock/BOM, 4A, alertes, prêt). Accessible ensuite via le bouton 🎓 dans la topbar.
+
+### Édition inline
+Les quantités du **BOM** et du **stock** sont modifiables directement dans les tableaux (Entrée ou blur pour valider). Une quantité BOM à 0 propose la suppression de la ligne.
+
+### Recherche globale (Ctrl+K / Cmd+K)
+Barre de recherche instantanée à travers personnes, projets, articles, commandes, tâches, machines, lieux. Navigation au clavier (↑↓), Entrée pour ouvrir la vue correspondante.
+
+### Menu contextuel Gantt
+Clic-droit sur une barre Gantt → menu d'actions rapides :
+- Éditer / Dupliquer / Supprimer
+- Marquer terminée (100 %) / 50 % / 0 %
+- Suggérer des personnes (liste scorée avec bouton Affecter)
+
+### Undo / Redo
+- **Ctrl+Z** / **Cmd+Z** : annuler la dernière action
+- **Ctrl+Shift+Z** / **Cmd+Shift+Z** : refaire
+
+Historique des 20 dernières modifications en mémoire (non persistant entre sessions).
 
 ### Rapport PDF projet
 Bouton **⎙ Rapport** sur chaque carte projet. Ouvre une fenêtre A4 paysage avec :
@@ -117,11 +145,14 @@ Bouton ☾ / ☀ : bascule instantanée, persisté en localStorage.
 |:-:|---|
 | `D` `G` `C` `P` `L` `M` `J` `S` `B` `V` `O` `X` `W` | Navigation directe vers un onglet |
 | `N` | Nouvel élément (dans la vue courante) |
-| `/` | Focus sur la barre de recherche |
+| `/` | Focus sur la barre de recherche de la vue |
+| `Ctrl+K` / `Cmd+K` | **Recherche globale** (toutes entités) |
+| `Ctrl+Z` / `Cmd+Z` | **Annuler** la dernière modification |
+| `Ctrl+Shift+Z` | **Refaire** |
 | `?` | Afficher l'aide des raccourcis |
-| `Esc` | Fermer la modale / l'aide |
+| `Esc` | Fermer la modale / la recherche |
 
-> Sur macOS, les raccourcis sont identiques. Les modificateurs (`Cmd`, `Ctrl`, `Alt`) sont ignorés pour éviter les collisions avec le navigateur.
+> Sur macOS, les raccourcis fonctionnent avec `Cmd` à la place de `Ctrl`.
 
 ## Données de démonstration
 

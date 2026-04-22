@@ -108,6 +108,54 @@ body {
 }
 .inline-edit:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: var(--primary); }
 
+/* Recherche globale (Ctrl+K) */
+.gs-overlay {
+  position: fixed; inset: 0; z-index: 10000;
+  background: rgba(0,0,0,0.4); display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 80px;
+}
+.gs-panel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; width: min(640px, 92vw); max-height: 70vh;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.gs-panel #gs-input {
+  padding: 14px 18px; font-size: 16px; border: none; border-bottom: 1px solid var(--border);
+  background: var(--surface); color: var(--text); font-family: inherit; outline: none;
+}
+.gs-results { overflow: auto; max-height: 50vh; }
+.gs-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px; cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.gs-item.on { background: var(--primary-weak); }
+.gs-item:hover { background: var(--surface-2); }
+.gs-kind {
+  background: var(--surface-2); color: var(--text-muted);
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 10px; letter-spacing: .5px;
+  min-width: 70px; text-align: center;
+}
+.gs-label { font-weight: 500; }
+.gs-meta { margin-left: auto; }
+.gs-hint { padding: 8px 14px; border-top: 1px solid var(--border); background: var(--surface-2); text-align: center; }
+
+/* Menu contextuel (clic-droit Gantt) */
+.ctx-menu {
+  position: fixed; z-index: 10001;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; min-width: 220px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2); padding: 4px 0;
+  font-size: 13px;
+}
+.ctx-item { padding: 6px 14px; cursor: pointer; color: var(--text); }
+.ctx-item:hover { background: var(--surface-2); }
+.ctx-item.danger { color: var(--danger); }
+.ctx-item.danger:hover { background: var(--danger); color: #fff; }
+.ctx-sep { height: 1px; background: var(--border); margin: 4px 0; }
+
 /* Main */
 main#view-root {
   flex: 1; overflow: auto; padding: 20px;
