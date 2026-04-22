@@ -15,7 +15,7 @@ Copier `index.html`, `styles.css`, `app.js`, `data.js` et le dossier `views/` su
 **Option 3 — GitHub Pages**
 Cette app est déployée automatiquement depuis la branche `main`.
 
-## Modules (15 vues + Admin)
+## Modules (16 vues + Admin)
 
 | Raccourci | Onglet | Contenu |
 |:-:|---|---|
@@ -33,6 +33,7 @@ Cette app est déployée automatiquement depuis la branche `main`.
 | `X` | Capacité | Heatmap capacité sur 8 / 12 / 24 semaines (par lieu, machine ou personne) |
 | `R` | **Ressources** | Matrice personnes × jours × demi-journées (dispo / occupé·e / off) |
 | `E` | **Équipes** | Définition d'équipes de production (Ligne 1, Valmont, Logistique, Assemblage…) avec slots de compétences |
+| `A` | **Plan atelier** | Vue bird's eye SVG 2D : lieux positionnés par étage, coloration charge, dots personnes temps réel, drag admin |
 | `W` | What-if | Snapshot, modifications, diff, commit ou rollback |
 | ⚙ | Admin | Gestion utilisateurs, groupes d'accès, permissions, mots de passe |
 
@@ -54,6 +55,16 @@ Cette app est déployée automatiquement depuis la branche `main`.
 - **Équipes** (raccourci E) : 7 équipes par défaut (Ligne 1-2, Valmont, Logistique 1-3, Assemblage) composées de slots de compétences (ex. 1×Contrôle + 7×Montage)
 - **Pré-remplissage d'équipe** : depuis le formulaire d'une tâche Gantt, bouton « 🎯 Appliquer l'équipe » qui affecte automatiquement les N meilleures personnes par slot selon compétences + horaires + charge
 - **Détection de conflit** : si une personne proposée est déjà sur une tâche chevauchante, popup avec choix individuel « Déplacer ici » (retire de l'autre tâche) ou « Ignorer »
+
+### Plan 2D interactif de l'atelier
+Vue **Plan** (raccourci A) : représentation bird's eye SVG de tous les lieux positionnés par étage.
+
+- **Coloration automatique** selon la charge sur 5 j. ouvrés : 🟢 ≤50 % / 🟡 ≤80 % / 🟠 ≤95 % / 🔴 >95 %
+- **Dots personnes** : chaque personne ayant une tâche active aujourd'hui apparaît comme un cercle coloré dans le lieu concerné (tooltip avec nom/rôle)
+- **Icône** selon le type (🛠 production / 📦 stockage)
+- **Filtres pills** pour isoler un étage
+- **Panel détail** au clic : charge en j-personne, liste des personnes présentes, tâches prévues sur 5 j avec badges projet
+- **Mode édition admin** : cocher « Mode édition » → drag des rectangles à la souris, positions sauvegardées en direct. Bouton « Réorganiser auto » pour revenir à la grille par défaut.
 
 ### Authentification par mot de passe
 Login au démarrage avec SHA-256 (Web Crypto API). Un utilisateur sans mot de passe défini n'a pas de challenge (accès direct). Un admin (⚙) peut définir/retirer les mots de passe de tous les utilisateurs. Chaque utilisateur peut gérer son propre mot de passe via 🔑.
@@ -167,6 +178,7 @@ Bouton ☾ / ☀ : bascule instantanée, persisté en localStorage.
 | `Ctrl+Shift+Z` | **Refaire** |
 | `R` | Vue Ressources |
 | `E` | Vue Équipes |
+| `A` | Vue Plan atelier |
 | `?` | Afficher l'aide des raccourcis |
 | `Esc` | Fermer la modale / la recherche |
 
@@ -213,6 +225,7 @@ views/
   capacite.js       Heatmap
   ressources.js     Matrice personnes × jours × demi-journées
   equipes.js        CRUD équipes + slots compétences + proposerAffectation
+  plan.js           Plan 2D SVG bird's eye, charge, dots personnes, drag admin
   whatif.js         Snapshot + diff + commit
   admin.js          Gestion utilisateurs, groupes, permissions, mots de passe
 ```
