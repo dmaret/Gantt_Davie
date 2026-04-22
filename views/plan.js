@@ -82,20 +82,24 @@ App.views.plan = {
     const st = this.state;
     let lieux = s.lieux.slice();
     if (st.etageFilter) lieux = lieux.filter(l => l.etage === st.etageFilter);
-    // Bounds
-    const xs = lieux.map(l => (l.x||0) + (l.w||180));
-    const ys = lieux.map(l => (l.y||0) + (l.h||110));
-    const maxX = Math.max(...xs, 400) + 20;
-    const maxY = Math.max(...ys, 300) + 40;
+    if (!lieux.length) { document.getElementById('plan-svg-wrap').innerHTML = '<p class="muted">Aucun lieu sur cet étage.</p>'; return; }
+    // Bornes serrées autour des lieux effectivement affichés (évite les zones vides si on filtre)
+    const PAD_LEFT = 60, PAD_TOP = 30, PAD_RIGHT = 20, PAD_BOTTOM = 20;
+    const minX = Math.min(...lieux.map(l => l.x||0)) - PAD_LEFT;
+    const minY = Math.min(...lieux.map(l => l.y||0)) - PAD_TOP;
+    const maxX = Math.max(...lieux.map(l => (l.x||0) + (l.w||180))) + PAD_RIGHT;
+    const maxY = Math.max(...lieux.map(l => (l.y||0) + (l.h||110))) + PAD_BOTTOM;
+    const vbW = maxX - minX;
+    const vbH = maxY - minY;
 
-    // Bandes d'étages (labels) — uniquement si on affiche plusieurs étages
+    // Bandes d'étages — positions calées sur les lieux de chaque étage
     const etagesPresents = [...new Set(lieux.map(l => l.etage))];
     const etageLabels = etagesPresents.map(e => {
       const lieuxE = lieux.filter(l => l.etage === e);
       const yMin = Math.min(...lieuxE.map(l => l.y||0));
       const yMax = Math.max(...lieuxE.map(l => (l.y||0) + (l.h||110)));
-      return `<text class="plan-etage-label" x="4" y="${(yMin+yMax)/2}" dy="4">${e}</text>
-        <line class="plan-etage-line" x1="0" x2="${maxX}" y1="${yMin-14}" y2="${yMin-14}"/>`;
+      return `<text class="plan-etage-label" x="${minX + 6}" y="${(yMin+yMax)/2}" dy="4">${e}</text>
+        <line class="plan-etage-line" x1="${minX + 50}" x2="${maxX}" y1="${yMin-14}" y2="${yMin-14}"/>`;
     }).join('');
 
     const rects = lieux.map(l => {
@@ -127,7 +131,7 @@ App.views.plan = {
       </g>`;
     }).join('');
 
-    const html = `<svg class="plan-svg" viewBox="0 0 ${maxX} ${maxY}" preserveAspectRatio="xMinYMin meet" width="100%" style="min-height:${Math.min(maxY, 700)}px">
+    const html = `<svg class="plan-svg" viewBox="${minX} ${minY} ${vbW} ${vbH}" preserveAspectRatio="xMinYMin meet" width="100%" style="min-height:${Math.min(vbH, 700)}px">
       ${etageLabels}
       ${rects}
     </svg>`;
