@@ -122,11 +122,11 @@ App.views.personnes = {
       const tItems = r.ts.length ? r.ts.map(t => {
         const prj = DB.projet(t.projetId);
         const lieu = DB.lieu(t.lieuId);
-        return `<li><span class="badge" style="background:${prj?prj.couleur+'33':''};color:${prj?prj.couleur:''}">${prj?prj.code:''}</span> <strong>${t.nom}</strong> <span class="muted small">· ${D.fmt(t.debut)}→${D.fmt(t.fin)} · ${lieu?lieu.nom:'—'}</span></li>`;
+        return `<li class="alert-row" data-tid="${t.id}" role="button" tabindex="0"><div style="flex:1"><span class="badge" style="background:${prj?prj.couleur+'33':''};color:${prj?prj.couleur:''}">${prj?prj.code:''}</span> <strong>${t.nom}</strong> <span class="muted small">· ${D.fmt(t.debut)}→${D.fmt(t.fin)} · ${lieu?lieu.nom:'—'}</span></div><span class="alert-arrow">›</span></li>`;
       }).join('') : '<li class="muted">Aucune tâche.</li>';
       const dItems = r.deps.length ? r.deps.map(d => {
         const o = DB.lieu(d.origineId), de = DB.lieu(d.destinationId);
-        return `<li>🚚 ${D.fmt(d.date)} · ${d.motif} · ${o?o.nom:'—'} → ${de?de.nom:'—'} · ${d.duree}</li>`;
+        return `<li class="alert-row" data-did="${d.id}" role="button" tabindex="0"><div style="flex:1">🚚 ${D.fmt(d.date)} · ${d.motif} · ${o?o.nom:'—'} → ${de?de.nom:'—'} · ${d.duree}</div><span class="alert-arrow">›</span></li>`;
       }).join('') : '';
       return `<div class="card" style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -138,8 +138,8 @@ App.views.personnes = {
         </div>
         <div class="bar-inline ${cls}"><div class="fill" style="width:${pct}%"></div></div>
         <h4 style="margin:10px 0 4px 0">Tâches (${r.ts.length})</h4>
-        <ul class="list">${tItems}</ul>
-        ${r.deps.length ? `<h4 style="margin:10px 0 4px 0">Déplacements (${r.deps.length})</h4><ul class="list">${dItems}</ul>` : ''}
+        <ul class="list list-clickable">${tItems}</ul>
+        ${r.deps.length ? `<h4 style="margin:10px 0 4px 0">Déplacements (${r.deps.length})</h4><ul class="list list-clickable">${dItems}</ul>` : ''}
       </div>`;
     };
 
@@ -150,6 +150,12 @@ App.views.personnes = {
     `;
     const foot = `<button class="btn btn-secondary" onclick="window.print()">⎙ Imprimer</button><span class="spacer" style="flex:1"></span><button class="btn" onclick="App.closeModal()">Fermer</button>`;
     App.openModal('Ma semaine — ' + App.personneLabel(p), body, foot);
+    document.querySelectorAll('[data-tid]').forEach(el => el.onclick = () => {
+      App.closeModal(); App.navigateToTarget({ view: 'gantt', tacheId: el.dataset.tid });
+    });
+    document.querySelectorAll('[data-did]').forEach(el => el.onclick = () => {
+      App.closeModal(); App.navigate('deplacements');
+    });
   },
   openForm(id) {
     const isNew = !id;

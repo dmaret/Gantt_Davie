@@ -99,8 +99,25 @@ Au premier démarrage, un **tutoriel 8 étapes** s'affiche (bienvenue, navigatio
 ### Édition inline
 Les quantités du **BOM** et du **stock** sont modifiables directement dans les tableaux (Entrée ou blur pour valider). Une quantité BOM à 0 propose la suppression de la ligne.
 
+### Édition visuelle des ressources dans les projets
+Depuis l'onglet **Projets**, en ouvrant un projet :
+- Chaque tâche affiche ses personnes en **chips colorées** (couleur de la personne) avec **× pour retirer**
+- **Sélecteur « + Ajouter personne »** par tâche (filtré sur non-assignées)
+- **Bouton « 💡 Suggérer »** par tâche : top 5 scoré par compétence (+100) + lieu (+10) − charge (−5/j)
+- **Bouton « 🎯 Auto-affecter équipe »** au niveau projet : choisir une équipe → répartit automatiquement les personnes sur toutes les tâches non-jalon selon les slots de compétences, en conservant les affectations existantes
+
+### Navigation contextuelle (« clic → source »)
+Toutes les fenêtres d'information ont des **lignes cliquables** avec chevron **›** :
+- **🔔 Alertes proactives** : clic sur une alerte → ouvre la vue concernée et le formulaire de l'élément (projet en retard, tâche en conflit, personne surchargée, BOM en rupture)
+- **Tableau de bord** : carte « Conflits » et « Prochaines tâches » cliquables
+- **Ma semaine** (Personnes) : clic sur une tâche ou un déplacement → navigue vers la vue
+- **Calendrier** : détail jour → clic sur tâche ouvre le formulaire dans le Gantt
+- **Plan 2D** : panneau détail → clic personne/tâche ouvre la fiche
+- **Suggestions** (Gantt) : clic sur le nom → ouvre la fiche personne
+- **Recherche globale** (Ctrl+K) : Entrée ou clic → ouvre le formulaire de l'entité sélectionnée
+
 ### Recherche globale (Ctrl+K / Cmd+K)
-Barre de recherche instantanée à travers personnes, projets, articles, commandes, tâches, machines, lieux. Navigation au clavier (↑↓), Entrée pour ouvrir la vue correspondante.
+Barre de recherche instantanée à travers personnes, projets, articles, commandes, tâches, machines, lieux. Navigation au clavier (↑↓), Entrée pour ouvrir directement le formulaire de l'élément sélectionné.
 
 ### Menu contextuel Gantt
 Clic-droit sur une barre Gantt → menu d'actions rapides :

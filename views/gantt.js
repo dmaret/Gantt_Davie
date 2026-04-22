@@ -324,11 +324,11 @@ App.views.gantt = {
     const t = DB.tache(tid);
     if (!t) return;
     const sugg = App.suggestAssignees(t, 5);
-    const body = `<p class="muted">Score = compétence × 100 − charge × 5 + proximité × 10</p>
+    const body = `<p class="muted">Score = compétence × 100 − charge × 5 + proximité × 10 · Clic sur le nom pour ouvrir la fiche de la personne.</p>
       <table class="data">
         <thead><tr><th>Personne</th><th>Rôle</th><th class="right">Score</th><th class="right">Charge</th><th>Compétence</th><th></th></tr></thead>
         <tbody>${sugg.map(x => `<tr>
-          <td><strong>${App.personneLabel(x.p)}</strong></td>
+          <td><a href="#" class="link-to-person" data-pid="${x.p.id}"><strong>${App.personneLabel(x.p)}</strong></a></td>
           <td>${x.p.role}</td>
           <td class="right mono">${x.score}</td>
           <td class="right">${x.charge}j</td>
@@ -337,6 +337,11 @@ App.views.gantt = {
         </tr>`).join('')}</tbody>
       </table>`;
     App.openModal('Suggestions pour : ' + t.nom, body, `<button class="btn btn-secondary" onclick="App.closeModal()">Fermer</button>`);
+    document.querySelectorAll('.link-to-person').forEach(a => a.onclick = (e) => {
+      e.preventDefault();
+      App.closeModal();
+      App.navigateToTarget({ view: 'personnes', personneId: a.dataset.pid });
+    });
     document.querySelectorAll('[data-assign]').forEach(b => b.onclick = () => {
       const pid = b.dataset.assign;
       t.assignes = Array.from(new Set([...(t.assignes||[]), pid]));

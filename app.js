@@ -414,6 +414,7 @@ const App = {
     const r = (this.gsResults||[])[this.gsSelected];
     if (!r) return;
     this.closeGlobalSearch();
+    if (r.target) { this.navigateToTarget(r.target); return; }
     this.navigate(r.view);
     if (r.onOpen) setTimeout(r.onOpen, 50);
   },
@@ -422,16 +423,16 @@ const App = {
     const ql = q.toLowerCase().trim();
     const out = [];
     const push = (r) => { if (!ql || r.label.toLowerCase().includes(ql) || (r.meta||'').toLowerCase().includes(ql)) out.push(r); };
-    s.personnes.forEach(p => push({ kind:'Personne', label:this.personneLabel(p), meta:`${p.role} · ${DB.lieu(p.lieuPrincipalId)?.nom||''} · ${(p.competences||[]).join(', ')}`, view:'personnes' }));
-    s.projets.forEach(p => push({ kind:'Projet',   label:`${p.code} — ${p.nom}`, meta:`${p.client||''} · ${p.statut}`, view:'projets' }));
-    s.stock.forEach(a => push({ kind:'Article',   label:`${a.ref} — ${a.nom}`, meta:`${a.quantite} ${a.unite} · ${DB.lieu(a.lieuId)?.nom||''}`, view:'stock' }));
-    s.commandes.forEach(c => push({ kind:'Commande', label:c.ref, meta:`${c.fournisseur} · ${c.statut}`, view:'commandes' }));
+    s.personnes.forEach(p => push({ kind:'Personne', label:this.personneLabel(p), meta:`${p.role} · ${DB.lieu(p.lieuPrincipalId)?.nom||''} · ${(p.competences||[]).join(', ')}`, view:'personnes', target:{ view:'personnes', personneId:p.id } }));
+    s.projets.forEach(p => push({ kind:'Projet',   label:`${p.code} — ${p.nom}`, meta:`${p.client||''} · ${p.statut}`, view:'projets', target:{ view:'projets', projetId:p.id } }));
+    s.stock.forEach(a => push({ kind:'Article',   label:`${a.ref} — ${a.nom}`, meta:`${a.quantite} ${a.unite} · ${DB.lieu(a.lieuId)?.nom||''}`, view:'stock', target:{ view:'stock', articleId:a.id } }));
+    s.commandes.forEach(c => push({ kind:'Commande', label:c.ref, meta:`${c.fournisseur} · ${c.statut}`, view:'commandes', target:{ view:'commandes', commandeId:c.id } }));
     s.taches.forEach(t => {
       const prj = DB.projet(t.projetId);
-      push({ kind:'Tâche', label:t.nom, meta:`${prj?prj.code:''} · ${D.fmt(t.debut)}→${D.fmt(t.fin)}`, view:'gantt' });
+      push({ kind:'Tâche', label:t.nom, meta:`${prj?prj.code:''} · ${D.fmt(t.debut)}→${D.fmt(t.fin)}`, view:'gantt', target:{ view:'gantt', tacheId:t.id } });
     });
-    s.machines.forEach(m => push({ kind:'Machine', label:m.nom, meta:`${m.type} · ${DB.lieu(m.lieuId)?.nom||''}`, view:'machines' }));
-    s.lieux.forEach(l => push({ kind:'Lieu', label:l.nom, meta:`${l.type} · ${l.etage}`, view:l.type==='production'?'lieux':'lieux' }));
+    s.machines.forEach(m => push({ kind:'Machine', label:m.nom, meta:`${m.type} · ${DB.lieu(m.lieuId)?.nom||''}`, view:'machines', target:{ view:'machines', machineId:m.id } }));
+    s.lieux.forEach(l => push({ kind:'Lieu', label:l.nom, meta:`${l.type} · ${l.etage}`, view:'lieux', target:{ view:'lieux', lieuId:l.id } }));
     return out.slice(0, limit);
   },
 
