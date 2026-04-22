@@ -238,13 +238,17 @@ views/
 
 | | |
 |---|---|
-| **Responsable** | Davie MARET |
+| **Responsable** | Davie MARET — MSP |
+| **Institution** | EPI — Atelier Conditionnement & Logistique |
+| **Site** | Genève |
+| **Email** | [davie.maret@epi.ge.ch](mailto:davie.maret@epi.ge.ch) |
+| **Téléphone** | 022 |
 | **Contexte** | Planification d'atelier de production multi-sites |
 | **Version** | 3.0 |
 | **Date** | Avril 2026 |
 
-Pour toute question relative à l'utilisation de cette application, contacter Davie MARET.
+Pour toute question relative à l'utilisation de cette application, contacter **Davie MARET** (MSP, Atelier Conditionnement & Logistique — EPI Genève) : [davie.maret@epi.ge.ch](mailto:davie.maret@epi.ge.ch)
 
 ## Licence & crédits
 
-Application développée sur mesure pour Davie MARET. Aucune dépendance tierce.
+Application développée sur mesure pour **Davie MARET** — MSP à l'Atelier Conditionnement & Logistique des EPI (Genève). Aucune dépendance tierce.
