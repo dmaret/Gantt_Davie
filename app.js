@@ -11,24 +11,183 @@ const App = {
     this.updateBell();
     this.bellInterval = setInterval(() => this.updateBell(), 30000);
     this.applyGroupUI();
-    this.navigate(location.hash.replace('#','') || 'dashboard');
-    // Tutorial au premier démarrage
-    if (!localStorage.getItem('atelier_tuto_seen')) {
-      setTimeout(() => this.showTutorial(false), 400);
+    // Login au démarrage si pas de session authentifiée
+    if (!this.isAuthed()) {
+      this.showLogin();
+    } else {
+      this.navigate(location.hash.replace('#','') || 'dashboard');
+      if (!localStorage.getItem('atelier_tuto_seen')) {
+        setTimeout(() => this.showTutorial(false), 400);
+      }
     }
+  },
+
+  // Hachage SHA-256 du mot de passe (Web Crypto API)
+  async hash(s) {
+    const data = new TextEncoder().encode(s);
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+  },
+
+  isAuthed() {
+    const id = sessionStorage.getItem('atelier_authed');
+    if (!id) return false;
+    const u = (DB.state.utilisateurs || []).find(x => x.id === id);
+    return !!u;
+  },
+
+  async login(userId, password) {
+    const u = (DB.state.utilisateurs || []).find(x => x.id === userId);
+    if (!u) return false;
+    // Pas de mot de passe défini → accès direct
+    if (!u.passwordHash) {
+      sessionStorage.setItem('atelier_authed', userId);
+      localStorage.setItem('atelier_user_id', userId);
+      return true;
+    }
+    const h = await this.hash(password || '');
+    if (h === u.passwordHash) {
+      sessionStorage.setItem('atelier_authed', userId);
+      localStorage.setItem('atelier_user_id', userId);
+      return true;
+    }
+    return false;
+  },
+
+  logout() {
+    sessionStorage.removeItem('atelier_authed');
+    this.showLogin();
+  },
+
+  async setPassword(userId, newPassword) {
+    const u = (DB.state.utilisateurs || []).find(x => x.id === userId);
+    if (!u) return;
+    if (!newPassword) {
+      delete u.passwordHash;
+    } else {
+      u.passwordHash = await this.hash(newPassword);
+    }
+    DB.save();
+  },
+
+  showLogin() {
+    const existing = document.getElementById('login-overlay');
+    if (existing) existing.remove();
+    const o = document.createElement('div');
+    o.id = 'login-overlay';
+    o.className = 'login-overlay';
+    const users = DB.state.utilisateurs || [];
+    const curId = localStorage.getItem('atelier_user_id') || users[0]?.id || '';
+    o.innerHTML = `<div class="login-card">
+      <div class="login-logo">◆</div>
+      <h2>Atelier · Planification</h2>
+      <p class="muted">Connecte-toi pour continuer</p>
+      <label class="small" style="display:block;text-align:left;margin-top:14px">Utilisateur</label>
+      <select id="login-user" class="login-input">
+        ${users.map(u => `<option value="${u.id}" ${u.id===curId?'selected':''}>${u.nom} · ${u.groupe}${u.passwordHash?' 🔒':''}</option>`).join('')}
+      </select>
+      <label class="small" style="display:block;text-align:left;margin-top:10px">Mot de passe <span id="login-pw-hint" class="muted">(aucun — laisser vide)</span></label>
+      <input type="password" id="login-pw" class="login-input" placeholder="••••••••" autofocus>
+      <div id="login-error" class="login-error" style="display:none"></div>
+      <button class="btn" id="login-btn" style="margin-top:14px;width:100%;padding:10px">Se connecter</button>
+      ${this._pendingSwitch ? '<button class="btn btn-secondary" id="login-cancel" style="margin-top:6px;width:100%">Annuler (rester connecté·e comme avant)</button>' : ''}
+      <p class="muted small" style="margin-top:14px">Astuce : les utilisateurs sans cadenas 🔒 n'ont pas de mot de passe. Un admin peut en définir un dans la vue Admin (⚙).</p>
+    </div>`;
+    document.body.appendChild(o);
+
+    const userSel = document.getElementById('login-user');
+    const pwInput = document.getElementById('login-pw');
+    const hint = document.getElementById('login-pw-hint');
+    const errEl = document.getElementById('login-error');
+    const btn = document.getElementById('login-btn');
+
+    const refreshHint = () => {
+      const u = users.find(x => x.id === userSel.value);
+      if (u && u.passwordHash) {
+        hint.textContent = '(obligatoire)'; hint.classList.remove('muted');
+      } else {
+        hint.textContent = '(aucun — laisser vide)'; hint.classList.add('muted');
+      }
+    };
+    userSel.onchange = refreshHint;
+    refreshHint();
+
+    const doLogin = async () => {
+      errEl.style.display = 'none';
+      btn.disabled = true; btn.textContent = 'Connexion…';
+      const ok = await this.login(userSel.value, pwInput.value);
+      btn.disabled = false; btn.textContent = 'Se connecter';
+      if (ok) {
+        document.getElementById('login-overlay').remove();
+        this.populateUserSelect();
+        this.applyGroupUI();
+        this.navigate(location.hash.replace('#','') || 'dashboard');
+        this.toast('Connecté comme ' + this.currentUser().nom, 'success');
+        if (!localStorage.getItem('atelier_tuto_seen')) {
+          setTimeout(() => this.showTutorial(false), 400);
+        }
+      } else {
+        errEl.style.display = 'block';
+        errEl.textContent = '✗ Mot de passe incorrect';
+        pwInput.value = '';
+        pwInput.focus();
+      }
+    };
+    btn.onclick = doLogin;
+    pwInput.onkeydown = e => { if (e.key === 'Enter') doLogin(); };
+    const cancelBtn = document.getElementById('login-cancel');
+    if (cancelBtn) cancelBtn.onclick = () => {
+      // Restaure la session précédente
+      const prevId = this._pendingSwitch.prevId;
+      sessionStorage.setItem('atelier_authed', prevId);
+      localStorage.setItem('atelier_user_id', prevId);
+      this._pendingSwitch = null;
+      document.getElementById('login-overlay').remove();
+      this.populateUserSelect();
+      this.applyGroupUI();
+    };
+    setTimeout(() => pwInput.focus(), 50);
+  },
+
+  // Change le mot de passe de l'utilisateur courant (auto-service)
+  showMyPasswordDialog() {
+    const u = this.currentUser();
+    const hasPw = !!u.passwordHash;
+    const body = `
+      <p class="muted small">Utilisateur : <strong>${u.nom}</strong> · groupe ${u.groupe}</p>
+      ${hasPw ? '<div class="field"><label>Mot de passe actuel</label><input type="password" id="mp-current"></div>' : '<p class="muted small">Tu n\'as pas encore de mot de passe.</p>'}
+      <div class="field"><label>Nouveau mot de passe (laisser vide pour retirer)</label><input type="password" id="mp-new"></div>
+      <div class="field"><label>Confirmer</label><input type="password" id="mp-confirm"></div>
+    `;
+    const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button><span class="spacer" style="flex:1"></span><button class="btn" id="mp-save">Enregistrer</button>`;
+    this.openModal('Mon mot de passe', body, foot);
+    document.getElementById('mp-save').onclick = async () => {
+      const cur = hasPw ? document.getElementById('mp-current').value : '';
+      const n1 = document.getElementById('mp-new').value;
+      const n2 = document.getElementById('mp-confirm').value;
+      if (hasPw) {
+        const h = await this.hash(cur);
+        if (h !== u.passwordHash) { this.toast('Mot de passe actuel incorrect','error'); return; }
+      }
+      if (n1 !== n2) { this.toast('Les deux champs ne correspondent pas','error'); return; }
+      await this.setPassword(u.id, n1);
+      this.populateUserSelect();
+      this.closeModal();
+      this.toast(n1 ? 'Mot de passe mis à jour' : 'Mot de passe retiré', 'success');
+    };
   },
 
   currentUser() {
     const id = localStorage.getItem('atelier_user_id');
     return (DB.state.utilisateurs || []).find(u => u.id === id) || (DB.state.utilisateurs || [])[0] || { id:'_', nom:'Anonyme', axes:[] };
   },
+  // Changement d'utilisateur : passe par l'écran de login pour re-authentifier
   setCurrentUser(id) {
+    const prev = sessionStorage.getItem('atelier_authed');
+    this._pendingSwitch = prev ? { prevId: prev } : null;
+    sessionStorage.removeItem('atelier_authed');
     localStorage.setItem('atelier_user_id', id);
-    this.toast('Signé comme ' + (this.currentUser().nom), 'success');
-    this.refreshUserBadge();
-    this.applyPerms();
-    this.applyGroupUI();
-    this.refresh();
+    this.showLogin();
   },
   populateUserSelect() {
     const sel = document.getElementById('user-select');
@@ -105,6 +264,8 @@ const App = {
     document.getElementById('btn-help').addEventListener('click', () => this.showHelp());
     document.getElementById('btn-bell').addEventListener('click', () => this.showBellPanel());
     document.getElementById('btn-admin').addEventListener('click', () => this.views.admin && this.navigate('admin'));
+    document.getElementById('btn-password').addEventListener('click', () => this.showMyPasswordDialog());
+    document.getElementById('btn-logout').addEventListener('click', () => this.logout());
     document.getElementById('btn-tuto').addEventListener('click', () => this.showTutorial(true));
     document.getElementById('btn-tablette').addEventListener('click', () => {
       document.body.classList.toggle('tablette');

@@ -64,17 +64,19 @@ App.views.admin = {
     const s = DB.state;
     const rows = s.utilisateurs.map(u => {
       const groupeClass = u.groupe === 'admin' ? 'bad' : u.groupe === 'MSP' ? 'warn' : 'muted';
+      const pw = u.passwordHash ? '<span class="badge good">🔒 défini</span>' : '<span class="badge muted">aucun</span>';
       return `<tr data-id="${u.id}" style="cursor:pointer">
         <td><strong>${u.nom}</strong></td>
         <td>${u.role||''}</td>
         <td><span class="badge ${groupeClass}">${u.groupe||'—'}</span></td>
         <td>${(u.axes||[]).join(', ')||'—'}</td>
+        <td>${pw}</td>
         <td class="mono small muted">${u.id}</td>
       </tr>`;
     }).join('');
     document.getElementById('adm-users').innerHTML = `
       <table class="data">
-        <thead><tr><th>Nom</th><th>Rôle</th><th>Groupe</th><th>Axes 4A</th><th>ID</th></tr></thead>
+        <thead><tr><th>Nom</th><th>Rôle</th><th>Groupe</th><th>Axes 4A</th><th>Mot de passe</th><th>ID</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     `;
@@ -101,6 +103,13 @@ App.views.admin = {
           ${axesCodes.map(a => `<label class="chip"><input type="checkbox" class="uf-axe" value="${a}" ${(u.axes||[]).includes(a)?'checked':''}> ${a}</label>`).join('')}
         </div>
       </div>
+      <div class="field"><label>Mot de passe ${u.passwordHash?'<span class="badge good small">défini</span>':'<span class="badge muted small">aucun</span>'}</label>
+        <div class="row" style="gap:6px">
+          <input type="password" id="uf-pw" placeholder="${u.passwordHash?'Laisser vide pour ne pas changer':'Nouveau mot de passe (optionnel)'}">
+          ${u.passwordHash ? '<button class="btn btn-secondary" id="uf-pw-clear" type="button" title="Retirer le mot de passe">Retirer</button>' : ''}
+        </div>
+        <p class="muted small" style="margin-top:4px">Laisser vide pour conserver l'actuel. Entrer un nouveau pour le remplacer.</p>
+      </div>
       <div class="muted small">ID technique : <code>${u.id}</code></div>
     `;
     const foot = `${!isNew?'<button class="btn btn-danger" id="uf-del">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>
@@ -108,14 +117,24 @@ App.views.admin = {
       <button class="btn" id="uf-save">${isNew?'Créer':'Enregistrer'}</button>`;
     App.openModal(isNew?'Nouvel utilisateur':u.nom, body, foot);
     document.getElementById('uf-cancel').onclick = () => App.closeModal();
-    document.getElementById('uf-save').onclick = () => {
+    document.getElementById('uf-save').onclick = async () => {
       u.nom = document.getElementById('uf-nom').value.trim();
       u.role = document.getElementById('uf-role').value.trim();
       u.groupe = document.getElementById('uf-groupe').value;
       u.axes = Array.from(document.querySelectorAll('.uf-axe:checked')).map(cb => cb.value);
       if (!u.nom) { App.toast('Nom requis','error'); return; }
       if (isNew) s.utilisateurs.push(u);
+      const newPw = document.getElementById('uf-pw').value;
+      if (newPw) { u.passwordHash = await App.hash(newPw); }
       DB.save(); App.closeModal(); App.populateUserSelect(); App.refresh();
+      App.toast('Utilisateur enregistré' + (newPw?' · mot de passe mis à jour':''), 'success');
+    };
+    const clearBtn = document.getElementById('uf-pw-clear');
+    if (clearBtn) clearBtn.onclick = () => {
+      if (!confirm('Retirer le mot de passe de ' + u.nom + ' ?')) return;
+      delete u.passwordHash;
+      DB.save(); App.closeModal(); App.populateUserSelect(); App.refresh();
+      App.toast('Mot de passe retiré','info');
     };
     if (!isNew) document.getElementById('uf-del').onclick = () => {
       if (s.utilisateurs.length === 1) { App.toast('Impossible de supprimer le dernier utilisateur','error'); return; }
