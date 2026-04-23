@@ -13,6 +13,7 @@ App.views.dashboard = {
     'absences':    { title:'🏖 Absences en cours & à venir',                size:1, render(s, today) { return App.views.dashboard.renderAbsences(s, today); } },
     'kpi-velocity':{ title:'📐 Respect des délais',                         size:1, render(s) { return App.views.dashboard.renderVelocity(s); } },
     'top-articles':{ title:'🏷 Top articles (besoins BOM)',                 size:1, render(s) { return App.views.dashboard.renderTopArticles(s); } },
+    'avancement-projets': { title:'📊 Avancement par projet',              size:1, render(s) { return App.views.dashboard.renderAvancementProjets(s); } },
   },
 
   render(root) {
@@ -321,6 +322,33 @@ App.views.dashboard = {
           <div class="bar-inline ${rupture?'bad':'good'}" style="margin-top:4px;height:6px"><div class="fill" style="width:${pct}%"></div></div>
         </div>
         <span class="alert-arrow">›</span>
+      </li>`;
+    }).join('')}</ul>`;
+  },
+
+  renderAvancementProjets(s) {
+    const actifs = s.projets.filter(p => p.statut === 'en-cours');
+    if (!actifs.length) return `<p class="muted">Aucun projet en cours.</p>`;
+    return `<ul class="list" style="padding:0">${actifs.map(p => {
+      const taches = s.taches.filter(t => t.projetId === p.id && !t.jalon);
+      const total = taches.length;
+      if (!total) return '';
+      const done = taches.filter(t => t.avancement === 100).length;
+      const inProg = taches.filter(t => t.avancement > 0 && t.avancement < 100).length;
+      const pct = Math.round(done / total * 100);
+      const blendPct = Math.round((done + inProg * 0.5) / total * 100);
+      const today = D.today();
+      const isLate = taches.some(t => t.fin < today && t.avancement < 100);
+      return `<li class="alert-row" onclick="App.navigateToTarget({view:'projets',projetId:'${p.id}'})" role="button" tabindex="0" style="display:block;padding:8px 10px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
+          <span><span class="badge" style="background:${p.couleur}22;color:${p.couleur}">${p.code}</span> <strong>${p.nom}</strong>${isLate?' <span class="badge bad" style="font-size:9px">retard</span>':''}</span>
+          <span class="small mono" style="margin-left:8px">${pct}%</span>
+        </div>
+        <div style="position:relative;height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:${blendPct}%;background:${p.couleur};opacity:.3;border-radius:4px"></div>
+          <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:${p.couleur};border-radius:4px"></div>
+        </div>
+        <div class="small muted" style="margin-top:3px">${done}/${total} terminées · ${inProg} en cours · fin ${D.fmt(p.fin)}</div>
       </li>`;
     }).join('')}</ul>`;
   },
