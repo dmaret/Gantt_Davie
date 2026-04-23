@@ -16,6 +16,7 @@ App.views.lieux = {
         <input type="file" id="l-import-file" accept=".csv,.json" hidden>
         <button class="btn-ghost" id="l-tpl" data-perm="edit">⬇ Modèle</button>
         <button class="btn-ghost" id="l-import" data-perm="edit">⬆ Importer</button>
+        <button class="btn-ghost" id="l-csv">⤓ Exporter CSV</button>
         <button class="btn" id="l-add">+ Ajouter un lieu</button>
       </div>
       <div class="grid grid-2">
@@ -74,6 +75,7 @@ App.views.lieux = {
     document.getElementById('l-tpl').onclick = () => this.downloadTemplate();
     document.getElementById('l-import').onclick = () => document.getElementById('l-import-file').click();
     document.getElementById('l-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
+    document.getElementById('l-csv').onclick = () => this.exportCSV();
   },
 
   openTasksOfLieu(lieuId) {
@@ -159,6 +161,13 @@ App.views.lieux = {
       s.lieux = s.lieux.filter(x => x.id !== l.id);
       DB.save(); App.closeModal(); App.refresh();
     };
+  },
+
+  exportCSV() {
+    const rows = [['Nom','Étage','Type','Capacité']];
+    DB.state.lieux.forEach(l => rows.push([l.nom, l.etage||'', l.type||'', l.capacite||0]));
+    CSV.download('lieux-' + D.today() + '.csv', rows);
+    App.toast('Export CSV téléchargé', 'success');
   },
 
   downloadTemplate() {

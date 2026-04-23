@@ -8,6 +8,7 @@ App.views.projets = {
         <input type="file" id="prj-import-file" accept=".csv,.json" hidden>
         <button class="btn-ghost" id="prj-tpl" data-perm="edit">⬇ Modèle</button>
         <button class="btn-ghost" id="prj-import" data-perm="edit">⬆ Importer</button>
+        <button class="btn-ghost" id="prj-csv">⤓ Exporter CSV</button>
         <button class="btn" id="prj-add">+ Nouveau projet</button>
       </div>
       <div class="grid grid-3">
@@ -18,6 +19,7 @@ App.views.projets = {
     document.getElementById('prj-tpl').onclick = () => this.downloadTemplate();
     document.getElementById('prj-import').onclick = () => document.getElementById('prj-import-file').click();
     document.getElementById('prj-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
+    document.getElementById('prj-csv').onclick = () => this.exportCSV();
     document.querySelectorAll('.prj-card').forEach(c => c.onclick = e => {
       if (e.target.closest('.prj-report')) return;
       this.openForm(c.dataset.id);
@@ -60,6 +62,14 @@ App.views.projets = {
       </div>
     `;
   },
+  exportCSV() {
+    const s = DB.state;
+    const rows = [['Code','Nom','Client','Couleur','Début','Fin','Étage','Priorité','Statut']];
+    s.projets.forEach(p => rows.push([p.code, p.nom, p.client||'', p.couleur||'', p.debut, p.fin, p.etage||'', p.priorite||'', p.statut||'']));
+    CSV.download('projets-' + D.today() + '.csv', rows);
+    App.toast('Export CSV téléchargé', 'success');
+  },
+
   exportReport(id) {
     const p = DB.projet(id);
     if (!p) return;

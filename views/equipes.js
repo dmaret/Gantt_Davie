@@ -7,12 +7,20 @@ App.views.equipes = {
         <strong>Équipes</strong>
         <span class="muted small">Définir les équipes de production avec leurs slots de compétences</span>
         <span class="spacer"></span>
+        <input type="file" id="eq-import-file" accept=".csv,.json" hidden>
+        <button class="btn-ghost" id="eq-tpl" data-perm="edit">⬇ Modèle</button>
+        <button class="btn-ghost" id="eq-import" data-perm="edit">⬆ Importer</button>
+        <button class="btn-ghost" id="eq-csv">⤓ Exporter CSV</button>
         <button class="btn ${App.can('edit')?'':'hidden'}" id="eq-add" ${App.can('edit')?'':'style="display:none"'}>+ Nouvelle équipe</button>
       </div>
       <div class="grid grid-3" id="eq-cards"></div>
     `;
     const addBtn = document.getElementById('eq-add');
     if (addBtn) addBtn.onclick = () => this.openForm(null);
+    document.getElementById('eq-csv').onclick = () => this.exportCSV();
+    document.getElementById('eq-tpl').onclick = () => this.downloadTemplate();
+    document.getElementById('eq-import').onclick = () => document.getElementById('eq-import-file').click();
+    document.getElementById('eq-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
     this.draw();
   },
 
@@ -42,6 +50,84 @@ App.views.equipes = {
     }).join('');
     document.getElementById('eq-cards').innerHTML = cards || '<p class="muted">Aucune équipe. Clic sur « + Nouvelle équipe » pour commencer.</p>';
     document.querySelectorAll('.eq-card').forEach(c => c.onclick = () => this.openForm(c.dataset.id));
+  },
+
+  exportCSV() {
+    const rows = [['Nom équipe','Couleur (#hex)','Compétence','Nombre']];
+    (DB.state.equipes||[]).forEach(eq => {
+      if (!(eq.slots||[]).length) { rows.push([eq.nom, eq.couleur||'', '', '']); return; }
+      eq.slots.forEach(sl => rows.push([eq.nom, eq.couleur||'', sl.competence, sl.n]));
+    });
+    CSV.download('equipes-' + D.today() + '.csv', rows);
+    App.toast('Export CSV téléchargé','success');
+  },
+
+  downloadTemplate() {
+    CSV.download('modele-import-equipes.csv', [
+      ['Nom équipe','Couleur (#hex)','Compétence','Nombre'],
+      ['Ligne 3','#2c5fb3','Montage','6'],
+      ['Ligne 3','#2c5fb3','Contrôle','1'],
+    ]);
+  },
+
+  importFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        let text = e.target.result;
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        const sep = text.includes(';') ? ';' : ',';
+        const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        const hdrs = lines[0].split(sep).map(h => norm(h.replace(/^"|"$/g,'')));
+        const rows = lines.slice(1).map(l => {
+          const v = l.split(sep).map(c => c.trim().replace(/^"|"$/g,''));
+          const o = {}; hdrs.forEach((h,i) => o[h] = v[i]||''); return o;
+        }).filter(r => Object.values(r).some(v => v));
+        // Regrouper par nom d'équipe
+        const byNom = {};
+        rows.forEach(r => {
+          const nom = r['nom equipe'] || r['nom équipe'] || r['nom'] || '';
+          if (!nom) return;
+          if (!byNom[nom]) byNom[nom] = { nom, couleur: r['couleur (#hex)'] || r['couleur'] || '#888', slots: [] };
+          const comp = r['competence'] || r['compétence'] || '';
+          const n = parseInt(r['nombre'] || r['n'] || 1) || 1;
+          if (comp) byNom[nom].slots.push({ competence: comp, n });
+        });
+        const s = DB.state;
+        const parsed = Object.values(byNom).map(eq => ({
+          ...eq,
+          existing: (s.equipes||[]).find(x => x.nom.toLowerCase() === eq.nom.toLowerCase())
+        }));
+        if (!parsed.length) { App.toast('Aucune équipe à importer','warn'); return; }
+        const body = `<p class="muted small">${parsed.filter(r=>!r.existing).length} à créer · ${parsed.filter(r=>r.existing).length} à mettre à jour</p>
+          <table class="data"><thead><tr><th>Équipe</th><th>Slots</th><th>Statut</th></tr></thead><tbody>
+          ${parsed.map(eq => `<tr>
+            <td><span class="badge" style="background:${eq.couleur}22;color:${eq.couleur}">${eq.nom}</span></td>
+            <td>${eq.slots.map(sl=>`×${sl.n} ${sl.competence}`).join(', ')||'—'}</td>
+            <td><span class="badge ${eq.existing?'warn':'good'}">${eq.existing?'màj':'nouveau'}</span></td>
+          </tr>`).join('')}
+          </tbody></table>`;
+        const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>
+          <button class="btn" id="eq-import-ok">Importer (${parsed.length})</button>`;
+        App.openModal('Aperçu import — Équipes', body, foot);
+        document.getElementById('eq-import-ok').onclick = () => {
+          if (!s.equipes) s.equipes = [];
+          let created = 0, updated = 0;
+          parsed.forEach(eq => {
+            if (eq.existing) {
+              eq.existing.couleur = eq.couleur; eq.existing.slots = eq.slots; updated++;
+            } else {
+              s.equipes.push({ id: DB.uid('EQ'), nom: eq.nom, couleur: eq.couleur, slots: eq.slots });
+              created++;
+            }
+          });
+          DB.save(); App.closeModal(); App.refresh();
+          App.toast(`${created} créée(s) · ${updated} mise(s) à jour`, 'success');
+        };
+      } catch(err) { App.toast('Erreur : ' + err.message, 'error'); }
+    };
+    reader.readAsText(file, 'UTF-8');
   },
 
   openForm(id) {

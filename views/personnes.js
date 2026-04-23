@@ -10,6 +10,8 @@ App.views.personnes = {
         <span class="spacer"></span>
         <input type="file" id="p-import-file" accept=".csv,.json" hidden>
         <button class="btn-ghost" id="p-import" data-perm="edit" title="Importer des personnes depuis un fichier CSV ou JSON">⬆ Importer</button>
+        <button class="btn-ghost" id="p-tpl" title="Télécharger un modèle CSV pour importer des personnes">⬇ Modèle</button>
+        <button class="btn-ghost" id="p-csv" title="Exporter la liste des personnes en CSV">⤓ Exporter CSV</button>
         <button class="btn-ghost" id="p-export" title="Exporter le planning hebdomadaire en CSV (ouvrable dans Excel)">⬇ Planning CSV</button>
         <button class="btn" id="p-add">+ Ajouter une personne</button>
       </div>
@@ -19,6 +21,8 @@ App.views.personnes = {
     document.getElementById('p-role').onchange = e => { this.state.roleFilter = e.target.value; this.draw(); };
     document.getElementById('p-lieu').onchange = e => { this.state.lieuFilter = e.target.value; this.draw(); };
     document.getElementById('p-add').onclick = () => this.openForm(null);
+    document.getElementById('p-tpl').onclick = () => this.downloadPersonnesTemplate();
+    document.getElementById('p-csv').onclick = () => this.exportPersonnesCSV();
     document.getElementById('p-export').onclick = () => this.exportPlanningCSV();
     document.getElementById('p-import').onclick = () => document.getElementById('p-import-file').click();
     document.getElementById('p-import-file').onchange = e => {
@@ -363,6 +367,19 @@ App.views.personnes = {
       App.toast(`Import : ${created} créée(s), ${updated} mise(s) à jour`, 'success');
       App.refresh();
     };
+  },
+
+  exportPersonnesCSV() {
+    const s = DB.state;
+    const rows = [['Prénom','Nom','Rôle','Lieu principal','Compétences','Capacité hebdo (h)']];
+    s.personnes.forEach(p => rows.push([
+      p.prenom, p.nom, p.role||'',
+      DB.lieu(p.lieuPrincipalId)?.nom||'',
+      (p.competences||[]).join('/'),
+      p.capaciteHebdo||35,
+    ]));
+    CSV.download('personnes-' + D.today() + '.csv', rows);
+    App.toast('Export CSV téléchargé', 'success');
   },
 
   downloadPersonnesTemplate() {
