@@ -664,6 +664,40 @@ body.dark .h-cell[data-lvl="1"] { background: #254a77; color: #cfe4ff; }
 .gantt-deps path.critical { stroke: var(--danger); stroke-width: 2; opacity: .9; }
 .gantt-bar.critical { box-shadow: 0 0 0 2px var(--danger) inset; }
 
+/* Ligne "Aujourd'hui" dans le SVG Gantt */
+.today-line { stroke: #ef4444; stroke-width: 1.5; opacity: .65; stroke-dasharray: 5 3; pointer-events: none; }
+
+/* Barre de progression à l'intérieur des barres Gantt */
+.gantt-bar-progress {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: rgba(0,0,0,0.2);
+  pointer-events: none;
+  border-radius: inherit;
+}
+.gantt-bar-label {
+  position: relative; z-index: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 1;
+}
+
+/* Poignée de redimensionnement (bord droit des barres Gantt) */
+.gantt-resize-handle {
+  position: absolute; width: 8px; cursor: col-resize;
+  z-index: 4; background: transparent;
+  border-radius: 0 3px 3px 0;
+  transition: background .1s;
+}
+.gantt-resize-handle:hover { background: rgba(255,255,255,0.45); }
+.gantt-resize-handle.resizing { background: rgba(255,255,255,0.45); }
+
+/* Séparateur de mois dans la grille Gantt */
+.gantt-cell.day-month-start { border-left: 2px solid var(--primary) !important; }
+.gantt-cell.head.day-month-start .day-num { color: var(--primary); }
+.gantt-cell.head.day-cell .day-month-name {
+  display: block; font-size: 8px; font-weight: 700; text-transform: uppercase;
+  color: var(--primary); letter-spacing: .3px; line-height: 1; margin-bottom: 1px;
+}
+
 /* Mode tablette atelier — UI agrandie, nav + sortie toujours accessibles */
 body.tablette .topbar .actions > :not(#btn-tablette):not(#btn-theme) { display: none; }
 body.tablette #btn-tablette { background: var(--primary-weak); color: var(--primary); border-color: var(--primary); }
