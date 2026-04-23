@@ -630,10 +630,13 @@ App.views.gantt = {
           <select id="f-lieu"><option value="">—</option>${s.lieux.map(l => `<option value="${l.id}" ${l.id===t.lieuId?'selected':''}>${l.nom}</option>`).join('')}</select>
         </div>
       </div>
-      <div class="field"><label>Assignés (multi-sélection, Ctrl/Cmd)</label>
-        <select id="f-assignes" multiple size="6">
-          ${s.personnes.map(p => `<option value="${p.id}" ${(t.assignes||[]).includes(p.id)?'selected':''}>${App.personneLabel(p)} · ${p.role}</option>`).join('')}
-        </select>
+      <div class="field"><label>Assignés</label>
+        <div class="assignes-list" id="f-assignes-wrap">
+          ${s.personnes.map(p => {
+            const chk = (t.assignes||[]).includes(p.id);
+            return `<label class="assignes-row${chk?' is-checked':''}"><input type="checkbox" class="assignes-cb" value="${p.id}"${chk?' checked':''}> <span>${App.personneLabel(p)}</span> <span class="muted small"> · ${p.role}</span></label>`;
+          }).join('')}
+        </div>
       </div>
       <div id="f-sugg" class="muted small" style="margin-top:-4px"></div>
       <div class="field"><label>🎯 Pré-remplir avec une équipe</label>
@@ -667,12 +670,15 @@ App.views.gantt = {
       const sugg = App.suggestAssignees(pseudo, 3);
       document.getElementById('f-sugg').innerHTML = '💡 Suggestions : ' + sugg.map(x => `<button type="button" class="chip" data-sugg="${x.p.id}" style="cursor:pointer">${App.personneLabel(x.p)}${x.compMatch?' ✓':''} · charge ${x.charge}j</button>`).join(' ');
       document.querySelectorAll('[data-sugg]').forEach(b => b.onclick = () => {
-        const sel = document.getElementById('f-assignes');
-        Array.from(sel.options).forEach(o => { if (o.value === b.dataset.sugg) o.selected = true; });
+        const cb = document.querySelector(`#f-assignes-wrap .assignes-cb[value="${b.dataset.sugg}"]`);
+        if (cb && !cb.checked) { cb.checked = true; cb.closest('.assignes-row').classList.add('is-checked'); }
       });
     };
     renderSugg();
     ['f-debut','f-fin','f-machine','f-lieu','f-type'].forEach(id => { const el = document.getElementById(id); if (el) el.onchange = renderSugg; });
+    document.getElementById('f-assignes-wrap').addEventListener('change', e => {
+      if (e.target.classList.contains('assignes-cb')) e.target.closest('.assignes-row').classList.toggle('is-checked', e.target.checked);
+    });
 
     // Pré-remplissage par équipe — avec détection de conflit et popup de choix
     document.getElementById('f-eq-apply').onclick = () => {
@@ -716,8 +722,10 @@ App.views.gantt = {
             }
           });
         });
-        const sel = document.getElementById('f-assignes');
-        Array.from(sel.options).forEach(o => o.selected = selectedIds.has(o.value));
+        document.querySelectorAll('#f-assignes-wrap .assignes-cb').forEach(cb => {
+          cb.checked = selectedIds.has(cb.value);
+          cb.closest('.assignes-row').classList.toggle('is-checked', selectedIds.has(cb.value));
+        });
         const missing = [];
         prop.slots.forEach(sl => {
           const got = sl.selected.filter(c => selectedIds.has(c.p.id)).length;
@@ -792,7 +800,7 @@ App.views.gantt = {
       t.avancement = +document.getElementById('f-avancement').value;
       t.machineId = document.getElementById('f-machine').value || null;
       t.lieuId = document.getElementById('f-lieu').value || null;
-      t.assignes = Array.from(document.getElementById('f-assignes').selectedOptions).map(o => o.value);
+      t.assignes = Array.from(document.querySelectorAll('#f-assignes-wrap .assignes-cb:checked')).map(cb => cb.value);
       t.jalon = document.getElementById('f-jalon').checked;
       t.dependances = Array.from(document.getElementById('f-deps').selectedOptions).map(o => o.value);
       t.notes = document.getElementById('f-notes').value;

@@ -261,6 +261,13 @@ body {
 .r-scroll { overflow-x: auto; max-width: 100%; }
 
 /* Vue Équipes */
+/* Assignees checkbox list */
+.assignes-list { max-height: 168px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 2px 0; }
+.assignes-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: pointer; user-select: none; border-radius: 0; transition: background .1s; }
+.assignes-row:hover { background: var(--surface-2); }
+.assignes-row.is-checked { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.assignes-row input[type="checkbox"] { margin: 0; flex-shrink: 0; }
+
 .eq-card { transition: box-shadow .12s; }
 .eq-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
 .eq-slot { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
