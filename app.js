@@ -527,6 +527,7 @@ const App = {
       this._navHistory.push(this.view);
       if (this._navHistory.length > 30) this._navHistory.shift();
     }
+    if (this.view === 'gantt' && name !== 'gantt' && this.views.gantt.clearSelection) this.views.gantt.clearSelection();
     this.view = name;
     location.hash = name;
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === name));

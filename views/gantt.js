@@ -9,8 +9,86 @@ App.views.gantt = {
     showDeps: true,
     showCritical: true,
     autoCascade: true,
+    selectedIds: new Set(),
   },
   newItem() { this.openTacheForm(null); },
+
+  toggleSelection(tid) {
+    const sel = this.state.selectedIds;
+    if (sel.has(tid)) sel.delete(tid); else sel.add(tid);
+    const el = document.querySelector(`.gantt-bar[data-tid="${tid}"]`);
+    if (el) el.classList.toggle('selected', sel.has(tid));
+    this.renderSelectionBar();
+  },
+  clearSelection() {
+    this.state.selectedIds.clear();
+    document.querySelectorAll('.gantt-bar.selected').forEach(b => b.classList.remove('selected'));
+    this.renderSelectionBar();
+  },
+  renderSelectionBar() {
+    const existing = document.getElementById('gantt-selection-bar');
+    const n = this.state.selectedIds.size;
+    if (!n) { if (existing) existing.remove(); return; }
+    const s = DB.state;
+    const projOpts = '<option value="">Projet…</option>' + s.projets.map(p => `<option value="${p.id}">${p.code} — ${p.nom}</option>`).join('');
+    const html = `
+      <strong>${n} tâche(s) sélectionnée(s)</strong>
+      <span class="spacer"></span>
+      <label class="small">Décaler de</label>
+      <input type="number" id="sel-shift" value="1" style="width:60px">
+      <label class="small">j. ouvrés</label>
+      <button class="btn btn-secondary" id="sel-shift-btn" data-perm="edit">⏩ Appliquer</button>
+      <select id="sel-proj" data-perm="edit">${projOpts}</select>
+      <button class="btn btn-secondary" id="sel-proj-btn" data-perm="edit">Changer projet</button>
+      <button class="btn btn-danger" id="sel-del" data-perm="edit">🗑 Supprimer</button>
+      <button class="btn-ghost" id="sel-clear">✕ Désélectionner</button>
+    `;
+    if (existing) { existing.innerHTML = html; }
+    else {
+      const bar = document.createElement('div');
+      bar.id = 'gantt-selection-bar';
+      bar.className = 'selection-bar';
+      bar.innerHTML = html;
+      document.body.appendChild(bar);
+    }
+    document.getElementById('sel-clear').onclick = () => this.clearSelection();
+    document.getElementById('sel-shift-btn').onclick = () => this.bulkShift();
+    document.getElementById('sel-proj-btn').onclick = () => this.bulkChangeProject();
+    document.getElementById('sel-del').onclick = () => this.bulkDelete();
+    App.applyPerms();
+  },
+  bulkShift() {
+    if (!App.can('edit')) { App.toast('Lecture seule','error'); return; }
+    const n = +document.getElementById('sel-shift').value;
+    if (!n) return;
+    const ids = Array.from(this.state.selectedIds);
+    ids.forEach(id => {
+      const t = DB.tache(id); if (!t) return;
+      t.debut = D.addWorkdays(t.debut, n);
+      t.fin = D.addWorkdays(t.fin, n);
+    });
+    DB.save(); this.draw();
+    App.toast(`${ids.length} tâche(s) décalée(s) de ${n>0?'+':''}${n} j.`, 'success');
+  },
+  bulkChangeProject() {
+    if (!App.can('edit')) { App.toast('Lecture seule','error'); return; }
+    const pid = document.getElementById('sel-proj').value;
+    if (!pid) { App.toast('Choisir un projet','warn'); return; }
+    const ids = Array.from(this.state.selectedIds);
+    ids.forEach(id => { const t = DB.tache(id); if (t) t.projetId = pid; });
+    DB.save(); this.draw();
+    App.toast(`${ids.length} tâche(s) déplacée(s)`, 'success');
+  },
+  bulkDelete() {
+    if (!App.can('edit')) { App.toast('Lecture seule','error'); return; }
+    const ids = Array.from(this.state.selectedIds);
+    if (!confirm(`Supprimer ${ids.length} tâche(s) ? Cette action est annulable avec Ctrl+Z.`)) return;
+    DB.state.taches = DB.state.taches.filter(t => !ids.includes(t.id));
+    DB.state.taches.forEach(t => t.dependances = (t.dependances||[]).filter(d => !ids.includes(d)));
+    this.clearSelection();
+    DB.save(); this.draw();
+    App.toast(`${ids.length} tâche(s) supprimée(s)`, 'info');
+  },
 
   exportICS() {
     const s = DB.state;
@@ -141,6 +219,7 @@ App.views.gantt = {
           <label class="small"><input type="checkbox" id="g-deps" ${st.showDeps?'checked':''}> Dépendances</label>
           <label class="small"><input type="checkbox" id="g-crit" ${st.showCritical?'checked':''}> Chemin critique</label>
           <label class="small"><input type="checkbox" id="g-casc" ${st.autoCascade?'checked':''}> Cascade auto</label>
+          <span class="muted small" title="Ctrl/Cmd + clic pour multi-sélection et actions en lot">💡 Ctrl+clic = sélection multiple</span>
           <span class="spacer"></span>
           <input type="file" id="g-import-file" accept=".csv,.json" hidden>
           <button class="btn-ghost" id="g-tpl" data-perm="edit">⬇ Modèle</button>
@@ -350,10 +429,16 @@ App.views.gantt = {
     table.appendChild(overlay);
     overlay.querySelectorAll('.gantt-bar').forEach(el => {
       el.style.pointerEvents = 'auto';
-      el.addEventListener('click', () => this.openTacheForm(el.dataset.tid));
+      if (this.state.selectedIds.has(el.dataset.tid)) el.classList.add('selected');
+      el.addEventListener('click', e => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) { e.preventDefault(); this.toggleSelection(el.dataset.tid); return; }
+        if (this.state.selectedIds.size) { this.clearSelection(); }
+        this.openTacheForm(el.dataset.tid);
+      });
       el.addEventListener('contextmenu', e => { e.preventDefault(); this.showContextMenu(e, el.dataset.tid); });
       this.makeDraggable(el, CELL_W);
     });
+    this.renderSelectionBar();
     overlay.querySelectorAll('.gantt-resize-handle').forEach(el => {
       el.style.pointerEvents = 'auto';
       this.makeResizable(el, CELL_W);
