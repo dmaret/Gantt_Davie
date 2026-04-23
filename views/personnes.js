@@ -56,7 +56,12 @@ App.views.personnes = {
       const tsNow = ts.filter(t => t.fin >= today && t.debut <= D.addWorkdays(today, 4));
       const cells = perWeek.map(w => {
         const cls = w.pct > 95 ? 'bad' : w.pct > 80 ? 'warn' : '';
-        return `<div class="bar-inline ${cls}" title="${w.h}h"><div class="fill" style="width:${w.pct}%"></div></div>`;
+        const jours = w.h / 7;
+        const jLbl = jours > 0 ? (Number.isInteger(jours) ? jours + 'j' : jours.toFixed(1) + 'j') : '—';
+        return '<div style="text-align:center">'
+          + `<div class="bar-inline ${cls}" style="width:28px" title="${w.h}h · ${jLbl} ouvrés"><div class="fill" style="width:${w.pct}%"></div></div>`
+          + `<div style="font-size:9px;color:var(--text-muted);margin-top:1px;line-height:1">${jLbl}</div>`
+          + '</div>';
       }).join('');
       const avgCls = avgPct > 95 ? 'bad' : avgPct > 80 ? 'warn' : '';
       const h = p.horaires || defaultHoraires();
