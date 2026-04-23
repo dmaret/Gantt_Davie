@@ -29,6 +29,7 @@ App.views.absences = {
         <select id="ab-p"><option value="">Toutes personnes</option>${s.personnes.map(p => `<option value="${p.id}" ${st.filterPersonne===p.id?'selected':''}>${App.personneLabel(p)}</option>`).join('')}</select>
         <select id="ab-m"><option value="">Tous motifs</option>${motifs.map(m => `<option ${st.filterMotif===m?'selected':''}>${m}</option>`).join('')}</select>
         <label class="small"><input type="checkbox" id="ab-past" ${st.showPast?'checked':''}> Inclure passées</label>
+        <button class="btn-ghost" id="ab-csv">⤓ Exporter CSV</button>
         ${canEdit ? `<input type="file" id="ab-import-file" accept=".csv,.json" hidden>
         <button class="btn-ghost" id="ab-tpl">⬇ Modèle</button>
         <button class="btn-ghost" id="ab-import">⬆ Importer</button>
@@ -68,6 +69,7 @@ App.views.absences = {
     document.getElementById('ab-p').onchange = e => { st.filterPersonne = e.target.value; App.refresh(); };
     document.getElementById('ab-m').onchange = e => { st.filterMotif = e.target.value; App.refresh(); };
     document.getElementById('ab-past').onchange = e => { st.showPast = e.target.checked; App.refresh(); };
+    document.getElementById('ab-csv').onclick = () => this.exportCSV();
     const addBtn = document.getElementById('ab-add');
     if (addBtn) addBtn.onclick = () => this.openForm(null, null);
     const tplBtn = document.getElementById('ab-tpl');
@@ -136,6 +138,17 @@ App.views.absences = {
       DB.logAudit('delete','absence',a.id,App.personneLabel(p));
       DB.save(); App.closeModal(); App.refresh(); App.toast('Absence supprimée','info');
     };
+  },
+
+  exportCSV() {
+    const s = DB.state;
+    const rows = [['Prénom','Nom','Début','Fin','Durée (j. ouvrés)','Motif','Note']];
+    s.personnes.forEach(p => (p.absences||[]).forEach(a => {
+      const duree = D.workdaysBetween(a.debut, a.fin) + 1;
+      rows.push([p.prenom, p.nom, a.debut, a.fin, duree, a.motif||'', a.note||'']);
+    }));
+    CSV.download('absences-' + D.today() + '.csv', rows);
+    App.toast('Export CSV téléchargé', 'success');
   },
 
   downloadTemplate() {
