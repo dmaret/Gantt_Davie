@@ -262,6 +262,17 @@ body {
 
 /* Vue Équipes */
 /* Assignees checkbox list */
+.gantt-bar-comment { position: absolute; right: 2px; top: 1px; font-size: 11px; line-height: 1; filter: drop-shadow(0 0 1px rgba(255,255,255,.8)); pointer-events: none; }
+
+/* Comments list in task form */
+.comments-list { max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; margin-bottom: 6px; background: var(--surface-2); }
+.comment-item { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.comment-item:last-child { border-bottom: none; }
+.comment-head { display: flex; align-items: center; gap: 4px; margin-bottom: 2px; }
+.comment-text { white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.35; }
+.comment-add { display: flex; flex-direction: column; }
+.comment-add textarea { resize: vertical; }
+
 .assignes-list { max-height: 168px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 2px 0; }
 .assignes-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: pointer; user-select: none; border-radius: 0; transition: background .1s; }
 .assignes-row:hover { background: var(--surface-2); }

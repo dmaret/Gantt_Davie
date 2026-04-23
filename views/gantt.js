@@ -12,6 +12,56 @@ App.views.gantt = {
   },
   newItem() { this.openTacheForm(null); },
 
+  exportICS() {
+    const s = DB.state;
+    const events = [];
+    s.taches.forEach(t => {
+      if (t.jalon) {
+        events.push({
+          uid: ICS.uid('jalon', t.id),
+          summary: '◆ ' + t.nom + (DB.projet(t.projetId) ? ' ['+DB.projet(t.projetId).code+']' : ''),
+          dtstart: t.debut,
+          dtend: D.addDays(t.debut, 1),
+          description: (t.notes||'') + (t.commentaires?.length ? `\n\n${t.commentaires.length} commentaire(s)` : ''),
+          location: DB.lieu(t.lieuId)?.nom || '',
+        });
+      } else {
+        const prj = DB.projet(t.projetId);
+        const assignes = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join(', ');
+        events.push({
+          uid: ICS.uid('tache', t.id),
+          summary: (prj?prj.code+' · ':'') + t.nom + (t.avancement?` (${t.avancement}%)`:''),
+          dtstart: t.debut,
+          dtend: D.addDays(t.fin, 1),
+          description: [assignes ? 'Assignés : '+assignes : '', t.notes||'', t.commentaires?.length ? `${t.commentaires.length} commentaire(s)`:''].filter(Boolean).join('\n'),
+          location: [DB.machine(t.machineId)?.nom, DB.lieu(t.lieuId)?.nom].filter(Boolean).join(' · '),
+        });
+      }
+    });
+    s.personnes.forEach(p => (p.absences||[]).forEach(a => {
+      events.push({
+        uid: ICS.uid('absence', a.id),
+        summary: `🏖 ${a.motif||'Absence'} — ${App.personneLabel(p)}`,
+        dtstart: a.debut,
+        dtend: D.addDays(a.fin, 1),
+        description: a.note||'',
+      });
+    }));
+    s.deplacements.forEach(d => {
+      const p = DB.personne(d.personneId);
+      events.push({
+        uid: ICS.uid('dep', d.id),
+        summary: `🚚 ${d.motif} — ${App.personneLabel(p)}`,
+        dtstart: d.date,
+        dtend: D.addDays(d.date, 1),
+        description: `${DB.lieu(d.origineId)?.nom||''} → ${DB.lieu(d.destinationId)?.nom||''} · ${d.duree||''}`,
+      });
+    });
+    if (!events.length) { App.toast('Aucun événement à exporter','warn'); return; }
+    ICS.download('planning-'+D.today()+'.ics', events);
+    App.toast(`${events.length} événement(s) exporté(s) en .ics`, 'success');
+  },
+
   criticalTasks(projetId) {
     const tasks = DB.state.taches.filter(t => t.projetId === projetId);
     const byId = Object.fromEntries(tasks.map(t => [t.id, t]));
@@ -96,6 +146,7 @@ App.views.gantt = {
           <button class="btn-ghost" id="g-tpl" data-perm="edit">⬇ Modèle</button>
           <button class="btn-ghost" id="g-import" data-perm="edit">⬆ Importer</button>
           <button class="btn-ghost" id="g-csv">⤓ Exporter CSV</button>
+          <button class="btn-ghost" id="g-ics" title="Exporter vers Outlook / Google Agenda / Apple Calendar">📅 Export .ics</button>
           <button class="btn" id="g-add">+ Nouvelle tâche</button>
         </div>
         <div class="gantt-scroll"><div id="g-table"></div></div>
@@ -149,6 +200,7 @@ App.views.gantt = {
       CSV.download('planning-' + D.today() + '.csv', rows);
       App.toast('Export CSV téléchargé','success');
     };
+    document.getElementById('g-ics').onclick = () => this.exportICS();
 
     this.draw();
   },
@@ -250,7 +302,9 @@ App.views.gantt = {
         if (t.jalon) {
           bars.push(`<div class="gantt-bar milestone ${cls}" style="left:${left+width/2-7}px;top:${top+2}px;background:${color}" data-tid="${t.id}" title="${t.nom}"></div>`);
         } else {
-          bars.push(`<div class="gantt-bar ${cls}" style="left:${left}px;width:${width}px;top:${top}px;height:22px;background:${color}" data-tid="${t.id}" title="${t.nom} — ${D.fmt(t.debut)} → ${D.fmt(t.fin)}${crit?' [critique]':''}"><div class="gantt-bar-progress" style="width:${progressW}px"></div><span class="gantt-bar-label">${label}</span></div>`);
+          const nComments = (t.commentaires||[]).length;
+          const badge = nComments ? `<span class="gantt-bar-comment" title="${nComments} commentaire(s)">💬</span>` : '';
+          bars.push(`<div class="gantt-bar ${cls}" style="left:${left}px;width:${width}px;top:${top}px;height:22px;background:${color}" data-tid="${t.id}" title="${t.nom} — ${D.fmt(t.debut)} → ${D.fmt(t.fin)}${crit?' [critique]':''}${nComments?' · '+nComments+' commentaire(s)':''}"><div class="gantt-bar-progress" style="width:${progressW}px"></div><span class="gantt-bar-label">${label}</span>${badge}</div>`);
           if (App.can('edit')) {
             bars.push(`<div class="gantt-resize-handle" data-tid="${t.id}" style="left:${left+width-5}px;top:${top}px;height:22px" title="Glisser pour modifier la durée"></div>`);
           }
@@ -654,6 +708,21 @@ App.views.gantt = {
       <div class="field"><label>📝 Notes / consignes</label>
         <textarea id="f-notes" rows="3" placeholder="Instructions d'exécution, références, points d'attention…">${t.notes||''}</textarea>
       </div>
+      <div class="field"><label>💬 Commentaires (${(t.commentaires||[]).length})</label>
+        <div id="f-comments-list" class="comments-list">
+          ${(t.commentaires||[]).length ? (t.commentaires||[]).slice().reverse().map(c => `
+            <div class="comment-item" data-cid="${c.id}">
+              <div class="comment-head"><strong>${c.userName}</strong> <span class="muted small">· ${new Date(c.date).toLocaleString('fr-CH',{dateStyle:'short',timeStyle:'short'})}</span>
+              ${c.userId === App.currentUser().id ? `<button class="btn-ghost comment-del" data-cid="${c.id}" style="padding:0 6px;margin-left:auto" title="Supprimer">🗑</button>` : ''}</div>
+              <div class="comment-text">${c.texte.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>
+            </div>
+          `).join('') : '<p class="muted small" style="margin:4px 0">Aucun commentaire. Partage une info, un blocage, une décision…</p>'}
+        </div>
+        <div class="comment-add">
+          <textarea id="f-comment-new" rows="2" placeholder="Ajouter un commentaire (Ctrl+Entrée pour poster)…"></textarea>
+          <button class="btn btn-secondary" id="f-comment-post" style="margin-top:4px">💬 Poster</button>
+        </div>
+      </div>
       <label class="small"><input type="checkbox" id="f-jalon" ${t.jalon?'checked':''}> Jalon</label>
     `;
     const foot = `
@@ -790,6 +859,27 @@ App.views.gantt = {
         applyFinal(moves); close();
       };
     };
+
+    // Commentaires
+    const refreshComments = () => { App.closeModal(); this.openTacheForm(t.id); };
+    document.getElementById('f-comment-post').onclick = () => {
+      const ta = document.getElementById('f-comment-new');
+      const txt = ta.value.trim();
+      if (!txt) { App.toast('Commentaire vide', 'warn'); return; }
+      const u = App.currentUser();
+      if (!t.commentaires) t.commentaires = [];
+      t.commentaires.push({ id: DB.uid('CM'), userId: u.id, userName: u.nom, texte: txt, date: new Date().toISOString() });
+      if (isNew) { DB.state.taches.push(t); DB.logAudit('create','tache',t.id,t.nom); DB.save(); App.closeModal(); App.toast('Tâche créée avec commentaire','success'); App.refresh(); return; }
+      DB.save(); App.toast('Commentaire ajouté','success'); refreshComments();
+    };
+    document.getElementById('f-comment-new').onkeydown = e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); document.getElementById('f-comment-post').click(); }
+    };
+    document.querySelectorAll('.comment-del').forEach(b => b.onclick = () => {
+      if (!confirm('Supprimer ce commentaire ?')) return;
+      t.commentaires = (t.commentaires||[]).filter(c => c.id !== b.dataset.cid);
+      DB.save(); refreshComments();
+    });
 
     document.getElementById('f-cancel').onclick = () => App.closeModal();
     document.getElementById('f-save').onclick = () => {

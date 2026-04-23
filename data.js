@@ -181,6 +181,39 @@ const CSV = {
   },
 };
 
+// Export iCalendar (.ics) — compatible Outlook / Google / Apple Calendar
+const ICS = {
+  esc(v) { return String(v||'').replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;'); },
+  dateOnly(d) { return d.replace(/-/g,''); }, // YYYYMMDD
+  uid(prefix, id) { return `${prefix}-${id}@gantt-davie`; },
+  build(events) {
+    // events = [{ uid, summary, description, dtstart (YYYY-MM-DD), dtend (YYYY-MM-DD exclusive), location }]
+    const stamp = new Date().toISOString().replace(/[-:]|\.\d+/g,'').slice(0,15) + 'Z';
+    const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Gantt Davie//FR','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+    events.forEach(e => {
+      lines.push('BEGIN:VEVENT',
+        `UID:${e.uid}`,
+        `DTSTAMP:${stamp}`,
+        `DTSTART;VALUE=DATE:${ICS.dateOnly(e.dtstart)}`,
+        `DTEND;VALUE=DATE:${ICS.dateOnly(e.dtend)}`,
+        `SUMMARY:${ICS.esc(e.summary)}`,
+      );
+      if (e.description) lines.push(`DESCRIPTION:${ICS.esc(e.description)}`);
+      if (e.location) lines.push(`LOCATION:${ICS.esc(e.location)}`);
+      lines.push('END:VEVENT');
+    });
+    lines.push('END:VCALENDAR');
+    return lines.join('\r\n');
+  },
+  download(filename, events) {
+    const blob = new Blob([ICS.build(events)], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  },
+};
+
 // Utilisateurs + groupes d'accès (multi-utilisateur léger, sans backend)
 // Groupes : utilisateur (lecture), MSP (édition + signature selon axes), admin (tout)
 function defaultUsers() {
