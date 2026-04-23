@@ -255,6 +255,7 @@ body {
 /* Séparateurs visuels entre semaines */
 .ressources-grid th.week-start, .ressources-grid td.r-cell.week-start { border-left: 2px solid var(--primary); }
 .ressources-grid th.is-weekend { background: var(--surface-2); }
+.ressources-grid .r-cell.r-weekend { background: var(--surface-2) !important; border-color: var(--border); opacity: .6; }
 .ressources-grid .r-week-row th { font-size: 11px; font-weight: 600; padding: 6px 4px; background: var(--surface-2); border-bottom: 2px solid var(--border); text-align: center; }
 .ressources-grid .r-week-row th.r-week-sep { border-left: 2px solid var(--primary); }
 .r-scroll { overflow-x: auto; max-width: 100%; }
