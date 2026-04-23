@@ -273,6 +273,11 @@ const App = {
         } else if (target.view === 'personnes' && target.personneId && this.views.personnes?.openForm) {
           this.views.personnes.openForm(target.personneId);
         } else if (target.view === 'gantt' && target.tacheId && this.views.gantt?.openTacheForm) {
+          const t = DB.tache(target.tacheId);
+          if (t && this.views.gantt.state) {
+            this.views.gantt.state.rangeStart = D.addDays(t.debut, -3);
+            this.views.gantt.draw && this.views.gantt.draw();
+          }
           this.views.gantt.openTacheForm(target.tacheId);
         } else if (target.view === 'stock' && target.articleId && this.views.stock?.openForm) {
           this.views.stock.openForm(target.articleId);

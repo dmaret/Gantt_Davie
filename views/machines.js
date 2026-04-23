@@ -99,16 +99,54 @@ App.views.machines = {
     const s = DB.state;
     const m = id ? DB.machine(id) : { id: DB.uid('M'), nom:'', type:'', lieuId: s.lieux.find(l=>l.type==='production').id, capaciteJour:8 };
     const lieuxProd = s.lieux.filter(l => l.type === 'production');
+
+    // Conflits éventuels pour cette machine
+    const conflictsAll = isNew ? [] : App.detectConflicts().machines.filter(c => c.machineId === id);
+    const conflictTids = new Set(conflictsAll.flatMap(c => [c.t1, c.t2]));
+
     const tachesMachine = id ? s.taches.filter(t => t.machineId === id).sort((a,b) => a.debut.localeCompare(b.debut)) : [];
+
+    // Bloc conflits
+    const conflictsHTML = conflictsAll.length ? `
+      <div class="field">
+        <label style="color:var(--danger)">⚠ ${conflictsAll.length} conflit(s) détecté(s)</label>
+        <ul class="list" style="margin:4px 0 0 0">
+          ${conflictsAll.map(c => {
+            const t1 = DB.tache(c.t1), t2 = DB.tache(c.t2);
+            const p1 = t1 && DB.projet(t1.projetId), p2 = t2 && DB.projet(t2.projetId);
+            return `<li style="background:var(--danger-bg,#fff0f0);border-radius:4px;padding:6px 10px;gap:8px">
+              <div style="flex:1">
+                <div><strong>${t1?t1.nom:'?'}</strong> <span class="muted small">${p1?p1.code:''}</span> · ${t1?D.fmt(t1.debut)+' → '+D.fmt(t1.fin):'?'}</div>
+                <div class="muted small" style="margin:2px 0">↕ chevauche</div>
+                <div><strong>${t2?t2.nom:'?'}</strong> <span class="muted small">${p2?p2.code:''}</span> · ${t2?D.fmt(t2.debut)+' → '+D.fmt(t2.fin):'?'}</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px;align-self:center">
+                <button class="btn btn-secondary conf-gantt" data-t1="${c.t1}" data-t2="${c.t2}" style="padding:3px 10px;font-size:12px">📅 Gantt</button>
+              </div>
+            </li>`;
+          }).join('')}
+        </ul>
+        <p class="muted small" style="margin-top:6px">Pour résoudre : décaler une tâche dans le Gantt (bouton 📅) ou réaffecter sa machine ci-dessous.</p>
+      </div>` : '';
+
     const tachesHTML = tachesMachine.length ? `
       <div class="field"><label>Tâches affectées (${tachesMachine.length})</label>
         <ul class="list" style="max-height:180px;overflow:auto">
           ${tachesMachine.map(t => {
             const p = DB.projet(t.projetId);
-            return `<li><div><strong>${t.nom}</strong> · <span class="muted small">${p?p.code:''}</span><div class="small muted">${D.fmt(t.debut)} → ${D.fmt(t.fin)}</div></div></li>`;
+            const isConf = conflictTids.has(t.id);
+            return `<li style="${isConf?'border-left:3px solid var(--danger);padding-left:8px':''}">
+              <div style="flex:1">
+                <strong>${t.nom}</strong> · <span class="muted small">${p?p.code:''}</span>
+                ${isConf?'<span class="badge bad" style="margin-left:6px">conflit</span>':''}
+                <div class="small muted">${D.fmt(t.debut)} → ${D.fmt(t.fin)}</div>
+              </div>
+              ${isConf ? `<button class="btn-ghost conf-gantt" data-t1="${t.id}" style="font-size:12px;padding:2px 8px" title="Ouvrir dans le Gantt">📅</button>` : ''}
+            </li>`;
           }).join('')}
         </ul>
       </div>` : '';
+
     const body = `
       <div class="field"><label>Nom</label><input id="mf-nom" value="${m.nom||''}"></div>
       <div class="row">
@@ -118,12 +156,22 @@ App.views.machines = {
       <div class="field"><label>Lieu de production</label>
         <select id="mf-lieu">${lieuxProd.map(l=>`<option value="${l.id}" ${l.id===m.lieuId?'selected':''}>${l.nom}</option>`).join('')}</select>
       </div>
+      ${conflictsHTML}
       ${tachesHTML}
     `;
     const foot = `${!isNew?'<button class="btn btn-danger" id="mf-del">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="mf-cancel">Annuler</button>
       <button class="btn" id="mf-save">${isNew?'Créer':'Enregistrer'}</button>`;
     App.openModal(isNew?'Nouvelle machine':m.nom, body, foot);
+
+    // Navigation Gantt depuis les boutons conflit
+    document.querySelectorAll('.conf-gantt').forEach(btn => {
+      btn.onclick = () => {
+        App.closeModal();
+        App.navigateToTarget({ view: 'gantt', tacheId: btn.dataset.t1 });
+      };
+    });
+
     document.getElementById('mf-cancel').onclick = () => App.closeModal();
     document.getElementById('mf-save').onclick = () => {
       m.nom = document.getElementById('mf-nom').value.trim();
