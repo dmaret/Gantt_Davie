@@ -106,43 +106,48 @@ App.views.machines = {
 
     const tachesMachine = id ? s.taches.filter(t => t.machineId === id).sort((a,b) => a.debut.localeCompare(b.debut)) : [];
 
+    // Autres machines disponibles (pour réaffectation)
+    const autresMachines = s.machines.filter(x => x.id !== id);
+
     // Bloc conflits
     const conflictsHTML = conflictsAll.length ? `
       <div class="field">
         <label style="color:var(--danger)">⚠ ${conflictsAll.length} conflit(s) détecté(s)</label>
-        <ul class="list" style="margin:4px 0 0 0">
-          ${conflictsAll.map(c => {
+        <ul class="list" style="margin:4px 0 0 0;gap:8px">
+          ${conflictsAll.map((c, ci) => {
             const t1 = DB.tache(c.t1), t2 = DB.tache(c.t2);
             const p1 = t1 && DB.projet(t1.projetId), p2 = t2 && DB.projet(t2.projetId);
-            return `<li style="background:var(--danger-bg,#fff0f0);border-radius:4px;padding:6px 10px;gap:8px">
-              <div style="flex:1">
-                <div><strong>${t1?t1.nom:'?'}</strong> <span class="muted small">${p1?p1.code:''}</span> · ${t1?D.fmt(t1.debut)+' → '+D.fmt(t1.fin):'?'}</div>
-                <div class="muted small" style="margin:2px 0">↕ chevauche</div>
-                <div><strong>${t2?t2.nom:'?'}</strong> <span class="muted small">${p2?p2.code:''}</span> · ${t2?D.fmt(t2.debut)+' → '+D.fmt(t2.fin):'?'}</div>
-              </div>
-              <div style="display:flex;flex-direction:column;gap:4px;align-self:center">
-                <button class="btn btn-secondary conf-gantt" data-t1="${c.t1}" data-t2="${c.t2}" style="padding:3px 10px;font-size:12px">📅 Gantt</button>
-              </div>
+            const dur = t => D.workdaysBetween(t.debut, t.fin);
+            const machOpts = autresMachines.map(x => `<option value="${x.id}">${x.nom} (${x.type})</option>`).join('');
+            const taskRow = (t, p, idx) => t ? `
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 0">
+                <div style="flex:1;min-width:0">
+                  <strong>${t.nom}</strong> <span class="muted small">${p?p.code:''}</span>
+                  <span class="small muted"> · ${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${dur(t)} j. ouvrés</span>
+                </div>
+                <button class="btn btn-secondary conf-shift" data-tid="${t.id}" data-ci="${ci}" data-other="${idx===0?c.t2:c.t1}" style="white-space:nowrap;font-size:11px;padding:3px 8px" title="Décaler cette tâche juste après l'autre">⏩ Décaler</button>
+                <select class="conf-machine-sel" data-tid="${t.id}" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface)">
+                  <option value="">— changer machine —</option>
+                  ${machOpts}
+                </select>
+              </div>` : '';
+            return `<li style="background:var(--danger-bg,#fff5f5);border-radius:6px;padding:8px 12px;flex-direction:column;align-items:stretch">
+              ${taskRow(t1, p1, 0)}
+              <div class="muted small" style="text-align:center;padding:2px 0;border-top:1px dashed var(--border);border-bottom:1px dashed var(--border);margin:2px 0">↕ chevauchement</div>
+              ${taskRow(t2, p2, 1)}
             </li>`;
           }).join('')}
         </ul>
-        <p class="muted small" style="margin-top:6px">Pour résoudre : décaler une tâche dans le Gantt (bouton 📅) ou réaffecter sa machine ci-dessous.</p>
       </div>` : '';
 
-    const tachesHTML = tachesMachine.length ? `
-      <div class="field"><label>Tâches affectées (${tachesMachine.length})</label>
-        <ul class="list" style="max-height:180px;overflow:auto">
-          ${tachesMachine.map(t => {
+    const nonConflictTaches = tachesMachine.filter(t => !conflictTids.has(t.id));
+    const tachesHTML = nonConflictTaches.length ? `
+      <div class="field"><label>Autres tâches affectées (${nonConflictTaches.length})</label>
+        <ul class="list" style="max-height:140px;overflow:auto">
+          ${nonConflictTaches.map(t => {
             const p = DB.projet(t.projetId);
-            const isConf = conflictTids.has(t.id);
-            return `<li style="${isConf?'border-left:3px solid var(--danger);padding-left:8px':''}">
-              <div style="flex:1">
-                <strong>${t.nom}</strong> · <span class="muted small">${p?p.code:''}</span>
-                ${isConf?'<span class="badge bad" style="margin-left:6px">conflit</span>':''}
-                <div class="small muted">${D.fmt(t.debut)} → ${D.fmt(t.fin)}</div>
-              </div>
-              ${isConf ? `<button class="btn-ghost conf-gantt" data-t1="${t.id}" style="font-size:12px;padding:2px 8px" title="Ouvrir dans le Gantt">📅</button>` : ''}
-            </li>`;
+            return `<li><div><strong>${t.nom}</strong> · <span class="muted small">${p?p.code:''}</span>
+              <div class="small muted">${D.fmt(t.debut)} → ${D.fmt(t.fin)}</div></div></li>`;
           }).join('')}
         </ul>
       </div>` : '';
@@ -164,11 +169,41 @@ App.views.machines = {
       <button class="btn" id="mf-save">${isNew?'Créer':'Enregistrer'}</button>`;
     App.openModal(isNew?'Nouvelle machine':m.nom, body, foot);
 
-    // Navigation Gantt depuis les boutons conflit
-    document.querySelectorAll('.conf-gantt').forEach(btn => {
+    // ⏩ Décaler : déplace la tâche pour qu'elle commence juste après l'autre
+    document.querySelectorAll('.conf-shift').forEach(btn => {
+      if (!App.can('edit')) { btn.disabled = true; return; }
       btn.onclick = () => {
+        const t = DB.tache(btn.dataset.tid);
+        const other = DB.tache(btn.dataset.other);
+        if (!t || !other) return;
+        // La tâche à décaler démarre le jour ouvré après la fin de l'autre
+        const newDebut = D.addWorkdays(other.fin, 1);
+        const dur = D.workdaysBetween(t.debut, t.fin);
+        t.debut = newDebut;
+        t.fin   = D.addWorkdays(newDebut, Math.max(0, dur - 1));
+        DB.logAudit('update','tache',t.id,t.nom+' (décalée — résolution conflit machine)');
+        DB.save();
+        App.toast(`"${t.nom}" décalée au ${D.fmt(t.debut)}`, 'success');
         App.closeModal();
-        App.navigateToTarget({ view: 'gantt', tacheId: btn.dataset.t1 });
+        this.openForm(id); // rouvre la modale mise à jour
+      };
+    });
+
+    // Changement de machine
+    document.querySelectorAll('.conf-machine-sel').forEach(sel => {
+      if (!App.can('edit')) { sel.disabled = true; return; }
+      sel.onchange = () => {
+        if (!sel.value) return;
+        const t = DB.tache(sel.dataset.tid);
+        if (!t) return;
+        const newMach = DB.machine(sel.value);
+        if (!confirm(`Réaffecter "${t.nom}" vers "${newMach?.nom}" ?`)) { sel.value = ''; return; }
+        t.machineId = sel.value;
+        DB.logAudit('update','tache',t.id,t.nom+' (machine changée — résolution conflit)');
+        DB.save();
+        App.toast(`Machine de "${t.nom}" changée vers ${newMach?.nom}`, 'success');
+        App.closeModal();
+        this.openForm(id); // rouvre la modale mise à jour
       };
     });
 
