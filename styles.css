@@ -237,6 +237,19 @@ body {
 .ressources-grid .r-cell.r-busy { background: var(--warning); }
 .ressources-grid .r-cell.r-off  { background: repeating-linear-gradient(45deg, var(--surface-2) 0 3px, transparent 3px 6px), var(--surface-2); }
 .ressources-grid .r-cell.r-absent { background: repeating-linear-gradient(-45deg, #9333ea 0 3px, #c084fc 3px 6px); }
+/* Cellules plus petites quand plus de semaines affichées */
+.ressources-grid.r-medium .r-cell { width: 12px; min-width: 12px; }
+.ressources-grid.r-medium .r-head { font-size: 10px; }
+.ressources-grid.r-medium thead tr.sub th { font-size: 8px; }
+.ressources-grid.r-dense .r-cell { width: 8px; min-width: 8px; border-width: 0.5px; }
+.ressources-grid.r-dense .r-head { font-size: 9px; line-height: 1; }
+.ressources-grid.r-dense thead tr.sub th { font-size: 7px; padding: 1px; }
+/* Séparateurs visuels entre semaines */
+.ressources-grid th.week-start, .ressources-grid td.r-cell.week-start { border-left: 2px solid var(--primary); }
+.ressources-grid th.is-weekend { background: var(--surface-2); }
+.ressources-grid .r-week-row th { font-size: 11px; font-weight: 600; padding: 6px 4px; background: var(--surface-2); border-bottom: 2px solid var(--border); text-align: center; }
+.ressources-grid .r-week-row th.r-week-sep { border-left: 2px solid var(--primary); }
+.r-scroll { overflow-x: auto; max-width: 100%; }
 
 /* Vue Équipes */
 .eq-card { transition: box-shadow .12s; }
