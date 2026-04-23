@@ -6,6 +6,9 @@ App.views.commandes = {
         <strong>Commandes</strong>
         <span class="muted small">Règle « ${s.regle4A.libelle} » : engagement bloqué tant que les ${s.regle4A.axes.length} axes ne sont pas tous validés.</span>
         <span class="spacer"></span>
+        <input type="file" id="c-import-file" accept=".csv,.json" hidden>
+        <button class="btn-ghost" id="c-tpl" data-perm="edit">⬇ Modèle</button>
+        <button class="btn-ghost" id="c-import" data-perm="edit">⬆ Importer</button>
         <button class="btn-ghost" id="c-csv">⤓ Exporter CSV</button>
         <button class="btn" id="c-add">+ Nouvelle commande</button>
       </div>
@@ -21,6 +24,9 @@ App.views.commandes = {
     `;
     document.getElementById('c-add').onclick = () => this.openForm(null);
     document.getElementById('c-csv').onclick = () => this.exportCSV();
+    document.getElementById('c-tpl').onclick = () => this.downloadTemplate();
+    document.getElementById('c-import').onclick = () => document.getElementById('c-import-file').click();
+    document.getElementById('c-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
     this.draw();
   },
   migrate(c) {
@@ -201,6 +207,82 @@ App.views.commandes = {
       DB.save(); App.closeModal(); App.refresh();
     };
   },
+  downloadTemplate() {
+    CSV.download('modele-import-commandes.csv', [
+      ['Référence','Fournisseur','Projet (code)','Montant HT','Taux TVA (%)'],
+      ['CMD-2026-010','Fournisseur SA','PRJ-A','5000','8.1'],
+    ]);
+  },
+
+  importFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        let text = e.target.result;
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        const sep = text.includes(';') ? ';' : ',';
+        const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        const hdrs = lines[0].split(sep).map(h => norm(h.replace(/^"|"$/g,'')));
+        const rows = lines.slice(1).map(l => {
+          const v = l.split(sep).map(c => c.trim().replace(/^"|"$/g,''));
+          const o = {}; hdrs.forEach((h,i) => o[h] = v[i]||''); return o;
+        }).filter(r => Object.values(r).some(v => v));
+        const s = DB.state;
+        const parsed = rows.map(r => {
+          const ref = r['reference'] || r['référence'] || r['ref'] || '';
+          const fournisseur = r['fournisseur'] || '';
+          const pCode = norm(r['projet (code)'] || r['projet'] || '');
+          const prj = s.projets.find(p => norm(p.code) === pCode);
+          const montantHT = parseFloat(r['montant ht'] || r['montant'] || 0);
+          const tauxTVA = parseFloat(r['taux tva (%)'] || r['taux tva'] || r['tva'] || 8.1);
+          const existing = s.commandes.find(c => c.ref === ref);
+          const errors = [];
+          if (!ref) errors.push('référence manquante');
+          if (!fournisseur) errors.push('fournisseur manquant');
+          return { ref, fournisseur, prj, montantHT, tauxTVA, existing, errors };
+        }).filter(r => r.ref || r.fournisseur);
+        if (!parsed.length) { App.toast('Aucune commande à importer','warn'); return; }
+        const body = `<p class="muted small">${parsed.filter(r=>!r.existing&&!r.errors.length).length} à créer · ${parsed.filter(r=>r.existing).length} à màj · ${parsed.filter(r=>r.errors.length).length} erreur(s)</p>
+          <table class="data"><thead><tr><th>Réf</th><th>Fournisseur</th><th>Projet</th><th class="right">HT</th><th>Statut</th></tr></thead><tbody>
+          ${parsed.map(r => `<tr>
+            <td class="mono">${r.ref}</td><td>${r.fournisseur}</td>
+            <td>${r.prj?r.prj.code:'<span class="muted">—</span>'}</td>
+            <td class="right">${r.montantHT}</td>
+            <td>${r.errors.length?`<span class="badge bad">${r.errors.join(', ')}</span>`:r.existing?'<span class="badge warn">màj</span>':'<span class="badge good">nouveau</span>'}</td>
+          </tr>`).join('')}
+          </tbody></table>`;
+        const importable = parsed.filter(r => !r.errors.length);
+        const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>
+          <button class="btn" id="c-import-ok">Importer (${importable.length})</button>`;
+        App.openModal('Aperçu import — Commandes', body, foot);
+        document.getElementById('c-import-ok').onclick = () => {
+          let created = 0, updated = 0;
+          importable.forEach(r => {
+            if (r.existing) {
+              if (r.fournisseur) r.existing.fournisseur = r.fournisseur;
+              if (r.montantHT) r.existing.montantHT = r.montantHT;
+              if (r.prj) r.existing.projetId = r.prj.id;
+              r.existing.tauxTVA = r.tauxTVA;
+              DB.logAudit('update','commande',r.existing.id,r.ref+' (import)');
+              updated++;
+            } else {
+              const axes = s.regle4A?.axes || [];
+              const validations = {}; axes.forEach(a => validations[a.code] = false);
+              const cmd = { id: DB.uid('CMD'), ref: r.ref, fournisseur: r.fournisseur, projetId: r.prj?.id||null, montantHT: r.montantHT, tauxTVA: r.tauxTVA, dateDemande: D.today(), validations, statut:'brouillon', lignes:[] };
+              s.commandes.push(cmd);
+              DB.logAudit('create','commande',cmd.id,cmd.ref+' (import)');
+              created++;
+            }
+          });
+          DB.save(); App.closeModal(); App.refresh();
+          App.toast(`${created} créée(s) · ${updated} mise(s) à jour`, 'success');
+        };
+      } catch(err) { App.toast('Erreur : ' + err.message, 'error'); }
+    };
+    reader.readAsText(file, 'UTF-8');
+  },
+
   exportCSV() {
     const s = DB.state;
     const head = ['Réf','Fournisseur','Projet','Date demande','Montant HT','Taux TVA','TVA','TTC','Statut','A1','A2','A3','A4','Bloquée'];

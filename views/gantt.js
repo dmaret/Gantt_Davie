@@ -92,6 +92,9 @@ App.views.gantt = {
           <label class="small"><input type="checkbox" id="g-crit" ${st.showCritical?'checked':''}> Chemin critique</label>
           <label class="small"><input type="checkbox" id="g-casc" ${st.autoCascade?'checked':''}> Cascade auto</label>
           <span class="spacer"></span>
+          <input type="file" id="g-import-file" accept=".csv,.json" hidden>
+          <button class="btn-ghost" id="g-tpl" data-perm="edit">⬇ Modèle</button>
+          <button class="btn-ghost" id="g-import" data-perm="edit">⬆ Importer</button>
           <button class="btn-ghost" id="g-csv">⤓ Exporter CSV</button>
           <button class="btn" id="g-add">+ Nouvelle tâche</button>
         </div>
@@ -130,6 +133,9 @@ App.views.gantt = {
     document.getElementById('g-crit').onchange = e => { st.showCritical = e.target.checked; this.draw(); };
     document.getElementById('g-casc').onchange = e => { st.autoCascade = e.target.checked; };
     document.getElementById('g-add').onclick = () => this.openTacheForm(null);
+    document.getElementById('g-tpl').onclick = () => this.downloadTemplate();
+    document.getElementById('g-import').onclick = () => document.getElementById('g-import-file').click();
+    document.getElementById('g-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
     document.getElementById('g-csv').onclick = () => {
       const head = ['Projet','Tâche','Début','Fin','Durée j. ouvrés','Lieu','Machine','Assignés','Avancement','Jalon'];
       const rows = [head];
@@ -300,6 +306,96 @@ App.views.gantt = {
     });
   },
 
+  downloadTemplate() {
+    CSV.download('modele-import-taches.csv', [
+      ['Projet (code)','Nom','Début (YYYY-MM-DD)','Fin (YYYY-MM-DD)','Lieu','Machine','Assignés (séparés /)','Avancement (%)','Jalon (OUI/NON)','Notes'],
+      ['PRJ-A','Découpe pièces','2026-05-01','2026-05-05','Atelier 2B','Découpe laser','Marie Martin','0','NON',''],
+    ]);
+  },
+
+  importFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        let text = e.target.result;
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        const sep = text.includes(';') ? ';' : ',';
+        const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        const hdrs = lines[0].split(sep).map(h => norm(h.replace(/^"|"$/g,'')));
+        const rows = lines.slice(1).map(l => {
+          const v = l.split(sep).map(c => c.trim().replace(/^"|"$/g,''));
+          const o = {}; hdrs.forEach((h,i) => o[h] = v[i]||''); return o;
+        }).filter(r => Object.values(r).some(v => v));
+        const s = DB.state;
+        const parsed = rows.map(r => {
+          const pCode = norm(r['projet (code)'] || r['projet'] || r['project'] || '');
+          const prj = s.projets.find(p => norm(p.code) === pCode || norm(p.nom) === pCode);
+          const nom = r['nom'] || r['name'] || r['tâche'] || '';
+          const debut = r['début (yyyy-mm-dd)'] || r['debut'] || r['début'] || r['start'] || '';
+          const fin = r['fin (yyyy-mm-dd)'] || r['fin'] || r['end'] || '';
+          const lieuNom = norm(r['lieu'] || '');
+          const machNom = norm(r['machine'] || '');
+          const lieu = lieuNom ? s.lieux.find(l => norm(l.nom) === lieuNom) : null;
+          const mach = machNom ? s.machines.find(m => norm(m.nom) === machNom) : null;
+          const assignesNoms = (r['assignes (separes /)'] || r['assignés (séparés /)'] || r['assignes'] || '').split('/').map(n => n.trim()).filter(Boolean);
+          const assignes = assignesNoms.map(n => {
+            const parts = norm(n).split(' ');
+            return s.personnes.find(p => norm(p.prenom+' '+p.nom) === norm(n) || norm(p.nom+' '+p.prenom) === norm(n));
+          }).filter(Boolean).map(p => p.id);
+          const avancement = parseInt(r['avancement (%)'] || r['avancement'] || 0) || 0;
+          const jalon = (r['jalon (oui/non)'] || r['jalon'] || '').toLowerCase() === 'oui';
+          const notes = r['notes'] || '';
+          const existing = prj ? s.taches.find(t => t.projetId === prj.id && norm(t.nom) === norm(nom)) : null;
+          const errors = [];
+          if (!prj) errors.push('projet inconnu');
+          if (!debut.match(/^\d{4}-\d{2}-\d{2}$/)) errors.push('date début invalide');
+          if (!fin.match(/^\d{4}-\d{2}-\d{2}$/)) errors.push('date fin invalide');
+          return { nom, prj, debut, fin, lieuId: lieu?.id||null, lieuNom, machineId: mach?.id||null, machNom, assignes, assignesNoms, avancement, jalon, notes, existing, errors };
+        }).filter(r => r.nom);
+        if (!parsed.length) { App.toast('Aucune tâche à importer','warn'); return; }
+        const creates = parsed.filter(r => !r.existing && !r.errors.length).length;
+        const updates = parsed.filter(r => r.existing).length;
+        const errs = parsed.filter(r => r.errors.length).length;
+        const body = `<p class="muted small">${creates} à créer · ${updates} à mettre à jour · ${errs} erreur(s)</p>
+          <table class="data"><thead><tr><th>Projet</th><th>Tâche</th><th>Début</th><th>Fin</th><th>Statut</th></tr></thead><tbody>
+          ${parsed.map(r => `<tr>
+            <td>${r.prj?`<span class="badge" style="background:${r.prj.couleur}22;color:${r.prj.couleur}">${r.prj.code}</span>`:'<span class="badge bad">?</span>'}</td>
+            <td>${r.nom}</td><td>${r.debut}</td><td>${r.fin}</td>
+            <td>${r.errors.length?`<span class="badge bad">${r.errors.join(', ')}</span>`:r.existing?'<span class="badge warn">màj</span>':'<span class="badge good">nouveau</span>'}</td>
+          </tr>`).join('')}
+          </tbody></table>`;
+        const importable = parsed.filter(r => !r.errors.length);
+        const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>
+          <button class="btn" id="g-import-ok">Importer (${importable.length})</button>`;
+        App.openModal('Aperçu import — Tâches', body, foot);
+        document.getElementById('g-import-ok').onclick = () => {
+          let created = 0, updated = 0;
+          importable.forEach(r => {
+            if (r.existing) {
+              r.existing.debut = r.debut; r.existing.fin = r.fin;
+              r.existing.avancement = r.avancement; r.existing.jalon = r.jalon;
+              if (r.lieuId) r.existing.lieuId = r.lieuId;
+              if (r.machineId) r.existing.machineId = r.machineId;
+              if (r.assignes.length) r.existing.assignes = r.assignes;
+              if (r.notes) r.existing.notes = r.notes;
+              DB.logAudit('update','tache',r.existing.id,r.nom+' (import)');
+              updated++;
+            } else {
+              const t = { id: DB.uid('T'), projetId: r.prj.id, nom: r.nom, debut: r.debut, fin: r.fin, avancement: r.avancement, jalon: r.jalon, lieuId: r.lieuId, machineId: r.machineId, assignes: r.assignes, dependances: [], notes: r.notes, type: 'prod' };
+              s.taches.push(t);
+              DB.logAudit('create','tache',t.id,t.nom+' (import)');
+              created++;
+            }
+          });
+          DB.save(); App.closeModal(); App.refresh();
+          App.toast(`${created} créée(s) · ${updated} mise(s) à jour`, 'success');
+        };
+      } catch(err) { App.toast('Erreur : ' + err.message, 'error'); }
+    };
+    reader.readAsText(file, 'UTF-8');
+  },
+
   showContextMenu(e, tid) {
     const t = DB.tache(tid);
     if (!t) return;
@@ -450,6 +546,8 @@ App.views.gantt = {
           const extra = nCasc ? ` · ${nCasc} tâche(s) dépendante(s) décalée(s)` : '';
           App.toast(`Tâche déplacée de ${deltaDays > 0 ? '+' : ''}${deltaDays} j ouvrés${extra}`, 'success');
           this.draw();
+        } else {
+          el.style.left = origLeft + 'px'; // remet la barre à sa position si aucun snap
         }
       };
       document.addEventListener('mousemove', move);
@@ -532,10 +630,13 @@ App.views.gantt = {
           <select id="f-lieu"><option value="">—</option>${s.lieux.map(l => `<option value="${l.id}" ${l.id===t.lieuId?'selected':''}>${l.nom}</option>`).join('')}</select>
         </div>
       </div>
-      <div class="field"><label>Assignés (multi-sélection, Ctrl/Cmd)</label>
-        <select id="f-assignes" multiple size="6">
-          ${s.personnes.map(p => `<option value="${p.id}" ${(t.assignes||[]).includes(p.id)?'selected':''}>${App.personneLabel(p)} · ${p.role}</option>`).join('')}
-        </select>
+      <div class="field"><label>Assignés</label>
+        <div class="assignes-list" id="f-assignes-wrap">
+          ${s.personnes.map(p => {
+            const chk = (t.assignes||[]).includes(p.id);
+            return `<label class="assignes-row${chk?' is-checked':''}"><input type="checkbox" class="assignes-cb" value="${p.id}"${chk?' checked':''}> <span>${App.personneLabel(p)}</span> <span class="muted small"> · ${p.role}</span></label>`;
+          }).join('')}
+        </div>
       </div>
       <div id="f-sugg" class="muted small" style="margin-top:-4px"></div>
       <div class="field"><label>🎯 Pré-remplir avec une équipe</label>
@@ -569,12 +670,15 @@ App.views.gantt = {
       const sugg = App.suggestAssignees(pseudo, 3);
       document.getElementById('f-sugg').innerHTML = '💡 Suggestions : ' + sugg.map(x => `<button type="button" class="chip" data-sugg="${x.p.id}" style="cursor:pointer">${App.personneLabel(x.p)}${x.compMatch?' ✓':''} · charge ${x.charge}j</button>`).join(' ');
       document.querySelectorAll('[data-sugg]').forEach(b => b.onclick = () => {
-        const sel = document.getElementById('f-assignes');
-        Array.from(sel.options).forEach(o => { if (o.value === b.dataset.sugg) o.selected = true; });
+        const cb = document.querySelector(`#f-assignes-wrap .assignes-cb[value="${b.dataset.sugg}"]`);
+        if (cb && !cb.checked) { cb.checked = true; cb.closest('.assignes-row').classList.add('is-checked'); }
       });
     };
     renderSugg();
     ['f-debut','f-fin','f-machine','f-lieu','f-type'].forEach(id => { const el = document.getElementById(id); if (el) el.onchange = renderSugg; });
+    document.getElementById('f-assignes-wrap').addEventListener('change', e => {
+      if (e.target.classList.contains('assignes-cb')) e.target.closest('.assignes-row').classList.toggle('is-checked', e.target.checked);
+    });
 
     // Pré-remplissage par équipe — avec détection de conflit et popup de choix
     document.getElementById('f-eq-apply').onclick = () => {
@@ -618,8 +722,10 @@ App.views.gantt = {
             }
           });
         });
-        const sel = document.getElementById('f-assignes');
-        Array.from(sel.options).forEach(o => o.selected = selectedIds.has(o.value));
+        document.querySelectorAll('#f-assignes-wrap .assignes-cb').forEach(cb => {
+          cb.checked = selectedIds.has(cb.value);
+          cb.closest('.assignes-row').classList.toggle('is-checked', selectedIds.has(cb.value));
+        });
         const missing = [];
         prop.slots.forEach(sl => {
           const got = sl.selected.filter(c => selectedIds.has(c.p.id)).length;
@@ -694,7 +800,7 @@ App.views.gantt = {
       t.avancement = +document.getElementById('f-avancement').value;
       t.machineId = document.getElementById('f-machine').value || null;
       t.lieuId = document.getElementById('f-lieu').value || null;
-      t.assignes = Array.from(document.getElementById('f-assignes').selectedOptions).map(o => o.value);
+      t.assignes = Array.from(document.querySelectorAll('#f-assignes-wrap .assignes-cb:checked')).map(cb => cb.value);
       t.jalon = document.getElementById('f-jalon').checked;
       t.dependances = Array.from(document.getElementById('f-deps').selectedOptions).map(o => o.value);
       t.notes = document.getElementById('f-notes').value;

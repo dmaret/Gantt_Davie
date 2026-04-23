@@ -29,7 +29,10 @@ App.views.absences = {
         <select id="ab-p"><option value="">Toutes personnes</option>${s.personnes.map(p => `<option value="${p.id}" ${st.filterPersonne===p.id?'selected':''}>${App.personneLabel(p)}</option>`).join('')}</select>
         <select id="ab-m"><option value="">Tous motifs</option>${motifs.map(m => `<option ${st.filterMotif===m?'selected':''}>${m}</option>`).join('')}</select>
         <label class="small"><input type="checkbox" id="ab-past" ${st.showPast?'checked':''}> Inclure passées</label>
-        ${canEdit ? '<button class="btn" id="ab-add">+ Nouvelle absence</button>' : ''}
+        ${canEdit ? `<input type="file" id="ab-import-file" accept=".csv,.json" hidden>
+        <button class="btn-ghost" id="ab-tpl">⬇ Modèle</button>
+        <button class="btn-ghost" id="ab-import">⬆ Importer</button>
+        <button class="btn" id="ab-add">+ Nouvelle absence</button>` : ''}
       </div>
 
       <div class="grid grid-3" style="margin-bottom:14px">
@@ -67,6 +70,12 @@ App.views.absences = {
     document.getElementById('ab-past').onchange = e => { st.showPast = e.target.checked; App.refresh(); };
     const addBtn = document.getElementById('ab-add');
     if (addBtn) addBtn.onclick = () => this.openForm(null, null);
+    const tplBtn = document.getElementById('ab-tpl');
+    if (tplBtn) tplBtn.onclick = () => this.downloadTemplate();
+    const impBtn = document.getElementById('ab-import');
+    if (impBtn) impBtn.onclick = () => document.getElementById('ab-import-file').click();
+    const impFile = document.getElementById('ab-import-file');
+    if (impFile) impFile.onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
     document.querySelectorAll('.ab-edit').forEach(b => b.onclick = () => this.openForm(b.dataset.pid, b.dataset.aid));
     document.querySelectorAll('.ab-del').forEach(b => b.onclick = () => {
       if (!confirm('Supprimer cette absence ?')) return;
@@ -127,5 +136,71 @@ App.views.absences = {
       DB.logAudit('delete','absence',a.id,App.personneLabel(p));
       DB.save(); App.closeModal(); App.refresh(); App.toast('Absence supprimée','info');
     };
+  },
+
+  downloadTemplate() {
+    CSV.download('modele-import-absences.csv', [
+      ['Prénom','Nom','Début (YYYY-MM-DD)','Fin (YYYY-MM-DD)','Motif','Note'],
+      ['Marie','Martin','2026-06-01','2026-06-07','Vacances',''],
+    ]);
+  },
+
+  importFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        let text = e.target.result;
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        const sep = text.includes(';') ? ';' : ',';
+        const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        const hdrs = lines[0].split(sep).map(h => norm(h.replace(/^"|"$/g,'')));
+        const rows = lines.slice(1).map(l => {
+          const v = l.split(sep).map(c => c.trim().replace(/^"|"$/g,''));
+          const o = {}; hdrs.forEach((h,i) => o[h] = v[i]||''); return o;
+        }).filter(r => Object.values(r).some(v => v));
+        const s = DB.state;
+        const parsed = rows.map(r => {
+          const prenom = r['prenom'] || r['prénom'] || '';
+          const nomP = r['nom'] || '';
+          const debut = r['debut (yyyy-mm-dd)'] || r['debut'] || r['début'] || '';
+          const fin = r['fin (yyyy-mm-dd)'] || r['fin'] || '';
+          const motif = r['motif'] || 'Autre';
+          const note = r['note'] || '';
+          const personne = s.personnes.find(p => norm(p.prenom) === norm(prenom) && norm(p.nom) === norm(nomP));
+          const errors = [];
+          if (!personne) errors.push('personne introuvable');
+          if (!debut.match(/^\d{4}-\d{2}-\d{2}$/)) errors.push('date début invalide');
+          if (!fin.match(/^\d{4}-\d{2}-\d{2}$/)) errors.push('date fin invalide');
+          const duplicate = personne && (personne.absences||[]).some(a => a.debut === debut && a.fin === fin);
+          return { prenom, nomP, debut, fin, motif, note, personne, errors, duplicate };
+        }).filter(r => r.prenom || r.nomP);
+        if (!parsed.length) { App.toast('Aucune absence à importer','warn'); return; }
+        const creates = parsed.filter(r => !r.errors.length && !r.duplicate).length;
+        const dups = parsed.filter(r => r.duplicate).length;
+        const body = `<p class="muted small">${creates} à créer · ${dups} doublon(s) ignoré(s) · ${parsed.filter(r=>r.errors.length).length} erreur(s)</p>
+          <table class="data"><thead><tr><th>Personne</th><th>Début</th><th>Fin</th><th>Motif</th><th>Statut</th></tr></thead><tbody>
+          ${parsed.map(r => `<tr>
+            <td>${r.prenom} ${r.nomP}</td><td>${r.debut}</td><td>${r.fin}</td><td>${r.motif}</td>
+            <td>${r.errors.length?`<span class="badge bad">${r.errors.join(', ')}</span>`:r.duplicate?'<span class="badge muted">doublon</span>':'<span class="badge good">nouveau</span>'}</td>
+          </tr>`).join('')}
+          </tbody></table>`;
+        const importable = parsed.filter(r => !r.errors.length && !r.duplicate);
+        const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>
+          <button class="btn" id="ab-import-ok">Importer (${importable.length})</button>`;
+        App.openModal('Aperçu import — Absences', body, foot);
+        document.getElementById('ab-import-ok').onclick = () => {
+          importable.forEach(r => {
+            const abs = { id: DB.uid('ABS'), debut: r.debut, fin: r.fin, motif: r.motif, note: r.note };
+            if (!r.personne.absences) r.personne.absences = [];
+            r.personne.absences.push(abs);
+            DB.logAudit('create','absence',abs.id,r.prenom+' '+r.nomP+' (import)');
+          });
+          DB.save(); App.closeModal(); App.refresh();
+          App.toast(`${importable.length} absence(s) importée(s)`, 'success');
+        };
+      } catch(err) { App.toast('Erreur : ' + err.message, 'error'); }
+    };
+    reader.readAsText(file, 'UTF-8');
   },
 };

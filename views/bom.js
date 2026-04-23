@@ -10,6 +10,9 @@ App.views.bom = {
         <select id="b-prj"><option value="">Tous projets</option>${s.projets.map(p=>`<option value="${p.id}">${p.code}</option>`).join('')}</select>
         <label class="small"><input type="checkbox" id="b-rup"> Seulement ruptures prévues</label>
         <span class="spacer"></span>
+        <input type="file" id="b-import-file" accept=".csv,.json" hidden>
+        <button class="btn-ghost" id="b-tpl" data-perm="edit">⬇ Modèle</button>
+        <button class="btn-ghost" id="b-import" data-perm="edit">⬆ Importer</button>
         <button class="btn-ghost" id="b-csv">⤓ Exporter CSV</button>
       </div>
       <div class="grid grid-2">
@@ -26,6 +29,9 @@ App.views.bom = {
     document.getElementById('b-prj').onchange = e => { this.state.projetFilter = e.target.value; this.draw(); };
     document.getElementById('b-rup').onchange = e => { this.state.onlyRupture = e.target.checked; this.draw(); };
     document.getElementById('b-csv').onclick = () => this.exportCSV();
+    document.getElementById('b-tpl').onclick = () => this.downloadTemplate();
+    document.getElementById('b-import').onclick = () => document.getElementById('b-import-file').click();
+    document.getElementById('b-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
     this.draw();
   },
   seedBom(prj) {
@@ -182,5 +188,69 @@ App.views.bom = {
     }));
     CSV.download('bom-' + D.today() + '.csv', rows);
     App.toast('Export CSV téléchargé','success');
+  },
+
+  downloadTemplate() {
+    CSV.download('modele-import-bom.csv', [
+      ['Projet (code)','Référence article','Quantité'],
+      ['PRJ-A','ACI-3mm-1250','10'],
+      ['PRJ-A','VIS-M8','50'],
+    ]);
+  },
+
+  importFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        let text = e.target.result;
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        const sep = text.includes(';') ? ';' : ',';
+        const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        const hdrs = lines[0].split(sep).map(h => norm(h.replace(/^"|"$/g,'')));
+        const rows = lines.slice(1).map(l => {
+          const v = l.split(sep).map(c => c.trim().replace(/^"|"$/g,''));
+          const o = {}; hdrs.forEach((h,i) => o[h] = v[i]||''); return o;
+        }).filter(r => Object.values(r).some(v => v));
+        const s = DB.state;
+        const parsed = rows.map(r => {
+          const pCode = norm(r['projet (code)'] || r['projet'] || '');
+          const artRef = r['reference article'] || r['référence article'] || r['ref'] || r['référence'] || '';
+          const qte = parseInt(r['quantite'] || r['quantité'] || r['qty'] || 0) || 0;
+          const prj = s.projets.find(p => norm(p.code) === pCode);
+          const art = s.stock.find(a => a.ref === artRef);
+          const errors = [];
+          if (!prj) errors.push('projet inconnu');
+          if (!art) errors.push('article introuvable');
+          if (!qte) errors.push('quantité 0');
+          const existingLine = prj && art ? (prj.bom||[]).find(l => l.articleId === art.id) : null;
+          return { pCode, artRef, qte, prj, art, existingLine, errors };
+        }).filter(r => r.pCode || r.artRef);
+        if (!parsed.length) { App.toast('Aucune ligne BOM à importer','warn'); return; }
+        const body = `<p class="muted small">${parsed.filter(r=>!r.existingLine&&!r.errors.length).length} à créer · ${parsed.filter(r=>r.existingLine).length} à mettre à jour · ${parsed.filter(r=>r.errors.length).length} erreur(s)</p>
+          <table class="data"><thead><tr><th>Projet</th><th>Article</th><th>Qté</th><th>Statut</th></tr></thead><tbody>
+          ${parsed.map(r => `<tr>
+            <td>${r.prj?`<span class="badge" style="background:${r.prj.couleur}22;color:${r.prj.couleur}">${r.prj.code}</span>`:'<span class="badge bad">'+r.pCode+'</span>'}</td>
+            <td>${r.art?r.art.nom:r.artRef}</td><td>${r.qte}</td>
+            <td>${r.errors.length?`<span class="badge bad">${r.errors.join(', ')}</span>`:r.existingLine?'<span class="badge warn">màj</span>':'<span class="badge good">nouveau</span>'}</td>
+          </tr>`).join('')}
+          </tbody></table>`;
+        const importable = parsed.filter(r => !r.errors.length);
+        const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>
+          <button class="btn" id="b-import-ok">Importer (${importable.length})</button>`;
+        App.openModal('Aperçu import — BOM', body, foot);
+        document.getElementById('b-import-ok').onclick = () => {
+          let created = 0, updated = 0;
+          importable.forEach(r => {
+            if (!r.prj.bom) r.prj.bom = [];
+            if (r.existingLine) { r.existingLine.quantite = r.qte; updated++; }
+            else { r.prj.bom.push({ articleId: r.art.id, quantite: r.qte }); created++; }
+          });
+          DB.save(); App.closeModal(); App.refresh();
+          App.toast(`${created} ligne(s) créée(s) · ${updated} mise(s) à jour`, 'success');
+        };
+      } catch(err) { App.toast('Erreur : ' + err.message, 'error'); }
+    };
+    reader.readAsText(file, 'UTF-8');
   },
 };
