@@ -5,6 +5,9 @@ App.views.projets = {
       <div class="toolbar">
         <strong>Projets</strong>
         <span class="spacer"></span>
+        <input type="file" id="prj-import-file" accept=".csv,.json" hidden>
+        <button class="btn-ghost" id="prj-tpl" data-perm="edit">⬇ Modèle</button>
+        <button class="btn-ghost" id="prj-import" data-perm="edit">⬆ Importer</button>
         <button class="btn" id="prj-add">+ Nouveau projet</button>
       </div>
       <div class="grid grid-3">
@@ -12,6 +15,9 @@ App.views.projets = {
       </div>
     `;
     document.getElementById('prj-add').onclick = () => this.openForm(null);
+    document.getElementById('prj-tpl').onclick = () => this.downloadTemplate();
+    document.getElementById('prj-import').onclick = () => document.getElementById('prj-import-file').click();
+    document.getElementById('prj-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
     document.querySelectorAll('.prj-card').forEach(c => c.onclick = e => {
       if (e.target.closest('.prj-report')) return;
       this.openForm(c.dataset.id);
@@ -397,5 +403,85 @@ App.views.projets = {
     const wrap = document.getElementById('pf-tasks-wrap');
     if (wrap) wrap.innerHTML = this.renderTasksList(projetId, App.can('edit'));
     this.bindTasksList(projetId, App.can('edit'));
+  },
+
+  downloadTemplate() {
+    CSV.download('modele-import-projets.csv', [
+      ['Code','Nom','Client','Couleur (#hex)','Début (YYYY-MM-DD)','Fin (YYYY-MM-DD)','Étage','Priorité (haute/moyenne/basse)','Statut (planifié/en-cours/terminé/annulé)'],
+      ['PRJ-G','Nouveau projet G','Client SA','#2563eb','2026-06-01','2026-09-30','2e','haute','planifié'],
+    ]);
+  },
+
+  importFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        let text = e.target.result;
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        const sep = text.includes(';') ? ';' : ',';
+        const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        const hdrs = lines[0].split(sep).map(h => norm(h.replace(/^"|"$/g,'')));
+        const rows = lines.slice(1).map(l => {
+          const v = l.split(sep).map(c => c.trim().replace(/^"|"$/g,''));
+          const o = {}; hdrs.forEach((h,i) => o[h] = v[i]||''); return o;
+        }).filter(r => Object.values(r).some(v => v));
+        const s = DB.state;
+        const validStatuts = ['planifié','en-cours','terminé','annulé'];
+        const validPrios = ['haute','moyenne','basse'];
+        const parsed = rows.map(r => {
+          const code = r['code'] || '';
+          const nom = r['nom'] || '';
+          const client = r['client'] || '';
+          const couleur = r['couleur (#hex)'] || r['couleur'] || '#2563eb';
+          const debut = r['debut (yyyy-mm-dd)'] || r['debut'] || r['début'] || '';
+          const fin = r['fin (yyyy-mm-dd)'] || r['fin'] || '';
+          const etage = r['etage'] || r['étage'] || '';
+          const priorite = validPrios.includes(norm(r['priorite (haute/moyenne/basse)'] || r['priorite'] || r['priorité'])) ? norm(r['priorite (haute/moyenne/basse)'] || r['priorite'] || r['priorité']) : 'moyenne';
+          const statut = validStatuts.includes(norm(r['statut (planifie/en-cours/termine/annule)'] || r['statut'] || '')) ? norm(r['statut (planifie/en-cours/termine/annule)'] || r['statut'] || '') : 'planifié';
+          const existing = s.projets.find(p => p.code === code);
+          const errors = [];
+          if (!code) errors.push('code manquant');
+          if (!nom) errors.push('nom manquant');
+          if (debut && !debut.match(/^\d{4}-\d{2}-\d{2}$/)) errors.push('date début invalide');
+          if (fin && !fin.match(/^\d{4}-\d{2}-\d{2}$/)) errors.push('date fin invalide');
+          return { code, nom, client, couleur, debut, fin, etage, priorite, statut, existing, errors };
+        }).filter(r => r.code || r.nom);
+        if (!parsed.length) { App.toast('Aucun projet à importer','warn'); return; }
+        const body = `<p class="muted small">${parsed.filter(r=>!r.existing&&!r.errors.length).length} à créer · ${parsed.filter(r=>r.existing).length} à mettre à jour · ${parsed.filter(r=>r.errors.length).length} erreur(s)</p>
+          <table class="data"><thead><tr><th>Code</th><th>Nom</th><th>Client</th><th>Début</th><th>Fin</th><th>Statut</th></tr></thead><tbody>
+          ${parsed.map(r => `<tr>
+            <td><span class="badge" style="background:${r.couleur}22;color:${r.couleur}">${r.code}</span></td>
+            <td>${r.nom}</td><td class="muted small">${r.client}</td><td>${r.debut}</td><td>${r.fin}</td>
+            <td>${r.errors.length?`<span class="badge bad">${r.errors.join(', ')}</span>`:r.existing?'<span class="badge warn">màj</span>':'<span class="badge good">nouveau</span>'}</td>
+          </tr>`).join('')}
+          </tbody></table>`;
+        const importable = parsed.filter(r => !r.errors.length);
+        const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>
+          <button class="btn" id="prj-import-ok">Importer (${importable.length})</button>`;
+        App.openModal('Aperçu import — Projets', body, foot);
+        document.getElementById('prj-import-ok').onclick = () => {
+          let created = 0, updated = 0;
+          importable.forEach(r => {
+            if (r.existing) {
+              Object.assign(r.existing, { nom: r.nom||r.existing.nom, client: r.client||r.existing.client, couleur: r.couleur, priorite: r.priorite, statut: r.statut });
+              if (r.debut) r.existing.debut = r.debut;
+              if (r.fin) r.existing.fin = r.fin;
+              if (r.etage) r.existing.etage = r.etage;
+              DB.logAudit('update','projet',r.existing.id,r.code+' (import)');
+              updated++;
+            } else {
+              const p = { id: DB.uid('PRJ'), code: r.code, nom: r.nom, client: r.client, couleur: r.couleur, debut: r.debut||D.today(), fin: r.fin||D.addWorkdays(D.today(),20), etage: r.etage||'1er', priorite: r.priorite, statut: r.statut, bom:[] };
+              s.projets.push(p);
+              DB.logAudit('create','projet',p.id,p.code+' (import)');
+              created++;
+            }
+          });
+          DB.save(); App.closeModal(); App.refresh();
+          App.toast(`${created} créé(s) · ${updated} mis à jour`, 'success');
+        };
+      } catch(err) { App.toast('Erreur : ' + err.message, 'error'); }
+    };
+    reader.readAsText(file, 'UTF-8');
   },
 };

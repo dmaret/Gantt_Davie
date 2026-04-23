@@ -13,6 +13,9 @@ App.views.lieux = {
       <div class="toolbar">
         <strong>Lieux</strong>
         <span class="spacer"></span>
+        <input type="file" id="l-import-file" accept=".csv,.json" hidden>
+        <button class="btn-ghost" id="l-tpl" data-perm="edit">⬇ Modèle</button>
+        <button class="btn-ghost" id="l-import" data-perm="edit">⬆ Importer</button>
         <button class="btn" id="l-add">+ Ajouter un lieu</button>
       </div>
       <div class="grid grid-2">
@@ -68,6 +71,9 @@ App.views.lieux = {
       this.openForm(el.dataset.id);
     });
     document.getElementById('l-add').onclick = () => this.openForm(null);
+    document.getElementById('l-tpl').onclick = () => this.downloadTemplate();
+    document.getElementById('l-import').onclick = () => document.getElementById('l-import-file').click();
+    document.getElementById('l-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
   },
 
   openTasksOfLieu(lieuId) {
@@ -153,5 +159,66 @@ App.views.lieux = {
       s.lieux = s.lieux.filter(x => x.id !== l.id);
       DB.save(); App.closeModal(); App.refresh();
     };
+  },
+
+  downloadTemplate() {
+    CSV.download('modele-import-lieux.csv', [
+      ['Nom','Étage','Type (production/stockage)','Capacité'],
+      ['Atelier 3A','3e','production','8'],
+    ]);
+  },
+
+  importFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        let text = e.target.result;
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        const sep = text.includes(';') ? ';' : ',';
+        const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        const hdrs = lines[0].split(sep).map(h => norm(h.replace(/^"|"$/g,'')));
+        const rows = lines.slice(1).map(l => {
+          const v = l.split(sep).map(c => c.trim().replace(/^"|"$/g,''));
+          const o = {}; hdrs.forEach((h,i) => o[h] = v[i]||''); return o;
+        }).filter(r => Object.values(r).some(v => v));
+        const s = DB.state;
+        const parsed = rows.map(r => {
+          const nom = r['nom'] || '';
+          const etage = r['etage'] || r['étage'] || 'Rez';
+          const type = norm(r['type (production/stockage)'] || r['type'] || 'production');
+          const validType = ['production','stockage','bureau'].includes(type) ? type : 'production';
+          const capacite = parseInt(r['capacite'] || r['capacité'] || 8) || 8;
+          const existing = s.lieux.find(l => norm(l.nom) === norm(nom));
+          const errors = !nom ? ['nom manquant'] : [];
+          return { nom, etage, type: validType, capacite, existing, errors };
+        }).filter(r => r.nom);
+        if (!parsed.length) { App.toast('Aucun lieu à importer','warn'); return; }
+        const body = `<p class="muted small">${parsed.filter(r=>!r.existing&&!r.errors.length).length} à créer · ${parsed.filter(r=>r.existing).length} à mettre à jour</p>
+          <table class="data"><thead><tr><th>Nom</th><th>Étage</th><th>Type</th><th>Cap.</th><th>Statut</th></tr></thead><tbody>
+          ${parsed.map(r => `<tr><td>${r.nom}</td><td>${r.etage}</td><td>${r.type}</td><td>${r.capacite}</td>
+            <td>${r.errors.length?`<span class="badge bad">${r.errors[0]}</span>`:r.existing?'<span class="badge warn">màj</span>':'<span class="badge good">nouveau</span>'}</td></tr>`).join('')}
+          </tbody></table>`;
+        const importable = parsed.filter(r => !r.errors.length);
+        const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>
+          <button class="btn" id="l-import-ok">Importer (${importable.length})</button>`;
+        App.openModal('Aperçu import — Lieux', body, foot);
+        document.getElementById('l-import-ok').onclick = () => {
+          let created = 0, updated = 0;
+          importable.forEach(r => {
+            if (r.existing) {
+              r.existing.etage = r.etage; r.existing.type = r.type; r.existing.capacite = r.capacite;
+              updated++;
+            } else {
+              s.lieux.push({ id: DB.uid('L'), nom: r.nom, etage: r.etage, type: r.type, capacite: r.capacite });
+              created++;
+            }
+          });
+          DB.save(); App.closeModal(); App.refresh();
+          App.toast(`${created} créé(s) · ${updated} mis à jour`, 'success');
+        };
+      } catch(err) { App.toast('Erreur : ' + err.message, 'error'); }
+    };
+    reader.readAsText(file, 'UTF-8');
   },
 };

@@ -11,6 +11,9 @@ App.views.machines = {
         <select id="m-lieu"><option value="">Tous lieux</option>${lieuxProd.map(l=>`<option value="${l.id}">${l.nom}</option>`).join('')}</select>
         <label class="small"><input type="checkbox" id="m-conf"> Seulement conflits</label>
         <span class="spacer"></span>
+        <input type="file" id="m-import-file" accept=".csv,.json" hidden>
+        <button class="btn-ghost" id="m-tpl" data-perm="edit">⬇ Modèle</button>
+        <button class="btn-ghost" id="m-import" data-perm="edit">⬆ Importer</button>
         <button class="btn-ghost" id="m-csv">⤓ Exporter CSV</button>
         <button class="btn" id="m-add">+ Ajouter une machine</button>
       </div>
@@ -21,6 +24,9 @@ App.views.machines = {
     document.getElementById('m-lieu').onchange = e => { this.state.lieuFilter = e.target.value; this.draw(); };
     document.getElementById('m-conf').onchange = e => { this.state.onlyConflicts = e.target.checked; this.draw(); };
     document.getElementById('m-add').onclick = () => this.openForm(null);
+    document.getElementById('m-tpl').onclick = () => this.downloadTemplate();
+    document.getElementById('m-import').onclick = () => document.getElementById('m-import-file').click();
+    document.getElementById('m-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
     document.getElementById('m-csv').onclick = () => {
       const conflicts = App.detectConflicts();
       const conflSet = new Set(conflicts.machines.map(c => c.machineId));
@@ -94,6 +100,72 @@ App.views.machines = {
     `;
     document.querySelectorAll('#m-table tbody tr').forEach(tr => tr.onclick = () => this.openForm(tr.dataset.id));
   },
+  downloadTemplate() {
+    CSV.download('modele-import-machines.csv', [
+      ['Nom','Type','Lieu de production','Capacité (h/j)'],
+      ['CNC 3','CNC','Atelier 2A','8'],
+    ]);
+  },
+
+  importFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        let text = e.target.result;
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        const sep = text.includes(';') ? ';' : ',';
+        const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        const hdrs = lines[0].split(sep).map(h => norm(h.replace(/^"|"$/g,'')));
+        const rows = lines.slice(1).map(l => {
+          const v = l.split(sep).map(c => c.trim().replace(/^"|"$/g,''));
+          const o = {}; hdrs.forEach((h,i) => o[h] = v[i]||''); return o;
+        }).filter(r => Object.values(r).some(v => v));
+        const s = DB.state;
+        const parsed = rows.map(r => {
+          const nom = r['nom'] || '';
+          const type = r['type'] || '';
+          const capa = parseFloat(r['capacite (h/j)'] || r['capacite'] || r['capacité (h/j)'] || 8);
+          const lieuNom = norm(r['lieu de production'] || r['lieu'] || '');
+          const lieu = s.lieux.find(l => l.type === 'production' && norm(l.nom) === lieuNom);
+          const existing = s.machines.find(m => norm(m.nom) === norm(nom));
+          return { nom, type, capa, lieuId: lieu?.id || null, lieuNom, existing };
+        }).filter(r => r.nom);
+        if (!parsed.length) { App.toast('Aucune machine à importer','warn'); return; }
+        const creates = parsed.filter(r => !r.existing).length;
+        const updates = parsed.filter(r => r.existing).length;
+        const body = `<p class="muted small">${creates} à créer · ${updates} à mettre à jour</p>
+          <table class="data"><thead><tr><th>Nom</th><th>Type</th><th>Lieu</th><th>Cap.</th><th>Statut</th></tr></thead><tbody>
+          ${parsed.map(r => `<tr><td>${r.nom}</td><td>${r.type}</td>
+            <td class="${r.lieuId?'':'warn'}">${r.lieuNom||'—'}${r.lieuId?'':' ⚠'}</td>
+            <td>${r.capa}h/j</td>
+            <td><span class="badge ${r.existing?'warn':'good'}">${r.existing?'màj':'nouveau'}</span></td></tr>`).join('')}
+          </tbody></table>`;
+        const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>
+          <button class="btn" id="m-import-ok">Importer (${parsed.length})</button>`;
+        App.openModal('Aperçu import — Machines', body, foot);
+        document.getElementById('m-import-ok').onclick = () => {
+          let created = 0, updated = 0;
+          parsed.forEach(r => {
+            if (r.existing) {
+              if (r.type) r.existing.type = r.type;
+              r.existing.capaciteJour = r.capa;
+              if (r.lieuId) r.existing.lieuId = r.lieuId;
+              updated++;
+            } else {
+              const m = { id: DB.uid('M'), nom: r.nom, type: r.type, capaciteJour: r.capa, lieuId: r.lieuId || s.lieux.find(l=>l.type==='production')?.id };
+              s.machines.push(m);
+              created++;
+            }
+          });
+          DB.save(); App.closeModal(); App.refresh();
+          App.toast(`${created} créée(s) · ${updated} mise(s) à jour`, 'success');
+        };
+      } catch(err) { App.toast('Erreur : ' + err.message, 'error'); }
+    };
+    reader.readAsText(file, 'UTF-8');
+  },
+
   openForm(id) {
     const isNew = !id;
     const s = DB.state;
