@@ -143,7 +143,7 @@ App.views.gantt = {
         const prj = DB.projet(t.projetId);
         const lieu = DB.lieu(t.lieuId);
         const mach = DB.machine(t.machineId);
-        const pers = (t.assignes||[]).map(pid => App.personneLabel(DB.personne(pid))).join(', ');
+        const pers = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join(', ');
         rows.push([prj?prj.code:'', t.nom, t.debut, t.fin, D.workdaysBetween(t.debut,t.fin), lieu?lieu.nom:'', mach?mach.nom:'', pers, (t.avancement||0)+'%', t.jalon?'OUI':'']);
       });
       CSV.download('planning-' + D.today() + '.csv', rows);
@@ -676,7 +676,8 @@ App.views.gantt = {
     };
     renderSugg();
     ['f-debut','f-fin','f-machine','f-lieu','f-type'].forEach(id => { const el = document.getElementById(id); if (el) el.onchange = renderSugg; });
-    document.getElementById('f-assignes-wrap').addEventListener('change', e => {
+    const assignesWrap = document.getElementById('f-assignes-wrap');
+    if (assignesWrap) assignesWrap.addEventListener('change', e => {
       if (e.target.classList.contains('assignes-cb')) e.target.closest('.assignes-row').classList.toggle('is-checked', e.target.checked);
     });
 

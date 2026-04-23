@@ -8,6 +8,7 @@ App.views.deplacements = {
         <input type="file" id="d-import-file" accept=".csv,.json" hidden>
         <button class="btn-ghost" id="d-tpl" data-perm="edit">⬇ Modèle</button>
         <button class="btn-ghost" id="d-import" data-perm="edit">⬆ Importer</button>
+        <button class="btn-ghost" id="d-csv">⤓ Exporter CSV</button>
         <button class="btn" id="d-add">+ Nouveau déplacement</button>
       </div>
       <div class="card">
@@ -35,11 +36,15 @@ App.views.deplacements = {
     document.getElementById('d-tpl').onclick = () => this.downloadTemplate();
     document.getElementById('d-import').onclick = () => document.getElementById('d-import-file').click();
     document.getElementById('d-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
+    document.getElementById('d-csv').onclick = () => this.exportCSV();
     document.querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => this.openForm(tr.dataset.id));
   },
   openForm(id) {
     const isNew = !id;
     const s = DB.state;
+    if (!id && (!s.personnes.length || s.lieux.length < 2)) {
+      App.toast('Il faut au moins une personne et deux lieux pour créer un déplacement.', 'error'); return;
+    }
     const d = id ? s.deplacements.find(x => x.id === id) : {
       id: DB.uid('DEP'), date: D.today(), personneId: s.personnes[0].id, origineId: s.lieux[0].id,
       destinationId: s.lieux[1].id, motif:'', projetId:null, duree:'1h'
@@ -88,6 +93,19 @@ App.views.deplacements = {
       s.deplacements = s.deplacements.filter(x => x.id !== d.id);
       DB.save(); App.closeModal(); App.refresh();
     };
+  },
+
+  exportCSV() {
+    const s = DB.state;
+    const rows = [['Date','Prénom','Nom','Origine','Destination','Motif','Durée','Projet']];
+    s.deplacements.slice().sort((a,b) => a.date.localeCompare(b.date)).forEach(d => {
+      const p = DB.personne(d.personneId);
+      const o = DB.lieu(d.origineId), dest = DB.lieu(d.destinationId);
+      const prj = DB.projet(d.projetId);
+      rows.push([d.date, p?.prenom||'', p?.nom||'', o?.nom||'', dest?.nom||'', d.motif||'', d.duree||'', prj?.code||'']);
+    });
+    CSV.download('deplacements-' + D.today() + '.csv', rows);
+    App.toast('Export CSV téléchargé', 'success');
   },
 
   downloadTemplate() {
