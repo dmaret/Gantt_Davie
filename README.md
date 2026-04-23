@@ -298,10 +298,10 @@ views/
 | | |
 |---|---|
 | **Responsable** | Davie MARET — MSP |
-| **Institution** | EPI — Atelier Conditionnement & Logistique |
+| **Institution** | Atelier Conditionnement & Logistique |
 | **Site** | Genève |
 | **Email** | [davie.maret@epi.ge.ch](mailto:davie.maret@epi.ge.ch) |
-| **Téléphone** | 022 |
+| **Téléphone** | +41765356682|
 | **Contexte** | Planification d'atelier de production multi-sites |
 | **Version** | 3.0 |
 | **Date** | Avril 2026 |
