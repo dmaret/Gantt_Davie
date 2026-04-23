@@ -130,6 +130,9 @@ App.views.calendrier = {
       }).join('')}</ul>` : ''}
     `;
     App.openModal(D.fmt(d), body, `<button class="btn btn-secondary" onclick="App.closeModal()">Fermer</button>`);
-    document.querySelectorAll('[data-tid]').forEach(el => el.onclick = () => { App.closeModal(); App.navigate('gantt'); setTimeout(() => App.views.gantt.openTacheForm(el.dataset.tid), 50); });
+    document.querySelectorAll('[data-tid]').forEach(el => el.onclick = () => {
+      App.closeModal();
+      App.navigateToTarget({ view: 'gantt', tacheId: el.dataset.tid });
+    });
   },
 };

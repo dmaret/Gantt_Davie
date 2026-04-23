@@ -158,6 +158,7 @@ App.views.projets = {
       debut:D.today(), fin:D.addDays(D.today(),30), etage:'1er', priorite:'moyenne', statut:'planifié'
     };
     const taches = id ? DB.tachesDuProjet(id) : [];
+    const canEdit = App.can('edit');
     const body = `
       <div class="row">
         <div class="field"><label>Code</label><input id="pf-code" value="${p.code||''}"></div>
@@ -183,17 +184,18 @@ App.views.projets = {
         </div>
       </div>
       ${!isNew ? `
-        <h3 style="margin-top:14px">Tâches du projet (${taches.length})</h3>
-        <ul class="list">
-          ${taches.sort((a,b)=>a.debut.localeCompare(b.debut)).map(t => `
-            <li>
-              <div>
-                <strong>${t.nom}</strong> ${t.jalon?'<span class="badge">jalon</span>':''}
-                <div class="small muted">${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${(t.assignes||[]).length} personne(s) · ${t.avancement}%</div>
-              </div>
-              <span class="badge muted">${t.type}</span>
-            </li>`).join('')}
-        </ul>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap">
+          <h3 style="margin:0;flex:1">👥 Tâches & ressources (${taches.length})</h3>
+          <button class="btn-ghost" id="pf-export-csv" title="Exporter les tâches de ce projet en CSV (ouvrable dans Excel)">⬇ CSV</button>
+          ${canEdit && (s.equipes||[]).length ? `
+            <select id="pf-equipe-sel" class="small">
+              <option value="">— choisir une équipe —</option>
+              ${(s.equipes||[]).map(eq => `<option value="${eq.id}">${eq.nom}</option>`).join('')}
+            </select>
+            <button class="btn-ghost" id="pf-apply-eq" title="Affecter automatiquement l'équipe sélectionnée à toutes les tâches de ce projet">🎯 Auto-affecter équipe</button>
+          ` : ''}
+        </div>
+        <div id="pf-tasks-wrap">${this.renderTasksList(p.id, canEdit)}</div>
       ` : ''}
     `;
     const foot = `${!isNew?'<button class="btn btn-danger" id="pf-del">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>
@@ -212,14 +214,188 @@ App.views.projets = {
       p.priorite = document.getElementById('pf-prio').value;
       p.statut = document.getElementById('pf-statut').value;
       if (!p.nom || !p.code) { App.toast('Code et nom requis','error'); return; }
-      if (isNew) s.projets.push(p);
+      if (isNew) { s.projets.push(p); DB.logAudit('create','projet',p.id,`${p.code} · ${p.nom}`); }
+      else DB.logAudit('update','projet',p.id,`${p.code} · ${p.nom}`);
       DB.save(); App.closeModal(); App.refresh();
     };
-    if (!isNew) document.getElementById('pf-del').onclick = () => {
-      if (!confirm('Supprimer ce projet et toutes ses tâches ?')) return;
-      s.projets = s.projets.filter(x => x.id !== p.id);
-      s.taches = s.taches.filter(t => t.projetId !== p.id);
-      DB.save(); App.closeModal(); App.refresh();
+    if (!isNew) {
+      document.getElementById('pf-del').onclick = () => {
+        if (!confirm('Supprimer ce projet et toutes ses tâches ?')) return;
+        s.projets = s.projets.filter(x => x.id !== p.id);
+        s.taches = s.taches.filter(t => t.projetId !== p.id);
+        DB.logAudit('delete','projet',p.id,`${p.code} · ${p.nom}`);
+        DB.save(); App.closeModal(); App.refresh();
+      };
+      this.bindTasksList(p.id, canEdit);
+      const applyBtn = document.getElementById('pf-apply-eq');
+      if (applyBtn) applyBtn.onclick = () => this.applyEquipeToProject(p.id);
+      const csvBtn = document.getElementById('pf-export-csv');
+      if (csvBtn) csvBtn.onclick = () => this.exportTachesCSV(p.id);
+    }
+  },
+
+  exportTachesCSV(projetId) {
+    const p = DB.projet(projetId);
+    if (!p) return;
+    const tasks = DB.tachesDuProjet(projetId).sort((a,b) => a.debut.localeCompare(b.debut));
+    const rows = [['Code','Projet','Tâche','Type','Début','Fin','Durée (j)','Avancement (%)','Jalon','Machine','Lieu','Personnes','Dépendances','Notes']];
+    tasks.forEach(t => {
+      const m = DB.machine(t.machineId), l = DB.lieu(t.lieuId);
+      const persons = (t.assignes||[]).map(id => App.personneLabel(DB.personne(id))).join(' | ');
+      const deps = (t.dependances||[]).map(id => DB.tache(id)?.nom).filter(Boolean).join(' | ');
+      rows.push([
+        p.code, p.nom, t.nom, t.type||'',
+        D.fmt(t.debut), D.fmt(t.fin), D.diffDays(t.debut, t.fin),
+        t.avancement||0, t.jalon?'oui':'',
+        m?m.nom:'', l?l.nom:'', persons, deps, t.notes||'',
+      ]);
+    });
+    CSV.download(`${p.code}-taches-${D.iso(new Date())}.csv`, rows);
+    App.toast('Tâches exportées en CSV','success');
+  },
+
+  renderTasksList(projetId, canEdit) {
+    const s = DB.state;
+    const taches = DB.tachesDuProjet(projetId).sort((a,b) => a.debut.localeCompare(b.debut));
+    if (!taches.length) return '<p class="muted small">Aucune tâche. Créer des tâches depuis le Gantt.</p>';
+    return taches.map(t => this.renderTaskRow(t, canEdit)).join('');
+  },
+
+  renderTaskRow(t, canEdit) {
+    const s = DB.state;
+    const assignes = (t.assignes||[]).map(id => DB.personne(id)).filter(Boolean);
+    const chips = assignes.map(p => `
+      <span class="chip-person" style="background:${(p.couleur||'#2c5fb3')}22;color:${p.couleur||'#2c5fb3'};border:1px solid ${p.couleur||'#2c5fb3'}55">
+        <span class="chip-dot" style="background:${p.couleur||'#2c5fb3'}"></span>
+        ${p.prenom} ${p.nom}
+        ${canEdit ? `<button class="chip-x" data-task="${t.id}" data-pid="${p.id}" title="Retirer">×</button>` : ''}
+      </span>`).join('');
+    const assignedSet = new Set(t.assignes||[]);
+    const disponibles = s.personnes.filter(p => !assignedSet.has(p.id));
+    const addSelect = canEdit ? `
+      <select class="pf-add-person" data-task="${t.id}">
+        <option value="">+ Ajouter personne…</option>
+        ${disponibles.map(p => `<option value="${p.id}">${p.prenom} ${p.nom} · ${p.role||''}</option>`).join('')}
+      </select>
+      <button class="btn-ghost small pf-suggest" data-task="${t.id}" title="Suggérer les meilleures personnes (compétence + charge)">💡 Suggérer</button>
+    ` : '';
+    return `
+      <div class="pf-task-row" data-task="${t.id}">
+        <div class="pf-task-head">
+          <div>
+            <strong>${t.nom}</strong> ${t.jalon?'<span class="badge">jalon</span>':''}
+            <span class="badge muted">${t.type||''}</span>
+          </div>
+          <div class="small muted">${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${t.avancement||0}%</div>
+        </div>
+        <div class="pf-task-chips">
+          ${chips || '<span class="muted small">Aucune personne affectée</span>'}
+        </div>
+        ${addSelect ? `<div class="pf-task-actions">${addSelect}</div>` : ''}
+      </div>`;
+  },
+
+  bindTasksList(projetId, canEdit) {
+    if (!canEdit) return;
+    const wrap = document.getElementById('pf-tasks-wrap');
+    if (!wrap) return;
+    wrap.onclick = (e) => {
+      const x = e.target.closest('.chip-x');
+      if (x) {
+        const t = DB.tache(x.dataset.task);
+        if (!t) return;
+        t.assignes = (t.assignes||[]).filter(id => id !== x.dataset.pid);
+        DB.save();
+        this.refreshTaskRow(t.id, canEdit);
+        return;
+      }
+      const sug = e.target.closest('.pf-suggest');
+      if (sug) {
+        this.openSuggestPopup(sug.dataset.task, canEdit);
+        return;
+      }
     };
+    wrap.onchange = (e) => {
+      const sel = e.target.closest('.pf-add-person');
+      if (!sel || !sel.value) return;
+      const t = DB.tache(sel.dataset.task);
+      if (!t) return;
+      t.assignes = t.assignes || [];
+      if (!t.assignes.includes(sel.value)) t.assignes.push(sel.value);
+      DB.save();
+      this.refreshTaskRow(t.id, canEdit);
+    };
+  },
+
+  refreshTaskRow(tacheId, canEdit) {
+    const t = DB.tache(tacheId);
+    if (!t) return;
+    const row = document.querySelector(`.pf-task-row[data-task="${tacheId}"]`);
+    if (!row) return;
+    row.outerHTML = this.renderTaskRow(t, canEdit);
+  },
+
+  openSuggestPopup(tacheId, canEdit) {
+    const t = DB.tache(tacheId);
+    if (!t) return;
+    const suggestions = App.suggestAssignees(t, 5);
+    const body = `
+      <p class="muted small">Top 5 pour <strong>${t.nom}</strong> (score : compétence +100, lieu +10, charge −5/j).</p>
+      <ul class="list">
+        ${suggestions.map(sg => `
+          <li>
+            <div>
+              <strong>${sg.p.prenom} ${sg.p.nom}</strong>
+              <span class="badge muted">${sg.p.role||''}</span>
+              ${sg.compMatch ? '<span class="badge good">compétence ✓</span>' : ''}
+              <div class="small muted">charge période : ${sg.charge} j · score ${sg.score}</div>
+            </div>
+            <button class="btn btn-secondary small pf-affect-one" data-task="${t.id}" data-pid="${sg.p.id}" ${((t.assignes||[]).includes(sg.p.id))?'disabled':''}>
+              ${((t.assignes||[]).includes(sg.p.id))?'Déjà affecté·e':'Affecter'}
+            </button>
+          </li>`).join('')}
+      </ul>`;
+    const foot = `<span class="spacer" style="flex:1"></span><button class="btn btn-secondary" id="sg-close">Fermer</button>`;
+    App.openOverlay('Suggestions — ' + t.nom, body, foot);
+    document.getElementById('sg-close').onclick = () => App.closeOverlay();
+    document.querySelectorAll('.pf-affect-one').forEach(b => b.onclick = () => {
+      const task = DB.tache(b.dataset.task);
+      if (!task) return;
+      task.assignes = task.assignes || [];
+      if (!task.assignes.includes(b.dataset.pid)) task.assignes.push(b.dataset.pid);
+      DB.save();
+      b.disabled = true; b.textContent = 'Déjà affecté·e';
+      this.refreshTaskRow(task.id, canEdit);
+    });
+  },
+
+  applyEquipeToProject(projetId) {
+    const s = DB.state;
+    const sel = document.getElementById('pf-equipe-sel');
+    if (!sel || !sel.value) { App.toast('Choisir une équipe','warn'); return; }
+    const eq = s.equipes.find(e => e.id === sel.value);
+    if (!eq) { App.toast('Équipe introuvable','error'); return; }
+    const taches = DB.tachesDuProjet(projetId).filter(t => !t.jalon);
+    if (!taches.length) { App.toast('Aucune tâche à affecter','warn'); return; }
+    if (!confirm(`Auto-affecter l'équipe « ${eq.nom} » à ${taches.length} tâche(s) ?\n(Les personnes déjà affectées sont conservées, les nouvelles sont ajoutées selon compétence + dispo.)`)) return;
+    let touched = 0;
+    taches.forEach(t => {
+      const prop = App.views.equipes.proposerAffectation(eq.id, t.debut, t.fin);
+      if (!prop) return;
+      t.assignes = t.assignes || [];
+      let changed = false;
+      prop.slots.forEach(sl => {
+        (sl.selected||[]).forEach(c => {
+          if (!t.assignes.includes(c.p.id)) { t.assignes.push(c.p.id); changed = true; }
+        });
+      });
+      if (changed) touched++;
+    });
+    DB.save();
+    App.toast(`${touched} tâche(s) enrichie(s) avec l'équipe ${eq.nom}`, 'success');
+    // Re-render toute la liste de tâches
+    const wrap = document.getElementById('pf-tasks-wrap');
+    if (wrap) wrap.innerHTML = this.renderTasksList(projetId, App.can('edit'));
+    this.bindTasksList(projetId, App.can('edit'));
   },
 };

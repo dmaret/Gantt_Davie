@@ -10,6 +10,9 @@ App.views.dashboard = {
     'next-tasks':  { title:'🗓 Prochaines tâches (7 jours ouvrés)',         size:1, render(s, today) { return App.views.dashboard.renderNextTasks(s, today); } },
     'next-moves':  { title:'🚚 Déplacements à venir',                       size:1, render(s, today) { return App.views.dashboard.renderNextMoves(s, today); } },
     'charge-lieux':{ title:'📊 Charge par lieu de production (5 j ouvrés)', size:2, render(s, today) { return App.views.dashboard.renderChargeLieux(s, today); } },
+    'absences':    { title:'🏖 Absences en cours & à venir',                size:1, render(s, today) { return App.views.dashboard.renderAbsences(s, today); } },
+    'kpi-velocity':{ title:'📐 Respect des délais',                         size:1, render(s) { return App.views.dashboard.renderVelocity(s); } },
+    'top-articles':{ title:'🏷 Top articles (besoins BOM)',                 size:1, render(s) { return App.views.dashboard.renderTopArticles(s); } },
   },
 
   render(root) {
@@ -40,10 +43,19 @@ App.views.dashboard = {
       </div>`;
     }).join('');
 
+    const absentsAjd = s.personnes.filter(p => (p.absences||[]).some(a => a.debut <= today && a.fin >= today)).length;
+    const projetsRetard = s.projets.filter(p => {
+      if (p.statut !== 'en-cours') return false;
+      const pr = App.predictProjectEnd(p.id);
+      return pr && pr.delayDays >= 3;
+    }).length;
+
     root.innerHTML = `
-      <div class="grid grid-4">
+      <div class="grid grid-4 kpi-grid">
         <div class="kpi"><div class="label">Personnes</div><div class="value">${s.personnes.length}</div><div class="sub">dans ${s.lieux.filter(l=>l.type==='production').length} lieux de production</div></div>
+        <div class="kpi ${absentsAjd>0?'warn':''}"><div class="label">Absents aujourd'hui</div><div class="value">${absentsAjd}</div><div class="sub">${s.personnes.length-absentsAjd} dispo</div></div>
         <div class="kpi"><div class="label">Projets en cours</div><div class="value">${projetsEnCours}</div><div class="sub">${s.projets.length} au total</div></div>
+        <div class="kpi ${projetsRetard>0?'bad':'good'}"><div class="label">Projets en retard</div><div class="value">${projetsRetard}</div><div class="sub">prédiction +3 j</div></div>
         <div class="kpi ${tachesSemaine>20?'warn':''}"><div class="label">Tâches 7 j. ouvrés</div><div class="value">${tachesSemaine}</div><div class="sub">à venir ou en cours</div></div>
         <div class="kpi ${stockBas>0?'bad':'good'}"><div class="label">Alertes stock</div><div class="value">${stockBas}</div><div class="sub">sous seuil</div></div>
       </div>
@@ -138,12 +150,13 @@ App.views.dashboard = {
   renderConflicts(c) {
     const total = c.personnes.length + c.machines.length + c.stock.length + c.commandes.length;
     if (total === 0) return `<p class="muted">Aucun conflit détecté. ✔</p>`;
+    const row = (badge, kind, text, view) => `<li class="alert-row" onclick="App.navigateToTarget({view:'${view}'})" role="button" tabindex="0"><span class="badge ${badge}">${kind}</span> <span class="alert-msg">${text}</span> <span class="alert-arrow">›</span></li>`;
     const rows = [];
-    if (c.personnes.length) rows.push(`<li><span class="badge bad">Personnes</span> ${c.personnes.length} chevauchement(s) d'affectation</li>`);
-    if (c.machines.length)  rows.push(`<li><span class="badge bad">Machines</span> ${c.machines.length} conflit(s) d'utilisation</li>`);
-    if (c.stock.length)     rows.push(`<li><span class="badge warn">Stock</span> ${c.stock.length} article(s) sous seuil</li>`);
-    if (c.commandes.length) rows.push(`<li><span class="badge warn">Commandes</span> ${c.commandes.length} en attente de validations 4A</li>`);
-    return `<ul class="list">${rows.join('')}</ul>`;
+    if (c.personnes.length) rows.push(row('bad','Personnes',`${c.personnes.length} chevauchement(s) d'affectation`, 'gantt'));
+    if (c.machines.length)  rows.push(row('bad','Machines', `${c.machines.length} conflit(s) d'utilisation`, 'machines'));
+    if (c.stock.length)     rows.push(row('warn','Stock',   `${c.stock.length} article(s) sous seuil`, 'stock'));
+    if (c.commandes.length) rows.push(row('warn','Commandes',`${c.commandes.length} en attente de validations 4A`, 'commandes'));
+    return `<ul class="list list-clickable">${rows.join('')}</ul>`;
   },
 
   renderCommandes(s) {
@@ -176,11 +189,11 @@ App.views.dashboard = {
       .sort((a,b) => a.debut.localeCompare(b.debut))
       .slice(0, 8);
     if (!ts.length) return `<p class="muted">Rien à venir cette semaine.</p>`;
-    return `<ul class="list">${ts.map(t => {
+    return `<ul class="list list-clickable">${ts.map(t => {
       const prj = DB.projet(t.projetId);
       const lieu = DB.lieu(t.lieuId);
       const assigns = (t.assignes||[]).map(id => App.personneLabel(DB.personne(id))).join(', ');
-      return `<li>
+      return `<li class="alert-row" onclick="App.navigateToTarget({view:'gantt',tacheId:'${t.id}'})" role="button" tabindex="0">
         <div>
           <div><strong>${t.nom}</strong> · <span class="muted small">${prj?prj.code:''}</span></div>
           <div class="small muted">${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${lieu?lieu.nom:'—'} · ${assigns||'—'}</div>
@@ -234,5 +247,81 @@ App.views.dashboard = {
     return `<table class="data">
       <thead><tr><th>Lieu</th><th>Tâches</th><th>Charge</th><th>Capacité</th><th></th><th class="right">%</th></tr></thead>
       <tbody>${rows}</tbody></table>`;
+  },
+
+  renderAbsences(s, today) {
+    const horizon = D.addWorkdays(today, 9);
+    const entries = [];
+    s.personnes.forEach(p => (p.absences||[]).forEach(a => {
+      if (a.fin >= today && a.debut <= horizon) entries.push({ ...a, p });
+    }));
+    if (!entries.length) return `<p class="muted">Personne d'absent dans les 10 j ouvrés.</p>`;
+    entries.sort((a,b) => a.debut.localeCompare(b.debut));
+    return `<ul class="list list-clickable">${entries.slice(0,8).map(e => {
+      const encours = e.debut <= today && e.fin >= today;
+      return `<li class="alert-row" onclick="App.navigate('absences')" role="button" tabindex="0">
+        <div>
+          <strong>${App.personneLabel(e.p)}</strong>
+          <div class="small muted">${D.fmt(e.debut)} → ${D.fmt(e.fin)} · ${e.motif}${e.note?' · '+e.note:''}</div>
+        </div>
+        <span class="badge ${encours?'bad':'warn'}">${encours?'en cours':'à venir'}</span>
+        <span class="alert-arrow">›</span>
+      </li>`;
+    }).join('')}</ul>${entries.length>8?`<p class="muted small">+${entries.length-8} autre(s)</p>`:''}`;
+  },
+
+  renderVelocity(s) {
+    const active = s.projets.filter(p => p.statut === 'en-cours');
+    if (!active.length) return `<p class="muted">Aucun projet en cours.</p>`;
+    let onTime = 0, late = 0, totalDelay = 0, count = 0;
+    active.forEach(p => {
+      const pr = App.predictProjectEnd(p.id);
+      if (!pr) return;
+      count++;
+      if (pr.delayDays >= 3) { late++; totalDelay += pr.delayDays; }
+      else onTime++;
+    });
+    if (!count) return `<p class="muted">Pas assez de données pour prédire.</p>`;
+    const pct = Math.round(onTime / count * 100);
+    const moy = late ? Math.round(totalDelay / late) : 0;
+    const cls = pct >= 80 ? 'good' : pct >= 60 ? 'warn' : 'bad';
+    return `<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+        <div style="flex:1">
+          <div class="muted small">Taux respect délais</div>
+          <div style="font-size:28px;font-weight:700" class="${cls}">${pct}%</div>
+        </div>
+        <div style="flex:1">
+          <div class="muted small">Retard moyen (retardés)</div>
+          <div style="font-size:28px;font-weight:700">${moy} j</div>
+        </div>
+      </div>
+      <div class="bar-inline ${cls}"><div class="fill" style="width:${pct}%"></div></div>
+      <div class="small muted" style="margin-top:6px">${onTime} projet(s) à l'heure · ${late} en retard</div>`;
+  },
+
+  renderTopArticles(s) {
+    const besoins = {};
+    s.projets.forEach(p => (p.bom||[]).forEach(l => {
+      besoins[l.articleId] = (besoins[l.articleId]||0) + l.quantite;
+    }));
+    const arts = Object.entries(besoins)
+      .map(([aid, qte]) => ({ art: DB.stock(aid), qte }))
+      .filter(x => x.art)
+      .sort((a,b) => b.qte - a.qte)
+      .slice(0, 5);
+    if (!arts.length) return `<p class="muted">Aucun besoin BOM défini.</p>`;
+    const max = arts[0].qte;
+    return `<ul class="list">${arts.map(x => {
+      const pct = Math.round(x.qte / max * 100);
+      const rupture = x.art.quantite < x.qte;
+      return `<li class="alert-row" onclick="App.navigateToTarget({view:'stock',articleId:'${x.art.id}'})" role="button" tabindex="0">
+        <div style="flex:1">
+          <strong>${x.art.ref}</strong> · ${x.art.nom}
+          <div class="small muted">besoin : ${x.qte} ${x.art.unite} · stock : ${x.art.quantite} ${x.art.unite} ${rupture?'<span class="badge bad">rupture</span>':''}</div>
+          <div class="bar-inline ${rupture?'bad':'good'}" style="margin-top:4px;height:6px"><div class="fill" style="width:${pct}%"></div></div>
+        </div>
+        <span class="alert-arrow">›</span>
+      </li>`;
+    }).join('')}</ul>`;
   },
 };

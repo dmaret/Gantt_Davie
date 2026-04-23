@@ -150,21 +150,26 @@ App.views.equipes = {
         .filter(p => (p.competences||[]).includes(sl.competence))
         .filter(p => !usedIds.has(p.id))
         .map(p => {
-          // Dispo sur la période ? Au moins une demi-journée travaillée sur [debut, fin]
+          // Dispo sur la période ? Au moins une demi-journée travaillée sur [debut, fin] (hors absences)
           const h = p.horaires || defaultHoraires();
           let dispoDJ = 0;
+          let joursAbsent = 0;
           let cur = tacheDebut;
           while (cur <= tacheFin) {
             const dow = JOURS_SEMAINE[(D.parse(cur).getUTCDay()+6)%7];
-            if (h[dow]?.matin) dispoDJ++;
-            if (h[dow]?.aprem) dispoDJ++;
+            const absent = DB.personneAbsenteLe(p.id, cur);
+            if (absent) joursAbsent++;
+            else {
+              if (h[dow]?.matin) dispoDJ++;
+              if (h[dow]?.aprem) dispoDJ++;
+            }
             cur = D.addDays(cur, 1);
           }
           // Déjà occupé·e sur d'autres tâches ?
           const conflicts = s.taches.filter(t => (t.assignes||[]).includes(p.id) && t.fin >= tacheDebut && t.debut <= tacheFin).length;
-          const libre = conflicts === 0;
-          const score = (libre ? 100 : 0) + dispoDJ * 2 - conflicts * 10;
-          return { p, score, dispoDJ, libre, conflicts };
+          const libre = conflicts === 0 && joursAbsent === 0;
+          const score = (libre ? 100 : 0) + dispoDJ * 2 - conflicts * 10 - joursAbsent * 20;
+          return { p, score, dispoDJ, libre, conflicts, joursAbsent };
         })
         .sort((a,b) => b.score - a.score)
         .slice(0, Math.max(sl.n * 2, sl.n + 2)); // garde un peu plus de candidats

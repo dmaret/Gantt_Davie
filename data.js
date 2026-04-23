@@ -30,6 +30,30 @@ const DB = {
       }
     });
     this.state.commandes.forEach(c => { if (!c.validationLog) c.validationLog = []; });
+    // v3.2 : absences par personne, notes sur tâches, audit log, modèles tâches
+    this.state.personnes.forEach(p => { if (!p.absences) p.absences = []; });
+    this.state.taches.forEach(t => { if (t.notes === undefined) t.notes = ''; });
+    if (!this.state.audit) this.state.audit = [];
+    if (!this.state.modeles) this.state.modeles = [];
+  },
+
+  // Journal d'audit : garde les 500 dernières actions
+  logAudit(action, entity, entityId, details) {
+    if (!this.state.audit) this.state.audit = [];
+    const user = (window.App && App.currentUser && App.currentUser()) || { id:'?', nom:'?' };
+    this.state.audit.push({
+      ts: new Date().toISOString(),
+      userId: user.id, userNom: user.nom,
+      action, entity, entityId, details: details || ''
+    });
+    if (this.state.audit.length > 500) this.state.audit = this.state.audit.slice(-500);
+  },
+
+  // Personne disponible ce jour-là ? (false si en absence)
+  personneAbsenteLe(personneId, iso) {
+    const p = this.personne(personneId);
+    if (!p || !p.absences) return false;
+    return p.absences.some(a => a.debut <= iso && a.fin >= iso);
   },
   save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));

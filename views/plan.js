@@ -216,12 +216,18 @@ App.views.plan = {
         <div class="muted small">${charge.jours} / ${charge.capa} j-personne occupés</div>
       </div>
       <h4>👥 Personnes présentes aujourd'hui (${people.length})</h4>
-      ${people.length ? `<ul class="list">${people.map(p => `<li><strong>${App.personneLabel(p)}</strong> <span class="muted small">${p.role}</span></li>`).join('')}</ul>` : '<p class="muted small">Personne aujourd\'hui.</p>'}
+      ${people.length ? `<ul class="list list-clickable">${people.map(p => `<li class="alert-row" data-pid="${p.id}" role="button" tabindex="0"><div style="flex:1"><strong>${App.personneLabel(p)}</strong> <span class="muted small">${p.role}</span></div><span class="alert-arrow">›</span></li>`).join('')}</ul>` : '<p class="muted small">Personne aujourd\'hui.</p>'}
       <h4>📋 Tâches prévues (5 j. ouvrés) · ${tasks.length}</h4>
-      ${tasks.length ? `<ul class="list">${tasks.map(t => {
+      ${tasks.length ? `<ul class="list list-clickable">${tasks.map(t => {
         const prj = DB.projet(t.projetId);
-        return `<li><div><strong>${t.nom}</strong><div class="small muted">${prj?prj.code:''} · ${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${(t.assignes||[]).length} pers.</div></div><span class="badge" style="background:${prj?prj.couleur+'33':''};color:${prj?prj.couleur:''}">${prj?prj.code:''}</span></li>`;
+        return `<li class="alert-row" data-tid="${t.id}" role="button" tabindex="0"><div style="flex:1"><strong>${t.nom}</strong><div class="small muted">${prj?prj.code:''} · ${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${(t.assignes||[]).length} pers.</div></div><span class="badge" style="background:${prj?prj.couleur+'33':''};color:${prj?prj.couleur:''}">${prj?prj.code:''}</span><span class="alert-arrow">›</span></li>`;
       }).join('')}</ul>` : '<p class="muted small">Aucune tâche prévue.</p>'}
     `;
+    target.querySelectorAll('[data-tid]').forEach(el => el.onclick = () => {
+      App.navigateToTarget({ view: 'gantt', tacheId: el.dataset.tid });
+    });
+    target.querySelectorAll('[data-pid]').forEach(el => el.onclick = () => {
+      App.navigateToTarget({ view: 'personnes', personneId: el.dataset.pid });
+    });
   },
 };

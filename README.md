@@ -15,25 +15,28 @@ Copier `index.html`, `styles.css`, `app.js`, `data.js` et le dossier `views/` su
 **Option 3 — GitHub Pages**
 Cette app est déployée automatiquement depuis la branche `main`.
 
-## Modules (16 vues + Admin)
+## Modules (19 vues + Admin)
 
 | Raccourci | Onglet | Contenu |
 |:-:|---|---|
-| `D` | Tableau de bord | KPI, conflits, alertes proactives, prédiction fin de projet, prochaines tâches, charge par lieu — **cartes réorganisables par drag & drop pour les admins** |
-| `G` | Gantt | Vue chronologique, regroupement par projet / personne / machine / lieu, glisser-déposer, dépendances SVG, chemin critique, cascade automatique, menu contextuel clic-droit |
+| `D` | Tableau de bord | KPI enrichi (absents, retards), conflits, alertes proactives, prédiction fin de projet, respect des délais, top articles BOM, prochaines tâches, charge par lieu — **cartes réorganisables par drag & drop pour les admins** |
+| `G` | Gantt | Vue chronologique, regroupement par projet / personne / machine / lieu, glisser-déposer, dépendances SVG, chemin critique, cascade automatique, menu contextuel clic-droit, **notes/consignes** par tâche |
 | `C` | Calendrier | Vues mois / semaine, événements colorés par projet, modale détaillée au clic |
-| `P` | Personnes | Annuaire, compétences, **profil horaires hebdo cliquable**, charge glissante 4 semaines, Ma semaine |
+| `P` | Personnes | Annuaire, compétences, **profil horaires hebdo cliquable**, charge glissante 4 semaines, Ma semaine, **export CSV planning hebdomadaire** |
 | `L` | Lieux | Production + stockages arborescents par étage |
 | `M` | Machines | 10 machines, charge 7 jours, conflits, CRUD, export CSV |
-| `J` | Projets | Cartes projet, avancement, priorité, retard, rapport PDF |
+| `J` | Projets | Cartes projet, avancement, priorité, retard, rapport PDF, **édition visuelle des ressources** (chips + auto-affectation équipe) |
 | `S` | Stock | Articles, seuils d'alerte, stockage, projets liés, édition inline |
 | `B` | BOM | Bill of Materials : besoin projet ↔ solde stock, ruptures prévues, édition inline |
 | `V` | Déplacements | Mouvements entre sites, personnes, motifs |
 | `O` | Commandes | Workflow 4A, TVA suisse, historique signé et horodaté |
 | `X` | Capacité | Heatmap capacité sur 8 / 12 / 24 semaines (par lieu, machine ou personne) |
-| `R` | **Ressources** | Matrice personnes × jours × demi-journées (dispo / occupé·e / off) |
-| `E` | **Équipes** | Définition d'équipes de production (Ligne 1, Valmont, Logistique, Assemblage…) avec slots de compétences |
-| `A` | **Plan atelier** | Vue bird's eye SVG 2D : lieux positionnés par étage, coloration charge, dots personnes temps réel, drag admin |
+| `R` | Ressources | Matrice personnes × jours × demi-journées (dispo / occupé·e / off / **absent**) |
+| `E` | Équipes | Définition d'équipes de production avec slots de compétences, auto-affectation tenant compte des absences |
+| `A` | Plan atelier | Vue bird's eye SVG 2D : lieux positionnés par étage, coloration charge, dots personnes temps réel, drag admin |
+| `F` | **Absences** | Saisie congés/maladies/formations, impact automatique sur dispos et auto-affectation |
+| `T` | **Modèles** | Templates de tâches récurrentes (préparation, réception…) instanciables en 1 clic |
+| `H` | **Historique** | Journal d'audit 500 dernières actions : qui a créé/modifié/supprimé quoi et quand |
 | `W` | What-if | Snapshot, modifications, diff, commit ou rollback |
 | ⚙ | Admin | Gestion utilisateurs, groupes d'accès, permissions, mots de passe |
 
@@ -99,8 +102,58 @@ Au premier démarrage, un **tutoriel 8 étapes** s'affiche (bienvenue, navigatio
 ### Édition inline
 Les quantités du **BOM** et du **stock** sont modifiables directement dans les tableaux (Entrée ou blur pour valider). Une quantité BOM à 0 propose la suppression de la ligne.
 
+### Absences & congés (vue F)
+Saisie des absences par personne (vacances, maladie, formation, récup, autre) avec période et note.
+- **Impact automatique** sur la vue Ressources (cellule hachurée violette)
+- **Pénalisation dans l'auto-affectation équipe** : les personnes absentes sur la période de la tâche sont dépriorisées (score −20/jour)
+- KPI : absents aujourd'hui / semaine / 2 semaines à venir
+- Filtres personne, motif, inclure les passées
+
+### Modèles de tâches récurrentes (vue T)
+Créer un **template de tâche** (nom, type, durée, machine, lieu, compétences, notes, couleur) qu'on peut dupliquer en 1 clic. Utile pour les tournées, préparations et activités qui reviennent régulièrement. Le bouton « ➕ Utiliser » demande le projet et la date de début, crée la tâche et ouvre le Gantt.
+
+### Historique des modifications (vue H)
+**Journal d'audit** automatique sur create/update/delete des tâches, projets, absences, modèles. Les 500 dernières actions sont conservées avec :
+- Horodatage précis
+- Utilisateur ayant fait l'action
+- Type d'entité (tâche, projet, absence, modèle…)
+- Nature de l'action (create / update / delete)
+- Détails (nom de l'entité modifiée)
+
+Filtres par type, action, utilisateur, recherche plein texte. Purge admin.
+
+### Export CSV enrichi
+- **Planning hebdomadaire CSV** (bouton dans vue Personnes) : une ligne par personne × jour de la semaine avec tâches, déplacements, absences, heures travaillées
+- **Tâches projet CSV** (bouton dans formulaire projet) : toutes les tâches du projet avec dates, avancement, personnes, dépendances, notes
+- **CSV Excel-compatible** : BOM UTF-8, séparateur `;`, accents préservés
+- Téléchargement direct sans plugin
+
+### Mode mobile atelier
+Interface optimisée pour **téléphone & petit tablet** (< 720 px) :
+- Topbar compacte avec navigation horizontale scrollable
+- Tables scrollables en X
+- Modales en quasi plein-écran
+- Boutons d'action secondaires masqués (export, import, reset) en dessous de 480 px
+
+### Édition visuelle des ressources dans les projets
+Depuis l'onglet **Projets**, en ouvrant un projet :
+- Chaque tâche affiche ses personnes en **chips colorées** (couleur de la personne) avec **× pour retirer**
+- **Sélecteur « + Ajouter personne »** par tâche (filtré sur non-assignées)
+- **Bouton « 💡 Suggérer »** par tâche : top 5 scoré par compétence (+100) + lieu (+10) − charge (−5/j)
+- **Bouton « 🎯 Auto-affecter équipe »** au niveau projet : choisir une équipe → répartit automatiquement les personnes sur toutes les tâches non-jalon selon les slots de compétences, en conservant les affectations existantes
+
+### Navigation contextuelle (« clic → source »)
+Toutes les fenêtres d'information ont des **lignes cliquables** avec chevron **›** :
+- **🔔 Alertes proactives** : clic sur une alerte → ouvre la vue concernée et le formulaire de l'élément (projet en retard, tâche en conflit, personne surchargée, BOM en rupture)
+- **Tableau de bord** : carte « Conflits » et « Prochaines tâches » cliquables
+- **Ma semaine** (Personnes) : clic sur une tâche ou un déplacement → navigue vers la vue
+- **Calendrier** : détail jour → clic sur tâche ouvre le formulaire dans le Gantt
+- **Plan 2D** : panneau détail → clic personne/tâche ouvre la fiche
+- **Suggestions** (Gantt) : clic sur le nom → ouvre la fiche personne
+- **Recherche globale** (Ctrl+K) : Entrée ou clic → ouvre le formulaire de l'entité sélectionnée
+
 ### Recherche globale (Ctrl+K / Cmd+K)
-Barre de recherche instantanée à travers personnes, projets, articles, commandes, tâches, machines, lieux. Navigation au clavier (↑↓), Entrée pour ouvrir la vue correspondante.
+Barre de recherche instantanée à travers personnes, projets, articles, commandes, tâches, machines, lieux. Navigation au clavier (↑↓), Entrée pour ouvrir directement le formulaire de l'élément sélectionné.
 
 ### Menu contextuel Gantt
 Clic-droit sur une barre Gantt → menu d'actions rapides :
@@ -179,6 +232,9 @@ Bouton ☾ / ☀ : bascule instantanée, persisté en localStorage.
 | `R` | Vue Ressources |
 | `E` | Vue Équipes |
 | `A` | Vue Plan atelier |
+| `F` | Vue Absences |
+| `T` | Vue Modèles de tâches |
+| `H` | Vue Historique |
 | `?` | Afficher l'aide des raccourcis |
 | `Esc` | Fermer la modale / la recherche |
 
@@ -226,6 +282,9 @@ views/
   ressources.js     Matrice personnes × jours × demi-journées
   equipes.js        CRUD équipes + slots compétences + proposerAffectation
   plan.js           Plan 2D SVG bird's eye, charge, dots personnes, drag admin
+  absences.js       Saisie des absences + KPI + filtres + impact auto
+  modeles.js        Templates de tâches récurrentes + instanciation
+  audit.js          Journal d'audit 500 dernières actions
   whatif.js         Snapshot + diff + commit
   admin.js          Gestion utilisateurs, groupes, permissions, mots de passe
 ```
@@ -234,6 +293,21 @@ views/
 
 **Dates en UTC** : toutes les manipulations de date passent par `D.parse`, `D.iso`, `D.addDays`, etc. qui utilisent `Date.UTC()` et `getUTCDate()`. Cela évite les décalages d'un jour lors d'un changement d'heure ou d'un fuseau non-UTC (bug historique en CEST/Zurich).
 
+## Utilisation & contact
+
+| | |
+|---|---|
+| **Responsable** | Davie MARET — MSP |
+| **Institution** | EPI — Atelier Conditionnement & Logistique |
+| **Site** | Genève |
+| **Email** | [davie.maret@epi.ge.ch](mailto:davie.maret@epi.ge.ch) |
+| **Téléphone** | 022 |
+| **Contexte** | Planification d'atelier de production multi-sites |
+| **Version** | 3.0 |
+| **Date** | Avril 2026 |
+
+Pour toute question relative à l'utilisation de cette application, contacter **Davie MARET** (MSP, Atelier Conditionnement & Logistique — EPI Genève) : [davie.maret@epi.ge.ch](mailto:davie.maret@epi.ge.ch)
+
 ## Licence & crédits
 
-Application développée sur mesure. Aucune dépendance tierce.
+Application développée sur mesure pour **Davie MARET** — MSP à l'Atelier Conditionnement & Logistique des EPI (Genève). Aucune dépendance tierce.

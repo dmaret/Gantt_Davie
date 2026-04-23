@@ -324,11 +324,11 @@ App.views.gantt = {
     const t = DB.tache(tid);
     if (!t) return;
     const sugg = App.suggestAssignees(t, 5);
-    const body = `<p class="muted">Score = compétence × 100 − charge × 5 + proximité × 10</p>
+    const body = `<p class="muted">Score = compétence × 100 − charge × 5 + proximité × 10 · Clic sur le nom pour ouvrir la fiche de la personne.</p>
       <table class="data">
         <thead><tr><th>Personne</th><th>Rôle</th><th class="right">Score</th><th class="right">Charge</th><th>Compétence</th><th></th></tr></thead>
         <tbody>${sugg.map(x => `<tr>
-          <td><strong>${App.personneLabel(x.p)}</strong></td>
+          <td><a href="#" class="link-to-person" data-pid="${x.p.id}"><strong>${App.personneLabel(x.p)}</strong></a></td>
           <td>${x.p.role}</td>
           <td class="right mono">${x.score}</td>
           <td class="right">${x.charge}j</td>
@@ -337,6 +337,11 @@ App.views.gantt = {
         </tr>`).join('')}</tbody>
       </table>`;
     App.openModal('Suggestions pour : ' + t.nom, body, `<button class="btn btn-secondary" onclick="App.closeModal()">Fermer</button>`);
+    document.querySelectorAll('.link-to-person').forEach(a => a.onclick = (e) => {
+      e.preventDefault();
+      App.closeModal();
+      App.navigateToTarget({ view: 'personnes', personneId: a.dataset.pid });
+    });
     document.querySelectorAll('[data-assign]').forEach(b => b.onclick = () => {
       const pid = b.dataset.assign;
       t.assignes = Array.from(new Set([...(t.assignes||[]), pid]));
@@ -470,6 +475,9 @@ App.views.gantt = {
         <select id="f-deps" multiple size="5">
           ${s.taches.filter(x => x.id !== t.id && x.projetId === t.projetId).sort((a,b)=>a.debut.localeCompare(b.debut)).map(x => `<option value="${x.id}" ${(t.dependances||[]).includes(x.id)?'selected':''}>${x.nom} · ${D.fmt(x.debut)}→${D.fmt(x.fin)}</option>`).join('')}
         </select>
+      </div>
+      <div class="field"><label>📝 Notes / consignes</label>
+        <textarea id="f-notes" rows="3" placeholder="Instructions d'exécution, références, points d'attention…">${t.notes||''}</textarea>
       </div>
       <label class="small"><input type="checkbox" id="f-jalon" ${t.jalon?'checked':''}> Jalon</label>
     `;
@@ -615,14 +623,17 @@ App.views.gantt = {
       t.assignes = Array.from(document.getElementById('f-assignes').selectedOptions).map(o => o.value);
       t.jalon = document.getElementById('f-jalon').checked;
       t.dependances = Array.from(document.getElementById('f-deps').selectedOptions).map(o => o.value);
+      t.notes = document.getElementById('f-notes').value;
       if (!t.nom) { App.toast('Nom requis','error'); return; }
-      if (isNew) DB.state.taches.push(t);
+      if (isNew) { DB.state.taches.push(t); DB.logAudit('create','tache',t.id,t.nom); }
+      else DB.logAudit('update','tache',t.id,t.nom);
       DB.save(); App.closeModal(); App.toast('Enregistré','success'); App.refresh();
     };
     if (!isNew) {
       document.getElementById('f-del').onclick = () => {
         if (!confirm('Supprimer cette tâche ?')) return;
         DB.state.taches = DB.state.taches.filter(x => x.id !== t.id);
+        DB.logAudit('delete','tache',t.id,t.nom);
         DB.save(); App.closeModal(); App.toast('Tâche supprimée','info'); App.refresh();
       };
     }

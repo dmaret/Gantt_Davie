@@ -238,10 +238,54 @@ const App = {
   },
   showBellPanel() {
     const alerts = this.proactiveAlerts();
+    this._lastAlerts = alerts;
     const body = alerts.length
-      ? `<ul class="list">${alerts.map(a => `<li><span class="badge ${a.niveau}">${a.kind}</span> <span>${a.msg}</span></li>`).join('')}</ul>`
+      ? `<ul class="list list-clickable">${alerts.map((a,i) => `
+          <li class="alert-row" data-idx="${i}" ${a.target?'role="button" tabindex="0"':''}>
+            <span class="badge ${a.niveau}">${a.kind}</span>
+            <span class="alert-msg">${a.msg}</span>
+            ${a.target ? '<span class="alert-arrow" title="Ouvrir la vue concernée">›</span>' : ''}
+          </li>`).join('')}</ul>
+          <p class="muted small" style="margin-top:8px">Clic sur une ligne pour ouvrir l'élément concerné.</p>`
       : `<p class="muted">Aucune alerte. ✔</p>`;
     this.openModal(`Alertes proactives (${alerts.length})`, body, `<span class="spacer" style="flex:1"></span><button class="btn" onclick="App.closeModal()">Fermer</button>`);
+    document.querySelectorAll('.alert-row').forEach(li => {
+      li.addEventListener('click', () => {
+        const a = this._lastAlerts[+li.dataset.idx];
+        if (!a || !a.target) return;
+        this.closeModal();
+        this.navigateToTarget(a.target);
+      });
+    });
+  },
+
+  // Navigue vers l'entité décrite par `target` puis ouvre son formulaire si possible.
+  // target: { view, projetId?, personneId?, tacheId?, articleId?, machineId?, lieuId?, commandeId? }
+  navigateToTarget(target) {
+    if (!target || !target.view) return;
+    this.navigate(target.view);
+    // Laisser le temps à la vue de se rendre avant d'ouvrir le form
+    setTimeout(() => {
+      try {
+        if (target.view === 'projets' && target.projetId && this.views.projets?.openForm) {
+          this.views.projets.openForm(target.projetId);
+        } else if (target.view === 'personnes' && target.personneId && this.views.personnes?.openForm) {
+          this.views.personnes.openForm(target.personneId);
+        } else if (target.view === 'gantt' && target.tacheId && this.views.gantt?.openTacheForm) {
+          this.views.gantt.openTacheForm(target.tacheId);
+        } else if (target.view === 'stock' && target.articleId && this.views.stock?.openForm) {
+          this.views.stock.openForm(target.articleId);
+        } else if (target.view === 'machines' && target.machineId && this.views.machines?.openForm) {
+          this.views.machines.openForm(target.machineId);
+        } else if (target.view === 'commandes' && target.commandeId && this.views.commandes?.openForm) {
+          this.views.commandes.openForm(target.commandeId);
+        } else if (target.view === 'lieux' && target.lieuId && this.views.lieux?.openForm) {
+          this.views.lieux.openForm(target.lieuId);
+        }
+      } catch (err) {
+        console.warn('navigateToTarget:', err);
+      }
+    }, 60);
   },
 
   bindTopbar() {
@@ -303,7 +347,7 @@ const App = {
     }
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const map = { d:'dashboard', g:'gantt', c:'calendrier', p:'personnes', l:'lieux', m:'machines', j:'projets', s:'stock', v:'deplacements', o:'commandes', b:'bom', x:'capacite', w:'whatif', r:'ressources', e:'equipes', a:'plan' };
+    const map = { d:'dashboard', g:'gantt', c:'calendrier', p:'personnes', l:'lieux', m:'machines', j:'projets', s:'stock', v:'deplacements', o:'commandes', b:'bom', x:'capacite', w:'whatif', r:'ressources', e:'equipes', a:'plan', f:'absences', h:'audit', t:'modeles' };
     if (map[e.key]) { this.navigate(map[e.key]); e.preventDefault(); return; }
     if (e.key === '?') { this.showHelp(); e.preventDefault(); return; }
     if (e.key === 'n' && this.views[this.view].newItem) { this.views[this.view].newItem(); e.preventDefault(); return; }
@@ -370,6 +414,7 @@ const App = {
     const r = (this.gsResults||[])[this.gsSelected];
     if (!r) return;
     this.closeGlobalSearch();
+    if (r.target) { this.navigateToTarget(r.target); return; }
     this.navigate(r.view);
     if (r.onOpen) setTimeout(r.onOpen, 50);
   },
@@ -378,16 +423,16 @@ const App = {
     const ql = q.toLowerCase().trim();
     const out = [];
     const push = (r) => { if (!ql || r.label.toLowerCase().includes(ql) || (r.meta||'').toLowerCase().includes(ql)) out.push(r); };
-    s.personnes.forEach(p => push({ kind:'Personne', label:this.personneLabel(p), meta:`${p.role} · ${DB.lieu(p.lieuPrincipalId)?.nom||''} · ${(p.competences||[]).join(', ')}`, view:'personnes' }));
-    s.projets.forEach(p => push({ kind:'Projet',   label:`${p.code} — ${p.nom}`, meta:`${p.client||''} · ${p.statut}`, view:'projets' }));
-    s.stock.forEach(a => push({ kind:'Article',   label:`${a.ref} — ${a.nom}`, meta:`${a.quantite} ${a.unite} · ${DB.lieu(a.lieuId)?.nom||''}`, view:'stock' }));
-    s.commandes.forEach(c => push({ kind:'Commande', label:c.ref, meta:`${c.fournisseur} · ${c.statut}`, view:'commandes' }));
+    s.personnes.forEach(p => push({ kind:'Personne', label:this.personneLabel(p), meta:`${p.role} · ${DB.lieu(p.lieuPrincipalId)?.nom||''} · ${(p.competences||[]).join(', ')}`, view:'personnes', target:{ view:'personnes', personneId:p.id } }));
+    s.projets.forEach(p => push({ kind:'Projet',   label:`${p.code} — ${p.nom}`, meta:`${p.client||''} · ${p.statut}`, view:'projets', target:{ view:'projets', projetId:p.id } }));
+    s.stock.forEach(a => push({ kind:'Article',   label:`${a.ref} — ${a.nom}`, meta:`${a.quantite} ${a.unite} · ${DB.lieu(a.lieuId)?.nom||''}`, view:'stock', target:{ view:'stock', articleId:a.id } }));
+    s.commandes.forEach(c => push({ kind:'Commande', label:c.ref, meta:`${c.fournisseur} · ${c.statut}`, view:'commandes', target:{ view:'commandes', commandeId:c.id } }));
     s.taches.forEach(t => {
       const prj = DB.projet(t.projetId);
-      push({ kind:'Tâche', label:t.nom, meta:`${prj?prj.code:''} · ${D.fmt(t.debut)}→${D.fmt(t.fin)}`, view:'gantt' });
+      push({ kind:'Tâche', label:t.nom, meta:`${prj?prj.code:''} · ${D.fmt(t.debut)}→${D.fmt(t.fin)}`, view:'gantt', target:{ view:'gantt', tacheId:t.id } });
     });
-    s.machines.forEach(m => push({ kind:'Machine', label:m.nom, meta:`${m.type} · ${DB.lieu(m.lieuId)?.nom||''}`, view:'machines' }));
-    s.lieux.forEach(l => push({ kind:'Lieu', label:l.nom, meta:`${l.type} · ${l.etage}`, view:l.type==='production'?'lieux':'lieux' }));
+    s.machines.forEach(m => push({ kind:'Machine', label:m.nom, meta:`${m.type} · ${DB.lieu(m.lieuId)?.nom||''}`, view:'machines', target:{ view:'machines', machineId:m.id } }));
+    s.lieux.forEach(l => push({ kind:'Lieu', label:l.nom, meta:`${l.type} · ${l.etage}`, view:'lieux', target:{ view:'lieux', lieuId:l.id } }));
     return out.slice(0, limit);
   },
 
@@ -496,6 +541,28 @@ const App = {
     document.getElementById('modal-root').classList.remove('hidden');
   },
   closeModal() { document.getElementById('modal-root').classList.add('hidden'); },
+
+  // Overlay = petite popup posée au-dessus d'une modale (préserve le form derrière)
+  openOverlay(title, bodyHTML, footerHTML) {
+    this.closeOverlay();
+    const ov = document.createElement('div');
+    ov.className = 'app-overlay';
+    ov.innerHTML = `
+      <div class="app-overlay-card">
+        <header class="app-overlay-head">
+          <h3>${title}</h3>
+          <button class="modal-close" id="app-overlay-close" aria-label="Fermer">×</button>
+        </header>
+        <div class="app-overlay-body">${bodyHTML}</div>
+        <footer class="app-overlay-foot">${footerHTML||''}</footer>
+      </div>`;
+    document.body.appendChild(ov);
+    document.getElementById('app-overlay-close').onclick = () => this.closeOverlay();
+  },
+  closeOverlay() {
+    const ov = document.querySelector('.app-overlay');
+    if (ov) ov.remove();
+  },
 
   toast(msg, kind='info') {
     const root = document.getElementById('toast-root');
@@ -657,7 +724,11 @@ const App = {
         const art = DB.stock(l.articleId);
         if (art && art.quantite < l.quantite) {
           const j = D.workdaysBetween(today, t.debut);
-          alerts.push({ kind:'stock-bom', niveau:'bad', msg:`J-${j} · ${t.nom} (${prj.code}) · stock ${art.ref} insuffisant (${art.quantite}/${l.quantite})` });
+          alerts.push({
+            kind:'stock-bom', niveau:'bad',
+            msg:`J-${j} · ${t.nom} (${prj.code}) · stock ${art.ref} insuffisant (${art.quantite}/${l.quantite})`,
+            target: { view: 'bom', projetId: prj.id, articleId: art.id },
+          });
         }
       });
     });
@@ -668,7 +739,11 @@ const App = {
       const t1 = DB.tache(c.t1);
       if (t1 && t1.debut >= today && t1.debut <= horizon) {
         const m = DB.machine(c.machineId);
-        alerts.push({ kind:'machine-conflit', niveau:'warn', msg:`Conflit ${m?.nom} entre « ${DB.tache(c.t1)?.nom} » et « ${DB.tache(c.t2)?.nom} »` });
+        alerts.push({
+          kind:'machine-conflit', niveau:'warn',
+          msg:`Conflit ${m?.nom} entre « ${DB.tache(c.t1)?.nom} » et « ${DB.tache(c.t2)?.nom} »`,
+          target: { view: 'gantt', tacheId: c.t1, machineId: c.machineId },
+        });
       }
     });
 
@@ -679,7 +754,11 @@ const App = {
       const ts = s.taches.filter(t => (t.assignes||[]).includes(p.id) && t.fin >= weekStart && t.debut <= weekEnd);
       const h = ts.reduce((n,t) => n + D.workdaysBetween(t.debut > weekStart ? t.debut : weekStart, t.fin < weekEnd ? t.fin : weekEnd) * 7, 0);
       if (h > (p.capaciteHebdo||35)) {
-        alerts.push({ kind:'person-surcharge', niveau:'warn', msg:`${this.personneLabel(p)} saturé·e semaine prochaine (${h}h/${p.capaciteHebdo}h)` });
+        alerts.push({
+          kind:'person-surcharge', niveau:'warn',
+          msg:`${this.personneLabel(p)} saturé·e semaine prochaine (${h}h/${p.capaciteHebdo}h)`,
+          target: { view: 'personnes', personneId: p.id },
+        });
       }
     });
 
@@ -687,7 +766,11 @@ const App = {
     s.projets.filter(p => p.statut === 'en-cours').forEach(p => {
       const pr = this.predictProjectEnd(p.id);
       if (pr && pr.delayDays >= 3) {
-        alerts.push({ kind:'project-delay', niveau:'bad', msg:`${p.code} : retard prédit +${pr.delayDays} j (fin → ${D.fmt(pr.predEnd)})` });
+        alerts.push({
+          kind:'project-delay', niveau:'bad',
+          msg:`${p.code} : retard prédit +${pr.delayDays} j (fin → ${D.fmt(pr.predEnd)})`,
+          target: { view: 'projets', projetId: p.id },
+        });
       }
     });
 
