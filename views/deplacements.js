@@ -42,6 +42,9 @@ App.views.deplacements = {
   openForm(id) {
     const isNew = !id;
     const s = DB.state;
+    if (!id && (!s.personnes.length || s.lieux.length < 2)) {
+      App.toast('Il faut au moins une personne et deux lieux pour créer un déplacement.', 'error'); return;
+    }
     const d = id ? s.deplacements.find(x => x.id === id) : {
       id: DB.uid('DEP'), date: D.today(), personneId: s.personnes[0].id, origineId: s.lieux[0].id,
       destinationId: s.lieux[1].id, motif:'', projetId:null, duree:'1h'

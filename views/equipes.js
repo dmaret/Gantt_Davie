@@ -86,6 +86,7 @@ App.views.equipes = {
       if (!t) { preview.innerHTML = ''; okBtn.disabled = true; return; }
 
       const prop = this.proposerAffectation(equipeId, t.debut, t.fin);
+      if (!prop) { preview.innerHTML = '<p class="muted">Impossible de calculer les propositions.</p>'; okBtn.disabled = true; return; }
       let totalSelected = 0;
       const slotRows = prop.slots.map(sl => {
         const rows = sl.selected.map(c => {
@@ -104,7 +105,7 @@ App.views.equipes = {
         </div>`;
       }).join('');
 
-      const alreadyAssigned = (t.assignes||[]).map(id => App.personneLabel(DB.personne(id))).filter(Boolean);
+      const alreadyAssigned = (t.assignes||[]).map(id => DB.personne(id)).filter(Boolean).map(p => App.personneLabel(p));
       preview.innerHTML = `
         <div style="background:var(--surface-2);border-radius:8px;padding:12px;margin-top:10px">
           <div class="muted small" style="margin-bottom:8px">📅 ${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${t.avancement||0}% avancement
