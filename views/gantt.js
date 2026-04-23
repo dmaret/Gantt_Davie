@@ -450,6 +450,8 @@ App.views.gantt = {
           const extra = nCasc ? ` · ${nCasc} tâche(s) dépendante(s) décalée(s)` : '';
           App.toast(`Tâche déplacée de ${deltaDays > 0 ? '+' : ''}${deltaDays} j ouvrés${extra}`, 'success');
           this.draw();
+        } else {
+          el.style.left = origLeft + 'px'; // remet la barre à sa position si aucun snap
         }
       };
       document.addEventListener('mousemove', move);
