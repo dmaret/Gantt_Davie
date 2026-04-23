@@ -15,7 +15,7 @@ App.views.ressources = {
         <div class="etage-pills" title="Nombre de semaines affichées">
           ${weeksOpts.map(w => `<button class="pill ${this.state.weeks===w?'on':''}" data-weeks="${w}">${w} sem.</button>`).join('')}
         </div>
-        <span class="muted small">🟢 dispo · 🟠 occupé·e · grise = off · violet = absent</span>
+        <span class="muted small">🟢 dispo · 🟠 occupé·e · hachuré = off · grisé = week-end · violet = absent</span>
       </div>
       <div class="card"><div id="r-grid" class="r-scroll"></div></div>
     `;
@@ -90,27 +90,30 @@ App.views.ressources = {
 
     const rows = list.map(p => {
       const h = p.horaires || defaultHoraires();
-      let dispoCount = 0;
+      let dispoCount = 0, totalDJ = 0;
       const cells = days.map((d, i) => {
         const dow = JOURS_SEMAINE[(D.parse(d).getUTCDay()+6)%7];
+        const isWeekEnd = i % 7 >= 5;
         const matinOn = !!h[dow]?.matin;
         const apremOn = !!h[dow]?.aprem;
         const absent = DB.personneAbsenteLe(p.id, d);
         const absInfo = absent ? (p.absences||[]).find(a => a.debut <= d && a.fin >= d) : null;
         const occupé = !absent && this.occupéCeJour(p, d);
+        if (matinOn) totalDJ++;
+        if (apremOn) totalDJ++;
         if (matinOn && !absent) dispoCount++;
         if (apremOn && !absent) dispoCount++;
         const state = (on) => !on ? 'off' : (absent ? 'absent' : (occupé ? 'busy' : 'free'));
         const isFirstOfWeek = (i % 7) === 0 && i > 0;
+        const weCls = isWeekEnd ? ' r-weekend' : '';
         const mkCell = (on, label, extra) => {
-          const stCls = state(on);
-          const tt = `${p.prenom} ${p.nom} — ${D.fmt(d)} ${label} : ${!on?'off':absent?'absent ('+absInfo.motif+')':occupé?'occupé·e':'dispo'}`;
-          return `<td class="r-cell r-${stCls}${extra||''}" title="${tt}"></td>`;
+          const stCls = isWeekEnd ? 'weekend' : state(on);
+          const tt = isWeekEnd ? '' : `${p.prenom} ${p.nom} — ${D.fmt(d)} ${label} : ${!on?'off':absent?'absent ('+absInfo.motif+')':occupé?'occupé·e':'dispo'}`;
+          return `<td class="r-cell r-${stCls}${weCls}${extra||''}" title="${tt}"></td>`;
         };
         return mkCell(matinOn,'matin', isFirstOfWeek ? ' week-start' : '') + mkCell(apremOn,'après-midi', '');
       }).join('');
       const lieu = DB.lieu(p.lieuPrincipalId);
-      const totalDJ = weeks * 14;
       return `<tr>
         <td><strong>${App.personneLabel(p)}</strong><div class="muted small">${lieu?lieu.nom:'—'}</div></td>
         <td>${p.role}<div>${(p.competences||[]).map(c=>`<span class="chip small">${c}</span>`).join('')}</div></td>

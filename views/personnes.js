@@ -8,6 +8,8 @@ App.views.personnes = {
         <select id="p-role"><option value="">Tous rôles</option>${[...new Set(s.personnes.map(p=>p.role))].map(r=>`<option>${r}</option>`).join('')}</select>
         <select id="p-lieu"><option value="">Tous lieux</option>${s.lieux.filter(l=>l.type==='production').map(l=>`<option value="${l.id}">${l.nom}</option>`).join('')}</select>
         <span class="spacer"></span>
+        <input type="file" id="p-import-file" accept=".csv,.json" hidden>
+        <button class="btn-ghost" id="p-import" data-perm="edit" title="Importer des personnes depuis un fichier CSV ou JSON">⬆ Importer</button>
         <button class="btn-ghost" id="p-export" title="Exporter le planning hebdomadaire en CSV (ouvrable dans Excel)">⬇ Planning CSV</button>
         <button class="btn" id="p-add">+ Ajouter une personne</button>
       </div>
@@ -18,6 +20,11 @@ App.views.personnes = {
     document.getElementById('p-lieu').onchange = e => { this.state.lieuFilter = e.target.value; this.draw(); };
     document.getElementById('p-add').onclick = () => this.openForm(null);
     document.getElementById('p-export').onclick = () => this.exportPlanningCSV();
+    document.getElementById('p-import').onclick = () => document.getElementById('p-import-file').click();
+    document.getElementById('p-import-file').onchange = e => {
+      this.importPersonnesFile(e.target.files[0]);
+      e.target.value = '';
+    };
     this.draw();
   },
   draw() {
@@ -49,7 +56,12 @@ App.views.personnes = {
       const tsNow = ts.filter(t => t.fin >= today && t.debut <= D.addWorkdays(today, 4));
       const cells = perWeek.map(w => {
         const cls = w.pct > 95 ? 'bad' : w.pct > 80 ? 'warn' : '';
-        return `<div class="bar-inline ${cls}" title="${w.h}h"><div class="fill" style="width:${w.pct}%"></div></div>`;
+        const jours = w.h / 7;
+        const jLbl = jours > 0 ? (Number.isInteger(jours) ? jours + 'j' : jours.toFixed(1) + 'j') : '—';
+        return '<div style="text-align:center">'
+          + `<div class="bar-inline ${cls}" style="width:28px" title="${w.h}h · ${jLbl} ouvrés"><div class="fill" style="width:${w.pct}%"></div></div>`
+          + `<div style="font-size:9px;color:var(--text-muted);margin-top:1px;line-height:1">${jLbl}</div>`
+          + '</div>';
       }).join('');
       const avgCls = avgPct > 95 ? 'bad' : avgPct > 80 ? 'warn' : '';
       const h = p.horaires || defaultHoraires();
@@ -235,6 +247,134 @@ App.views.personnes = {
         DB.save(); App.closeModal(); App.toast('Supprimée','info'); App.refresh();
       };
     }
+  },
+
+  // Import CSV/JSON de personnes
+  importPersonnesFile(file) {
+    if (!file) return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const rows = ext === 'json' ? JSON.parse(r.result) : this.parsePersonnesCSV(r.result);
+        this.previewImport(rows);
+      } catch (e) { App.toast('Fichier invalide : ' + e.message, 'error'); }
+    };
+    r.readAsText(file);
+  },
+
+  parsePersonnesCSV(text) {
+    text = text.replace(/^﻿/, ''); // retirer le BOM UTF-8
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return [];
+    const sep = lines[0].includes(';') ? ';' : ',';
+    const headers = lines[0].split(sep).map(h => h.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''));
+    const get = (cols, variants) => {
+      for (const v of variants) {
+        const idx = headers.indexOf(v);
+        if (idx >= 0) return (cols[idx] || '').trim();
+      }
+      return '';
+    };
+    return lines.slice(1).map(line => {
+      const cols = line.split(sep);
+      const prenom = get(cols, ['prenom','firstname','first name','first_name','prénom']);
+      const nom    = get(cols, ['nom','name','lastname','last name','last_name','surname']);
+      const role   = get(cols, ['role','rôle','poste','fonction','position']);
+      const lieu   = get(cols, ['lieu','lieu principal','atelier','lieuprincipald','workshop']);
+      const compsRaw = get(cols, ['competences','compétences','skills','competence']);
+      const capa   = parseInt(get(cols, ['capacite hebdo','capacité hebdo','capacite','heures semaine','h semaine','heures/semaine'])) || 35;
+      if (!prenom || !nom) return null;
+      return {
+        prenom, nom,
+        role: role || 'Opérateur·rice',
+        lieu,
+        competences: compsRaw ? compsRaw.split(/[/,|]/).map(c=>c.trim()).filter(Boolean) : [],
+        capaciteHebdo: capa,
+      };
+    }).filter(Boolean);
+  },
+
+  previewImport(rows) {
+    if (!rows || !rows.length) { App.toast('Aucune personne à importer', 'warn'); return; }
+    const s = DB.state;
+    const existing = new Map(s.personnes.map(p => [(p.prenom+' '+p.nom).toLowerCase(), p]));
+    const toCreate = [], toUpdate = [];
+    rows.forEach(r => {
+      const key = (r.prenom + ' ' + r.nom).toLowerCase();
+      existing.has(key) ? toUpdate.push({ ex: existing.get(key), data: r }) : toCreate.push(r);
+    });
+    const findLieu = name => s.lieux.find(l => l.type==='production' && l.nom.toLowerCase().includes((name||'').toLowerCase()));
+    const firstProd = s.lieux.find(l => l.type==='production');
+
+    const mkRow = (action, badge, r) => {
+      const lieu = findLieu(r.lieu);
+      const lieuCell = lieu ? lieu.nom : (r.lieu ? `<span class="badge warn">${r.lieu} — non trouvé</span>` : '—');
+      return `<tr><td>${badge}</td><td>${r.prenom}</td><td>${r.nom}</td><td>${r.role}</td><td>${lieuCell}</td><td class="small">${r.competences.join(', ')||'—'}</td><td>${r.capaciteHebdo}h</td></tr>`;
+    };
+    const body = `
+      <p class="muted small" style="margin-bottom:8px">
+        ${rows.length} ligne(s) · <span class="badge good">${toCreate.length} à créer</span> <span class="badge warn">${toUpdate.length} à mettre à jour</span>
+      </p>
+      <div style="overflow:auto;max-height:55vh">
+        <table class="data">
+          <thead><tr><th>Action</th><th>Prénom</th><th>Nom</th><th>Rôle</th><th>Lieu</th><th>Compétences</th><th>Capa.</th></tr></thead>
+          <tbody>
+            ${toCreate.map(r => mkRow('create', '<span class="badge good">+ créer</span>', r)).join('')}
+            ${toUpdate.map(({data:r}) => mkRow('update', '<span class="badge warn">↻ màj</span>', r)).join('')}
+          </tbody>
+        </table>
+      </div>
+      <p class="muted small" style="margin-top:8px">Màj = met à jour rôle, lieu, compétences et capacité (même prénom + nom). Les tâches et horaires existants sont conservés.</p>
+    `;
+    const foot = `
+      <button class="btn-ghost" id="pi-tpl" title="Télécharger un modèle CSV">⬇ Modèle CSV</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>
+      <button class="btn" id="pi-ok">Importer (${rows.length})</button>
+    `;
+    App.openModal('Aperçu import — Personnes', body, foot);
+    document.getElementById('pi-tpl').onclick = () => this.downloadPersonnesTemplate();
+    document.getElementById('pi-ok').onclick = () => {
+      let created = 0, updated = 0;
+      toCreate.forEach(r => {
+        const lieu = findLieu(r.lieu) || firstProd;
+        const p = {
+          id: DB.uid('P'), prenom: r.prenom, nom: r.nom, role: r.role,
+          lieuPrincipalId: lieu?.id || null,
+          competences: r.competences, capaciteHebdo: r.capaciteHebdo,
+          couleur: '#' + ((Math.random()*0xffffff)|0).toString(16).padStart(6,'0'),
+          horaires: defaultHoraires(), absences: [],
+        };
+        s.personnes.push(p);
+        DB.logAudit('create','personne',p.id,p.prenom+' '+p.nom+' (import)');
+        created++;
+      });
+      toUpdate.forEach(({ex, data:r}) => {
+        const lieu = findLieu(r.lieu);
+        ex.role = r.role || ex.role;
+        if (lieu) ex.lieuPrincipalId = lieu.id;
+        if (r.competences.length) ex.competences = r.competences;
+        if (r.capaciteHebdo) ex.capaciteHebdo = r.capaciteHebdo;
+        DB.logAudit('update','personne',ex.id,ex.prenom+' '+ex.nom+' (import)');
+        updated++;
+      });
+      DB.save(); App.closeModal();
+      App.toast(`Import : ${created} créée(s), ${updated} mise(s) à jour`, 'success');
+      App.refresh();
+    };
+  },
+
+  downloadPersonnesTemplate() {
+    const rows = [
+      ['Prénom','Nom','Rôle','Lieu principal','Compétences (séparées par /)','Capacité hebdo (h)'],
+      ['Marie','Martin','Chef·fe de projet','Atelier 2A','CNC/Élec','35'],
+      ['Pierre','Bernard','Technicien·ne','Atelier 2B','Soudure/Montage','35'],
+      ['Sophie','Dubois','Opérateur·rice','Atelier 1A','Laser/Contrôle/CAO','28'],
+      ['Luc','Durand','Soudeur·se','Atelier 1B','Soudure','35'],
+    ];
+    CSV.download('modele-import-personnes.csv', rows);
+    App.toast('Modèle CSV téléchargé', 'info');
   },
 
   // Export CSV planning hebdomadaire (ouvrable dans Excel)

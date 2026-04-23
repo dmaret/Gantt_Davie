@@ -2,6 +2,7 @@
 const App = {
   view: 'dashboard',
   views: {},  // injectées par chaque views/*.js : { render(root) }
+  _navHistory: [],  // historique des vues pour le bouton retour
 
   init() {
     DB.load();
@@ -272,6 +273,11 @@ const App = {
         } else if (target.view === 'personnes' && target.personneId && this.views.personnes?.openForm) {
           this.views.personnes.openForm(target.personneId);
         } else if (target.view === 'gantt' && target.tacheId && this.views.gantt?.openTacheForm) {
+          const t = DB.tache(target.tacheId);
+          if (t && this.views.gantt.state) {
+            this.views.gantt.state.rangeStart = D.addDays(t.debut, -3);
+            this.views.gantt.draw && this.views.gantt.draw();
+          }
           this.views.gantt.openTacheForm(target.tacheId);
         } else if (target.view === 'stock' && target.articleId && this.views.stock?.openForm) {
           this.views.stock.openForm(target.articleId);
@@ -292,6 +298,7 @@ const App = {
     document.querySelectorAll('.nav-btn').forEach(btn => {
       btn.addEventListener('click', () => this.navigate(btn.dataset.view));
     });
+    document.getElementById('btn-back').addEventListener('click', () => this.navigateBack());
     document.getElementById('btn-theme').addEventListener('click', () => {
       const next = document.body.classList.contains('dark') ? 'light' : 'dark';
       this.applyTheme(next);
@@ -334,6 +341,10 @@ const App = {
   },
 
   handleKey(e) {
+    // Retour (Alt+←)
+    if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'ArrowLeft') {
+      e.preventDefault(); this.navigateBack(); return;
+    }
     // Recherche globale (Ctrl+K / Cmd+K) — fonctionne même depuis un input
     if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
       e.preventDefault(); this.showGlobalSearch(); return;
@@ -495,7 +506,7 @@ const App = {
       <p><kbd>V</kbd> Déplacements · <kbd>O</kbd> Commandes · <kbd>B</kbd> BOM · <kbd>X</kbd> Capacité · <kbd>W</kbd> What-if</p>
       <p><kbd>R</kbd> Ressources · <kbd>E</kbd> Équipes · <kbd>A</kbd> Plan atelier</p>
       <p><kbd>Ctrl</kbd>+<kbd>K</kbd> Recherche globale · <kbd>/</kbd> Recherche vue · <kbd>N</kbd> Nouveau · <kbd>?</kbd> Aide</p>
-      <p><kbd>Ctrl</kbd>+<kbd>Z</kbd> Annuler · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> Refaire · <kbd>Esc</kbd> Fermer</p>
+      <p><kbd>Ctrl</kbd>+<kbd>Z</kbd> Annuler · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> Refaire · <kbd>Alt</kbd>+<kbd>←</kbd> Vue précédente · <kbd>Esc</kbd> Fermer</p>
       <p class="muted small">Clic-droit sur une barre Gantt pour un menu d'actions rapides.</p>
       <p style="text-align:right;margin:14px 0 0 0"><button class="btn" id="help-close">OK</button></p>
     </div>`;
@@ -510,12 +521,32 @@ const App = {
     localStorage.setItem('theme', theme);
   },
 
-  navigate(name) {
+  navigate(name, { addToHistory = true } = {}) {
     if (!this.views[name]) { console.warn('vue inconnue', name); name = 'dashboard'; }
+    if (addToHistory && this.view && this.view !== name) {
+      this._navHistory.push(this.view);
+      if (this._navHistory.length > 30) this._navHistory.shift();
+    }
     this.view = name;
     location.hash = name;
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+    this.updateBackBtn();
     this.refresh();
+  },
+
+  navigateBack() {
+    if (!this._navHistory.length) return;
+    const prev = this._navHistory.pop();
+    this.view = prev;
+    location.hash = prev;
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === prev));
+    this.updateBackBtn();
+    this.refresh();
+  },
+
+  updateBackBtn() {
+    const btn = document.getElementById('btn-back');
+    if (btn) btn.hidden = this._navHistory.length === 0;
   },
 
   refresh() {
