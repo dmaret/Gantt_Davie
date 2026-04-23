@@ -67,17 +67,21 @@ App.views.capacite = {
 
     // Filter dims avec au moins une tâche pour lisibilité
     const active = dims.filter(d => weeks.some(w => charge(d.id, w) > 0));
-    const cols = `250px repeat(${weeks.length}, minmax(50px, 1fr))`;
-    const head = `<div class="h-label" style="background:transparent">${st.dim}</div>` + weeks.map(w => `<div class="h-head">${w.label}</div>`).join('');
+    const capaUnit = st.dim === 'lieu' ? 'j' : 'h';
+    const cols = `250px 72px repeat(${weeks.length}, minmax(50px, 1fr))`;
+    const head = `<div class="h-label" style="background:transparent">${st.dim}</div>`
+      + `<div class="h-head">Cap./sem.</div>`
+      + weeks.map(w => `<div class="h-head">${w.label}</div>`).join('');
     const rows = active.map(d => {
+      const weekCapa = d.capa * 5;
+      const capaDisplay = weekCapa % 1 === 0 ? weekCapa : weekCapa.toFixed(1);
       const cells = weeks.map(w => {
         const load = charge(d.id, w);
         const lvl = level(load, d.capa);
-        const weekCapa = d.capa * 5;
         const pct = weekCapa ? Math.round(load / weekCapa * 100) : 0;
-        return `<div class="h-cell" data-lvl="${lvl}" title="${load} j-h / ${weekCapa} (${pct}%)">${pct}%</div>`;
+        return `<div class="h-cell" data-lvl="${lvl}" title="${load}${capaUnit} chargé · capacité ${weekCapa}${capaUnit}/sem. (${pct}%)">${pct}%</div>`;
       }).join('');
-      return `<div class="h-label">${d.label}</div>${cells}`;
+      return `<div class="h-label">${d.label}</div><div class="h-capa">${capaDisplay}${capaUnit}</div>${cells}`;
     }).join('');
     document.getElementById('cap-grid').innerHTML = `
       <div class="heatmap-grid" style="grid-template-columns:${cols}">
