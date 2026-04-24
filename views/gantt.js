@@ -10,6 +10,7 @@ App.views.gantt = {
     showCritical: true,
     autoCascade: true,
     selectedIds: new Set(),
+    baselineId: null,
   },
   newItem() { this.openTacheForm(null); },
 
@@ -140,6 +141,68 @@ App.views.gantt = {
     App.toast(`${events.length} événement(s) exporté(s) en .ics`, 'success');
   },
 
+  saveBaseline() {
+    if (!App.can('edit')) { App.toast('Lecture seule','error'); return; }
+    const label = prompt('Nom de cette baseline :', 'Baseline ' + D.fmt(D.today()));
+    if (!label) return;
+    if (!DB.state.baselines) DB.state.baselines = [];
+    const snap = DB.state.taches.map(t => ({id:t.id, nom:t.nom, debut:t.debut, fin:t.fin, projetId:t.projetId, avancement:t.avancement}));
+    const bl = { id: DB.uid('BL'), date: D.today(), label, snap };
+    DB.state.baselines.push(bl);
+    DB.save();
+    this.state.baselineId = bl.id;
+    App.toast('Baseline « '+label+' » sauvegardée · activée','success');
+    this.render(document.getElementById('view-root'));
+  },
+
+  showRapportHebdo() {
+    const s = DB.state;
+    const today = D.today();
+    const dt = D.parse(today);
+    const dow = dt.getUTCDay() || 7;
+    const monday = D.addDays(today, 1 - dow);
+    const friday = D.addDays(monday, 4);
+    const body = `
+      <div class="row" style="gap:12px;align-items:flex-end;flex-wrap:wrap">
+        <div class="field" style="flex:0"><label>Du</label><input type="date" id="rp-from" value="${monday}"></div>
+        <div class="field" style="flex:0"><label>Au</label><input type="date" id="rp-to" value="${friday}"></div>
+        <button class="btn btn-secondary" id="rp-gen">Générer</button>
+      </div>
+      <div id="rp-content" style="margin-top:12px"></div>`;
+    App.openModal('📋 Rapport hebdomadaire', body, `<button class="btn btn-secondary" onclick="App.closeModal()">Fermer</button><button class="btn" id="rp-print">🖨 Imprimer</button>`);
+    const gen = () => {
+      const from = document.getElementById('rp-from').value;
+      const to   = document.getElementById('rp-to').value;
+      if (!from || !to) return;
+      const fromDt = D.parse(from);
+      const thu = new Date(Date.UTC(fromDt.getUTCFullYear(), fromDt.getUTCMonth(), fromDt.getUTCDate() + 4 - (fromDt.getUTCDay()||7)));
+      const wn = Math.ceil(((thu - new Date(Date.UTC(thu.getUTCFullYear(),0,1)))/864e5+1)/7);
+      const taches = s.taches.filter(t => !t.jalon && t.debut <= to && t.fin >= from);
+      const lieux = s.lieux.filter(l => l.type === 'production');
+      const absents = s.personnes.filter(p => (p.absences||[]).some(a => a.debut<=to && a.fin>=from));
+      let html = `<h3 style="margin:0 0 4px">Semaine ${wn} · ${D.fmt(from)} – ${D.fmt(to)}</h3><p class="muted small" style="margin:0 0 14px">Généré le ${D.fmt(today)} · ${taches.length} tâche(s)</p>`;
+      lieux.forEach(l => {
+        const lt = taches.filter(t => t.lieuId === l.id).sort((a,b)=>a.debut.localeCompare(b.debut));
+        if (!lt.length) return;
+        html += `<div style="margin-bottom:14px"><h4 style="margin:0 0 5px;padding:3px 8px;background:var(--surface-2);border-radius:4px">📍 ${l.nom}</h4><table class="data"><thead><tr><th>Tâche</th><th>Projet</th><th>Début</th><th>Fin</th><th>Assignés</th><th>Av.</th></tr></thead><tbody>
+          ${lt.map(t => { const prj=DB.projet(t.projetId); const pers=(t.assignes||[]).map(pid=>DB.personne(pid)).filter(Boolean).map(p=>App.personneLabel(p)).join(', ')||'—'; const av=t.avancement||0; return `<tr><td>${t.nom}${av===100?' ✓':''}</td><td><span class="badge" style="background:${prj?.couleur||'#888'}22;color:${prj?.couleur||'#888'}">${prj?.code||'?'}</span></td><td class="nowrap">${D.fmt(t.debut)}</td><td class="nowrap">${D.fmt(t.fin)}</td><td>${pers}</td><td><div class="bar-inline${av>=100?' good':av>=50?'':' warn'}" style="width:50px"><div class="fill" style="width:${av}%"></div></div> ${av}%</td></tr>`; }).join('')}
+          </tbody></table></div>`;
+      });
+      const autres = taches.filter(t => !lieux.find(l=>l.id===t.lieuId)).sort((a,b)=>a.debut.localeCompare(b.debut));
+      if (autres.length) html += `<div style="margin-bottom:14px"><h4 style="margin:0 0 5px;padding:3px 8px;background:var(--surface-2);border-radius:4px">📋 Autres tâches</h4><ul class="list">${autres.map(t=>{const prj=DB.projet(t.projetId);const pers=(t.assignes||[]).map(pid=>DB.personne(pid)).filter(Boolean).map(p=>App.personneLabel(p)).join(', ');return `<li><span class="badge" style="background:${prj?.couleur||'#888'}22;color:${prj?.couleur||'#888'}">${prj?.code||'?'}</span> <strong>${t.nom}</strong><span class="muted small"> · ${pers||'—'} · ${D.fmt(t.debut)}→${D.fmt(t.fin)} · ${t.avancement||0}%</span></li>`;}).join('')}</ul></div>`;
+      if (absents.length) html += `<div><h4 style="margin:0 0 5px;padding:3px 8px;background:#fff3cd;border-radius:4px">🏖 Absences</h4><ul class="list">${absents.map(p=>{return (p.absences||[]).filter(a=>a.debut<=to&&a.fin>=from).map(a=>`<li><strong>${App.personneLabel(p)}</strong><span class="muted small"> · ${a.motif||'Absence'} · ${D.fmt(a.debut)}→${D.fmt(a.fin)}</span></li>`).join('');}).join('')}</ul></div>`;
+      if (!taches.length && !absents.length) html += '<p class="muted">Aucune tâche ni absence sur cette période.</p>';
+      document.getElementById('rp-content').innerHTML = html;
+    };
+    document.getElementById('rp-gen').onclick = gen;
+    document.getElementById('rp-print').onclick = () => {
+      const w = window.open('', '_blank');
+      w.document.write(`<html><head><title>Rapport hebdomadaire</title><style>body{font-family:system-ui,sans-serif;margin:20px;font-size:12px}h3{font-size:15px;margin:0 0 4px}h4{font-size:13px;margin:0 0 5px;padding:3px 8px;background:#f0f0f0;border-radius:4px}table{width:100%;border-collapse:collapse;margin-bottom:12px}th,td{padding:4px 8px;border:1px solid #ddd;text-align:left;font-size:11px}th{background:#f5f5f5}ul{margin:0;padding:0;list-style:none}li{padding:3px 0;border-bottom:1px solid #eee}@media print{@page{size:A4 landscape;margin:10mm}}</style></head><body>${document.getElementById('rp-content').innerHTML}</body></html>`);
+      w.document.close(); w.print();
+    };
+    gen();
+  },
+
   criticalTasks(projetId) {
     const tasks = DB.state.taches.filter(t => t.projetId === projetId);
     const byId = Object.fromEntries(tasks.map(t => [t.id, t]));
@@ -226,6 +289,9 @@ App.views.gantt = {
           <button class="btn-ghost" id="g-import" data-perm="edit">⬆ Importer</button>
           <button class="btn-ghost" id="g-csv">⤓ Exporter CSV</button>
           <button class="btn-ghost" id="g-ics" title="Exporter vers Outlook / Google Agenda / Apple Calendar">📅 Export .ics</button>
+          <button class="btn-ghost" id="g-rapport" title="Rapport hebdomadaire imprimable par lieu">📋 Rapport</button>
+          <button class="btn-ghost" id="g-baseline" data-perm="edit" title="Sauvegarder l'état actuel du planning comme référence (baseline)">📸 Baseline</button>
+          <select id="g-bl-sel" title="Comparer avec une baseline sauvegardée"><option value="">— Comparer —</option></select>
           <button class="btn" id="g-add">+ Nouvelle tâche</button>
         </div>
         <div class="gantt-scroll"><div id="g-table"></div></div>
@@ -280,6 +346,11 @@ App.views.gantt = {
       App.toast('Export CSV téléchargé','success');
     };
     document.getElementById('g-ics').onclick = () => this.exportICS();
+    document.getElementById('g-rapport').onclick = () => this.showRapportHebdo();
+    document.getElementById('g-baseline').onclick = () => this.saveBaseline();
+    const blSel = document.getElementById('g-bl-sel');
+    (DB.state.baselines||[]).forEach(b => { const o = document.createElement('option'); o.value = b.id; o.textContent = `📸 ${b.label}`; if (b.id === st.baselineId) o.selected = true; blSel.appendChild(o); });
+    blSel.onchange = e => { st.baselineId = e.target.value || null; this.draw(); };
 
     this.draw();
   },
@@ -374,6 +445,20 @@ App.views.gantt = {
         const color = prj ? prj.couleur : '#888';
         const label = t.jalon ? '' : (t.nom + ' · ' + Math.round(t.avancement||0) + '%');
         barPos[t.id] = { left, right: left + width, top: top + 11, mid: top + 11 };
+        // Ghost bar baseline
+        if (st.baselineId && !t.jalon) {
+          const bl = (DB.state.baselines||[]).find(b => b.id === st.baselineId);
+          const snap = bl?.snap?.find(s => s.id === t.id);
+          if (snap) {
+            const snOff = Math.max(0, D.diffDays(start, snap.debut));
+            const snEnd = Math.min(days-1, D.diffDays(start, snap.fin));
+            if (snEnd >= 0 && snOff <= days-1) {
+              const snL = LABEL_W + snOff * CELL_W + 2;
+              const snW = Math.max(CELL_W-4, (snEnd-snOff+1)*CELL_W-4);
+              bars.push(`<div class="gantt-bar-ghost" style="left:${snL}px;width:${snW}px;top:${top+2}px;height:18px;background:${color}" title="Baseline : ${D.fmt(snap.debut)} → ${D.fmt(snap.fin)}"></div>`);
+            }
+          }
+        }
 
         const overdue = !t.jalon && t.fin < D.today() && (t.avancement||0) < 100;
         const cls = (isConflict?'conflict ':'') + (crit?'critical ':'') + (overdue?'overdue ':'');
@@ -385,7 +470,9 @@ App.views.gantt = {
           const nComments = (t.commentaires||[]).length;
           const badge = nComments ? `<span class="gantt-bar-comment" title="${nComments} commentaire(s)">💬</span>` : '';
           const overdueBadge = overdue ? '<span class="gantt-bar-overdue" title="En retard !">⚠</span>' : '';
-          bars.push(`<div class="gantt-bar ${cls}" style="left:${left}px;width:${width}px;top:${top}px;height:22px;background:${color}" data-tid="${t.id}" title="${t.nom} — ${D.fmt(t.debut)} → ${D.fmt(t.fin)}${crit?' [critique]':''}${overdue?' ⚠ En retard':''}${nComments?' · '+nComments+' commentaire(s)':''}"><div class="gantt-bar-progress" style="width:${progressW}px"></div>${overdueBadge}<span class="gantt-bar-label">${label}</span>${badge}</div>`);
+          const clTotal = (t.checklist||[]).length, clDone = (t.checklist||[]).filter(i=>i.done).length;
+          const clBadge = clTotal ? `<span class="gantt-bar-cl" title="${clDone}/${clTotal} sous-tâche(s)">${clDone===clTotal?'☑':'☐'}${clDone}/${clTotal}</span>` : '';
+          bars.push(`<div class="gantt-bar ${cls}" style="left:${left}px;width:${width}px;top:${top}px;height:22px;background:${color}" data-tid="${t.id}" title="${t.nom} — ${D.fmt(t.debut)} → ${D.fmt(t.fin)}${crit?' [critique]':''}${overdue?' ⚠ En retard':''}${nComments?' · '+nComments+' commentaire(s)':''}"><div class="gantt-bar-progress" style="width:${progressW}px"></div>${overdueBadge}<span class="gantt-bar-label">${label}</span>${clBadge}${badge}</div>`);
           if (App.can('edit')) {
             bars.push(`<div class="gantt-resize-handle" data-tid="${t.id}" style="left:${left+width-5}px;top:${top}px;height:22px" title="Glisser pour modifier la durée"></div>`);
           }
@@ -856,6 +943,15 @@ App.views.gantt = {
       <div class="field"><label>📝 Notes / consignes</label>
         <textarea id="f-notes" rows="3" placeholder="Instructions d'exécution, références, points d'attention…">${t.notes||''}</textarea>
       </div>
+      <div class="field"><label>✅ Sous-tâches <span class="muted small" id="f-cl-count">${(t.checklist||[]).length ? (t.checklist||[]).filter(i=>i.done).length+'/'+(t.checklist||[]).length : ''}</span></label>
+        <div id="f-cl-list" class="cl-list">
+          ${(t.checklist||[]).length ? (t.checklist||[]).map(item => `<div class="cl-item"><label class="cl-row${item.done?' cl-done':''}"><input type="checkbox" class="cl-cb" data-id="${item.id}" ${item.done?'checked':''}><span class="cl-text">${item.texte.replace(/</g,'&lt;')}</span></label><button class="btn-ghost cl-del" data-id="${item.id}" style="padding:0 6px;flex-shrink:0">×</button></div>`).join('') : '<p class="muted small" style="margin:4px 0">Aucune sous-tâche. Ajoute des étapes à cocher ci-dessous.</p>'}
+        </div>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <input id="f-cl-new" type="text" placeholder="Nouvelle sous-tâche (Entrée pour ajouter)…" style="flex:1">
+          <button class="btn btn-secondary" id="f-cl-add" style="padding:4px 10px;flex-shrink:0">+</button>
+        </div>
+      </div>
       <div class="field"><label>💬 Commentaires (${(t.commentaires||[]).length})</label>
         <div id="f-comments-list" class="comments-list">
           ${(t.commentaires||[]).length ? (t.commentaires||[]).slice().reverse().map(c => `
@@ -897,6 +993,23 @@ App.views.gantt = {
     const updateDur = () => { const el = document.getElementById('f-dur'); if (el) el.textContent = Math.max(0, D.workdaysBetween(document.getElementById('f-debut').value, document.getElementById('f-fin').value)) + ' j.o.'; };
     ['f-debut','f-fin'].forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('change', updateDur); });
     const avEl = document.getElementById('f-avancement'); if (avEl) avEl.oninput = e => { const d = document.getElementById('f-av-val'); if (d) d.textContent = e.target.value + '%'; };
+    // Checklist sous-tâches
+    const localCL = JSON.parse(JSON.stringify(t.checklist || []));
+    const refreshCL = () => {
+      const total = localCL.length, done = localCL.filter(i=>i.done).length;
+      const cnt = document.getElementById('f-cl-count'); if (cnt) cnt.textContent = total ? `${done}/${total}` : '';
+      if (total) { const pct = Math.round(done/total*100); const sl = document.getElementById('f-avancement'), vl = document.getElementById('f-av-val'); if (sl) sl.value = pct; if (vl) vl.textContent = pct + '%'; }
+      const listEl = document.getElementById('f-cl-list'); if (!listEl) return;
+      listEl.innerHTML = localCL.length
+        ? localCL.map(item => `<div class="cl-item"><label class="cl-row${item.done?' cl-done':''}"><input type="checkbox" class="cl-cb" data-id="${item.id}" ${item.done?'checked':''}><span class="cl-text">${item.texte.replace(/</g,'&lt;')}</span></label><button class="btn-ghost cl-del" data-id="${item.id}" style="padding:0 6px;flex-shrink:0">×</button></div>`).join('')
+        : '<p class="muted small" style="margin:4px 0">Aucune sous-tâche.</p>';
+      listEl.querySelectorAll('.cl-cb').forEach(cb => cb.onchange = () => { const i = localCL.find(x=>x.id===cb.dataset.id); if (i) i.done = cb.checked; refreshCL(); });
+      listEl.querySelectorAll('.cl-del').forEach(btn => btn.onclick = () => { const idx = localCL.findIndex(x=>x.id===btn.dataset.id); if (idx>=0) localCL.splice(idx,1); refreshCL(); });
+    };
+    const addCLItem = () => { const inp = document.getElementById('f-cl-new'); if (!inp) return; const txt = inp.value.trim(); if (!txt) return; localCL.push({id:DB.uid('CL'),texte:txt,done:false}); inp.value=''; refreshCL(); };
+    const clAddBtn = document.getElementById('f-cl-add'); if (clAddBtn) clAddBtn.onclick = addCLItem;
+    const clNewInp = document.getElementById('f-cl-new'); if (clNewInp) clNewInp.onkeydown = e => { if (e.key==='Enter') { e.preventDefault(); addCLItem(); } };
+    refreshCL();
     const assignesWrap = document.getElementById('f-assignes-wrap');
     if (assignesWrap) assignesWrap.addEventListener('change', e => {
       if (e.target.classList.contains('assignes-cb')) e.target.closest('.assignes-row').classList.toggle('is-checked', e.target.checked);
@@ -1047,6 +1160,7 @@ App.views.gantt = {
       t.jalon = document.getElementById('f-jalon').checked;
       t.dependances = Array.from(document.getElementById('f-deps').selectedOptions).map(o => o.value);
       t.notes = document.getElementById('f-notes').value;
+      t.checklist = localCL;
       if (!t.nom) { App.toast('Nom requis','error'); return; }
       if (isNew) { DB.state.taches.push(t); DB.logAudit('create','tache',t.id,t.nom); }
       else DB.logAudit('update','tache',t.id,t.nom);

@@ -779,6 +779,17 @@ body.tablette table.data { font-size: 16px; }
   .actions #btn-export, .actions #btn-import, .actions #btn-reset, .actions #btn-tablette { display: none; }
 }
 
+/* Checklist sous-tâches */
+.cl-list { max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; margin-bottom: 4px; background: var(--surface-2); }
+.cl-item { display: flex; align-items: center; gap: 4px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+.cl-item:last-child { border-bottom: none; }
+.cl-row { display: flex; align-items: center; gap: 6px; flex: 1; cursor: pointer; font-size: 13px; }
+.cl-row.cl-done .cl-text { text-decoration: line-through; color: var(--text-muted); }
+.gantt-bar-cl { position: absolute; right: 18px; top: 1px; font-size: 10px; line-height: 1; pointer-events: none; filter: drop-shadow(0 0 1px rgba(255,255,255,.8)); }
+
+/* Ghost bars baseline */
+.gantt-bar-ghost { position: absolute; border-radius: 3px; opacity: 0.28; border: 2px dashed rgba(0,0,0,.45); pointer-events: none; z-index: 0; }
+
 /* Gantt hover tooltip */
 .gantt-tooltip {
   position: fixed; z-index: 9999;
