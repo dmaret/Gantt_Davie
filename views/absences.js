@@ -166,6 +166,7 @@ App.views.absences = {
         if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
         const sep = text.includes(';') ? ';' : ',';
         const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        const toISO = raw => { const s = (raw||'').trim().replace(/["']/g,''); if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; const m = s.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{4})$/); return m ? `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}` : s; };
         const lines = text.split(/\r?\n/).filter(l => l.trim());
         const hdrs = lines[0].split(sep).map(h => norm(h.replace(/^"|"$/g,'')));
         const rows = lines.slice(1).map(l => {
@@ -176,8 +177,8 @@ App.views.absences = {
         const parsed = rows.map(r => {
           const prenom = r['prenom'] || r['prénom'] || '';
           const nomP = r['nom'] || '';
-          const debut = r['debut (yyyy-mm-dd)'] || r['debut'] || r['début'] || '';
-          const fin = r['fin (yyyy-mm-dd)'] || r['fin'] || '';
+          const debut = toISO(r['debut (yyyy-mm-dd)'] || r['debut'] || r['début'] || '');
+          const fin   = toISO(r['fin (yyyy-mm-dd)']   || r['fin'] || '');
           const motif = r['motif'] || 'Autre';
           const note = r['note'] || '';
           const personne = s.personnes.find(p => norm(p.prenom) === norm(prenom) && norm(p.nom) === norm(nomP));

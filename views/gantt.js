@@ -511,6 +511,15 @@ App.views.gantt = {
         if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
         const sep = text.includes(';') ? ';' : ',';
         const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        // Convertit DD.MM.YYYY / DD/MM/YYYY / MM-DD-YYYY vers ISO YYYY-MM-DD
+        const toISO = raw => {
+          if (!raw) return '';
+          const s = raw.trim().replace(/["']/g,'');
+          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+          const eu = s.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{4})$/);
+          if (eu) return `${eu[3]}-${eu[2].padStart(2,'0')}-${eu[1].padStart(2,'0')}`;
+          return s;
+        };
         const lines = text.split(/\r?\n/).filter(l => l.trim());
         const hdrs = lines[0].split(sep).map(h => norm(h.replace(/^"|"$/g,'')));
         const rows = lines.slice(1).map(l => {
@@ -522,8 +531,8 @@ App.views.gantt = {
           const pCode = norm(r['projet (code)'] || r['projet'] || r['project'] || '');
           const prj = s.projets.find(p => norm(p.code) === pCode || norm(p.nom) === pCode);
           const nom = r['nom'] || r['name'] || r['tâche'] || '';
-          const debut = r['début (yyyy-mm-dd)'] || r['debut'] || r['début'] || r['start'] || '';
-          const fin = r['fin (yyyy-mm-dd)'] || r['fin'] || r['end'] || '';
+          const debut = toISO(r['début (yyyy-mm-dd)'] || r['debut'] || r['début'] || r['start'] || '');
+          const fin   = toISO(r['fin (yyyy-mm-dd)']   || r['fin']   || r['end']   || '');
           const lieuNom = norm(r['lieu'] || '');
           const machNom = norm(r['machine'] || '');
           const lieu = lieuNom ? s.lieux.find(l => norm(l.nom) === lieuNom) : null;
