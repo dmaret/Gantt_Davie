@@ -779,6 +779,43 @@ body.tablette table.data { font-size: 16px; }
   .actions #btn-export, .actions #btn-import, .actions #btn-reset, .actions #btn-tablette { display: none; }
 }
 
+/* Gantt hover tooltip */
+.gantt-tooltip {
+  position: fixed; z-index: 9999;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px; box-shadow: var(--shadow);
+  font-size: 12px; max-width: 300px; min-width: 190px;
+  pointer-events: none; line-height: 1.55;
+  opacity: 0; transition: opacity .12s ease;
+}
+.gantt-tooltip.visible { opacity: 1; }
+.gantt-tooltip-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gantt-tooltip-row { display: flex; gap: 6px; align-items: baseline; margin: 1px 0; }
+.gantt-tooltip-row .tt-label { color: var(--text-muted); flex-shrink: 0; font-size: 11px; }
+
+/* Overdue bars (fin < today et avancement < 100 %) */
+.gantt-bar.overdue::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+  background: repeating-linear-gradient(135deg, transparent 0 4px, rgba(0,0,0,.18) 4px 5px);
+  pointer-events: none;
+}
+.gantt-bar-overdue {
+  position: absolute; left: 3px; top: 1px;
+  font-size: 10px; line-height: 1; pointer-events: none;
+  filter: drop-shadow(0 0 1px rgba(0,0,0,.5));
+}
+
+/* Avancement range slider */
+.av-slider { width: 100%; accent-color: var(--primary); cursor: pointer; display: block; margin-top: 4px; }
+.av-display { font-weight: 700; min-width: 36px; display: inline-block; font-variant-numeric: tabular-nums; }
+
+/* Durée j.o. dans le formulaire */
+.dur-badge {
+  display: inline-block; padding: 2px 10px; border-radius: 10px;
+  background: var(--primary-weak); color: var(--primary);
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+
 /* Impression */
 @media print {
   .topbar, .toolbar, .btn, .btn-ghost, .modal-root, .toast-root { display: none !important; }

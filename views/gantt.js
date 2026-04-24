@@ -375,7 +375,8 @@ App.views.gantt = {
         const label = t.jalon ? '' : (t.nom + ' · ' + Math.round(t.avancement||0) + '%');
         barPos[t.id] = { left, right: left + width, top: top + 11, mid: top + 11 };
 
-        const cls = (isConflict?'conflict ':'') + (crit?'critical ':'');
+        const overdue = !t.jalon && t.fin < D.today() && (t.avancement||0) < 100;
+        const cls = (isConflict?'conflict ':'') + (crit?'critical ':'') + (overdue?'overdue ':'');
         const avPct = Math.min(100, Math.max(0, t.avancement||0));
         const progressW = Math.round(avPct/100*width);
         if (t.jalon) {
@@ -383,7 +384,8 @@ App.views.gantt = {
         } else {
           const nComments = (t.commentaires||[]).length;
           const badge = nComments ? `<span class="gantt-bar-comment" title="${nComments} commentaire(s)">💬</span>` : '';
-          bars.push(`<div class="gantt-bar ${cls}" style="left:${left}px;width:${width}px;top:${top}px;height:22px;background:${color}" data-tid="${t.id}" title="${t.nom} — ${D.fmt(t.debut)} → ${D.fmt(t.fin)}${crit?' [critique]':''}${nComments?' · '+nComments+' commentaire(s)':''}"><div class="gantt-bar-progress" style="width:${progressW}px"></div><span class="gantt-bar-label">${label}</span>${badge}</div>`);
+          const overdueBadge = overdue ? '<span class="gantt-bar-overdue" title="En retard !">⚠</span>' : '';
+          bars.push(`<div class="gantt-bar ${cls}" style="left:${left}px;width:${width}px;top:${top}px;height:22px;background:${color}" data-tid="${t.id}" title="${t.nom} — ${D.fmt(t.debut)} → ${D.fmt(t.fin)}${crit?' [critique]':''}${overdue?' ⚠ En retard':''}${nComments?' · '+nComments+' commentaire(s)':''}"><div class="gantt-bar-progress" style="width:${progressW}px"></div>${overdueBadge}<span class="gantt-bar-label">${label}</span>${badge}</div>`);
           if (App.can('edit')) {
             bars.push(`<div class="gantt-resize-handle" data-tid="${t.id}" style="left:${left+width-5}px;top:${top}px;height:22px" title="Glisser pour modifier la durée"></div>`);
           }
@@ -427,6 +429,21 @@ App.views.gantt = {
     overlay.style.position = 'absolute'; overlay.style.inset = '0'; overlay.style.pointerEvents = 'none';
     overlay.innerHTML = depsSvg + bars.join('');
     table.appendChild(overlay);
+
+    if (!bars.length) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'position:absolute;inset:30px 0 0;display:flex;align-items:center;justify-content:center;pointer-events:auto;z-index:2';
+      empty.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px"><div style="font-size:36px;margin-bottom:8px">📋</div><strong style="font-size:15px;color:var(--text)">Aucune tâche visible</strong><p class="small" style="margin:6px 0 16px">Modifie le filtre projet&nbsp;/ la recherche, élargis la plage de dates,<br>ou crée ta première tâche.</p><button class="btn" onclick="App.views.gantt.newItem()">+ Nouvelle tâche</button></div>';
+      table.appendChild(empty);
+    }
+
+    // Tooltip singleton
+    const tip = document.getElementById('gantt-tip') || (() => {
+      const el = document.createElement('div'); el.id = 'gantt-tip'; el.className = 'gantt-tooltip';
+      document.body.appendChild(el); return el;
+    })();
+    let tipTimer;
+
     overlay.querySelectorAll('.gantt-bar').forEach(el => {
       el.style.pointerEvents = 'auto';
       if (this.state.selectedIds.has(el.dataset.tid)) el.classList.add('selected');
@@ -436,6 +453,40 @@ App.views.gantt = {
         this.openTacheForm(el.dataset.tid);
       });
       el.addEventListener('contextmenu', e => { e.preventDefault(); this.showContextMenu(e, el.dataset.tid); });
+      el.addEventListener('mouseenter', () => {
+        clearTimeout(tipTimer);
+        tipTimer = setTimeout(() => {
+          if (el.classList.contains('dragging')) return;
+          const t = DB.tache(el.dataset.tid); if (!t) return;
+          const prj = DB.projet(t.projetId);
+          const assignes = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join(', ');
+          const machine = DB.machine(t.machineId)?.nom;
+          const lieu = DB.lieu(t.lieuId)?.nom;
+          const dur = D.workdaysBetween(t.debut, t.fin);
+          const av = t.avancement || 0;
+          const nComm = (t.commentaires||[]).length;
+          tip.innerHTML = [
+            `<div class="gantt-tooltip-title" style="color:${prj?.couleur||'inherit'}">${prj?`<span style="opacity:.7;font-weight:400">[${prj.code}]</span> `:''}${t.nom}</div>`,
+            `<div class="gantt-tooltip-row"><span class="tt-label">📅</span> ${D.fmt(t.debut)} → ${D.fmt(t.fin)} &nbsp;·&nbsp; <strong>${dur} j.o.</strong></div>`,
+            av > 0 ? `<div class="gantt-tooltip-row"><span class="tt-label">⚡</span> <strong>${av}%</strong> avancé</div>` : '',
+            assignes ? `<div class="gantt-tooltip-row"><span class="tt-label">👤</span> ${assignes}</div>` : '',
+            machine ? `<div class="gantt-tooltip-row"><span class="tt-label">⚙</span> ${machine}</div>` : '',
+            lieu ? `<div class="gantt-tooltip-row"><span class="tt-label">📍</span> ${lieu}</div>` : '',
+            nComm ? `<div class="gantt-tooltip-row"><span class="tt-label">💬</span> ${nComm} commentaire(s)</div>` : '',
+            t.notes ? `<div class="gantt-tooltip-row" style="margin-top:4px;font-size:11px;color:var(--text-muted);display:block">${t.notes.substring(0,100)}${t.notes.length>100?'…':''}</div>` : '',
+          ].filter(Boolean).join('');
+          // Position: measure off-screen first
+          tip.style.left = '-9999px'; tip.style.top = '0';
+          const rect = el.getBoundingClientRect();
+          const tw = tip.offsetWidth, th = tip.offsetHeight;
+          let l = rect.left, tt2 = rect.bottom + 8;
+          if (l + tw > window.innerWidth - 12) l = window.innerWidth - tw - 12;
+          if (tt2 + th > window.innerHeight - 12) tt2 = rect.top - th - 8;
+          tip.style.left = l + 'px'; tip.style.top = tt2 + 'px';
+          tip.classList.add('visible');
+        }, 200);
+      });
+      el.addEventListener('mouseleave', () => { clearTimeout(tipTimer); tip.classList.remove('visible'); });
       this.makeDraggable(el, CELL_W);
     });
     this.renderSelectionBar();
@@ -758,8 +809,11 @@ App.views.gantt = {
       </div>
       <div class="row">
         <div class="field"><label>Début</label><input type="date" id="f-debut" value="${t.debut}"></div>
+        <div class="field" style="flex:0;align-self:flex-end;padding-bottom:2px"><span class="dur-badge" id="f-dur">${Math.max(0,D.workdaysBetween(t.debut,t.fin))} j.o.</span></div>
         <div class="field"><label>Fin</label><input type="date" id="f-fin" value="${t.fin}"></div>
-        <div class="field"><label>Avancement (%)</label><input type="number" id="f-avancement" min="0" max="100" value="${t.avancement||0}"></div>
+      </div>
+      <div class="field"><label>Avancement &nbsp;<span class="av-display" id="f-av-val">${t.avancement||0}%</span></label>
+        <input type="range" id="f-avancement" min="0" max="100" value="${Math.min(100,Math.max(0,t.avancement||0))}" class="av-slider">
       </div>
       <div class="row">
         <div class="field"><label>Machine</label>
@@ -812,6 +866,7 @@ App.views.gantt = {
     `;
     const foot = `
       ${!isNew ? '<button class="btn btn-danger" id="f-del">Supprimer</button>' : ''}
+      ${!isNew ? '<button class="btn btn-secondary" id="f-dup" title="Duplique cette tâche dans le même projet">⎘ Dupliquer</button>' : ''}
       <span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="f-cancel">Annuler</button>
       <button class="btn" id="f-save">${isNew?'Créer':'Enregistrer'}</button>
@@ -830,6 +885,9 @@ App.views.gantt = {
     };
     renderSugg();
     ['f-debut','f-fin','f-machine','f-lieu','f-type'].forEach(id => { const el = document.getElementById(id); if (el) el.onchange = renderSugg; });
+    const updateDur = () => { const el = document.getElementById('f-dur'); if (el) el.textContent = Math.max(0, D.workdaysBetween(document.getElementById('f-debut').value, document.getElementById('f-fin').value)) + ' j.o.'; };
+    ['f-debut','f-fin'].forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('change', updateDur); });
+    const avEl = document.getElementById('f-avancement'); if (avEl) avEl.oninput = e => { const d = document.getElementById('f-av-val'); if (d) d.textContent = e.target.value + '%'; };
     const assignesWrap = document.getElementById('f-assignes-wrap');
     if (assignesWrap) assignesWrap.addEventListener('change', e => {
       if (e.target.classList.contains('assignes-cb')) e.target.closest('.assignes-row').classList.toggle('is-checked', e.target.checked);
@@ -991,6 +1049,14 @@ App.views.gantt = {
         DB.state.taches = DB.state.taches.filter(x => x.id !== t.id);
         DB.logAudit('delete','tache',t.id,t.nom);
         DB.save(); App.closeModal(); App.toast('Tâche supprimée','info'); App.refresh();
+      };
+      document.getElementById('f-dup').onclick = () => {
+        const copy = JSON.parse(JSON.stringify(t));
+        copy.id = DB.uid('T'); copy.nom = t.nom + ' (copie)';
+        copy.avancement = 0; copy.dependances = []; copy.commentaires = [];
+        DB.state.taches.push(copy);
+        DB.logAudit('create','tache',copy.id,copy.nom);
+        DB.save(); App.closeModal(); App.toast('Tâche dupliquée','success'); this.draw();
       };
     }
   },
