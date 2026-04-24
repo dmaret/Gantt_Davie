@@ -267,14 +267,14 @@ App.views.gantt = {
     document.getElementById('g-import').onclick = () => document.getElementById('g-import-file').click();
     document.getElementById('g-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
     document.getElementById('g-csv').onclick = () => {
-      const head = ['Projet','Tâche','Début','Fin','Durée j. ouvrés','Lieu','Machine','Assignés','Avancement','Jalon'];
+      const head = ['Projet (code)','Nom','Début (YYYY-MM-DD)','Fin (YYYY-MM-DD)','Durée j. ouvrés','Lieu','Machine','Assignés (séparés /)','Avancement (%)','Jalon (OUI/NON)','Notes'];
       const rows = [head];
       DB.state.taches.slice().sort((a,b)=>a.projetId.localeCompare(b.projetId)||a.debut.localeCompare(b.debut)).forEach(t => {
         const prj = DB.projet(t.projetId);
         const lieu = DB.lieu(t.lieuId);
         const mach = DB.machine(t.machineId);
-        const pers = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join(', ');
-        rows.push([prj?prj.code:'', t.nom, t.debut, t.fin, D.workdaysBetween(t.debut,t.fin), lieu?lieu.nom:'', mach?mach.nom:'', pers, (t.avancement||0)+'%', t.jalon?'OUI':'']);
+        const pers = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join('/');
+        rows.push([prj?prj.code:'', t.nom, t.debut, t.fin, D.workdaysBetween(t.debut,t.fin), lieu?lieu.nom:'', mach?mach.nom:'', pers, t.avancement||0, t.jalon?'OUI':'NON', t.notes||'']);
       });
       CSV.download('planning-' + D.today() + '.csv', rows);
       App.toast('Export CSV téléchargé','success');
