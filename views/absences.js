@@ -29,6 +29,7 @@ App.views.absences = {
         <select id="ab-p"><option value="">Toutes personnes</option>${s.personnes.map(p => `<option value="${p.id}" ${st.filterPersonne===p.id?'selected':''}>${App.personneLabel(p)}</option>`).join('')}</select>
         <select id="ab-m"><option value="">Tous motifs</option>${motifs.map(m => `<option ${st.filterMotif===m?'selected':''}>${m}</option>`).join('')}</select>
         <label class="small"><input type="checkbox" id="ab-past" ${st.showPast?'checked':''}> Inclure passées</label>
+        <button class="btn-ghost" id="ab-csv">⤓ Exporter CSV</button>
         ${canEdit ? `<input type="file" id="ab-import-file" accept=".csv,.json" hidden>
         <button class="btn-ghost" id="ab-tpl">⬇ Modèle</button>
         <button class="btn-ghost" id="ab-import">⬆ Importer</button>
@@ -68,6 +69,7 @@ App.views.absences = {
     document.getElementById('ab-p').onchange = e => { st.filterPersonne = e.target.value; App.refresh(); };
     document.getElementById('ab-m').onchange = e => { st.filterMotif = e.target.value; App.refresh(); };
     document.getElementById('ab-past').onchange = e => { st.showPast = e.target.checked; App.refresh(); };
+    document.getElementById('ab-csv').onclick = () => this.exportCSV();
     const addBtn = document.getElementById('ab-add');
     if (addBtn) addBtn.onclick = () => this.openForm(null, null);
     const tplBtn = document.getElementById('ab-tpl');
@@ -138,6 +140,17 @@ App.views.absences = {
     };
   },
 
+  exportCSV() {
+    const s = DB.state;
+    const rows = [['Prénom','Nom','Début','Fin','Durée (j. ouvrés)','Motif','Note']];
+    s.personnes.forEach(p => (p.absences||[]).forEach(a => {
+      const duree = D.workdaysBetween(a.debut, a.fin) + 1;
+      rows.push([p.prenom, p.nom, a.debut, a.fin, duree, a.motif||'', a.note||'']);
+    }));
+    CSV.download('absences-' + D.today() + '.csv', rows);
+    App.toast('Export CSV téléchargé', 'success');
+  },
+
   downloadTemplate() {
     CSV.download('modele-import-absences.csv', [
       ['Prénom','Nom','Début (YYYY-MM-DD)','Fin (YYYY-MM-DD)','Motif','Note'],
@@ -153,6 +166,7 @@ App.views.absences = {
         if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
         const sep = text.includes(';') ? ';' : ',';
         const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        const toISO = raw => { const s = (raw||'').trim().replace(/["']/g,''); if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; const m = s.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{4})$/); return m ? `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}` : s; };
         const lines = text.split(/\r?\n/).filter(l => l.trim());
         const hdrs = lines[0].split(sep).map(h => norm(h.replace(/^"|"$/g,'')));
         const rows = lines.slice(1).map(l => {
@@ -163,8 +177,8 @@ App.views.absences = {
         const parsed = rows.map(r => {
           const prenom = r['prenom'] || r['prénom'] || '';
           const nomP = r['nom'] || '';
-          const debut = r['debut (yyyy-mm-dd)'] || r['debut'] || r['début'] || '';
-          const fin = r['fin (yyyy-mm-dd)'] || r['fin'] || '';
+          const debut = toISO(r['debut (yyyy-mm-dd)'] || r['debut'] || r['début'] || '');
+          const fin   = toISO(r['fin (yyyy-mm-dd)']   || r['fin'] || '');
           const motif = r['motif'] || 'Autre';
           const note = r['note'] || '';
           const personne = s.personnes.find(p => norm(p.prenom) === norm(prenom) && norm(p.nom) === norm(nomP));

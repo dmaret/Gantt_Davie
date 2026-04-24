@@ -527,6 +527,7 @@ const App = {
       this._navHistory.push(this.view);
       if (this._navHistory.length > 30) this._navHistory.shift();
     }
+    if (this.view === 'gantt' && name !== 'gantt' && this.views.gantt.clearSelection) this.views.gantt.clearSelection();
     this.view = name;
     location.hash = name;
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === name));
@@ -767,12 +768,14 @@ const App = {
     // 2) Machines avec conflit dans les 10 j ouvrés
     const confs = this.detectConflicts().machines;
     confs.forEach(c => {
-      const t1 = DB.tache(c.t1);
+      const t1 = DB.tache(c.t1), t2 = DB.tache(c.t2);
       if (t1 && t1.debut >= today && t1.debut <= horizon) {
         const m = DB.machine(c.machineId);
+        const p1 = DB.projet(t1?.projetId), p2 = DB.projet(t2?.projetId);
+        const lbl = (t, p) => `${p?p.code+' · ':''}« ${t?.nom} » ${D.fmt(t?.debut)}→${D.fmt(t?.fin)}`;
         alerts.push({
           kind:'machine-conflit', niveau:'warn',
-          msg:`Conflit ${m?.nom} entre « ${DB.tache(c.t1)?.nom} » et « ${DB.tache(c.t2)?.nom} »`,
+          msg:`Conflit ${m?.nom} : ${lbl(t1,p1)} ↔ ${lbl(t2,p2)}`,
           target: { view: 'gantt', tacheId: c.t1, machineId: c.machineId },
         });
       }

@@ -10,6 +10,8 @@ App.views.personnes = {
         <span class="spacer"></span>
         <input type="file" id="p-import-file" accept=".csv,.json" hidden>
         <button class="btn-ghost" id="p-import" data-perm="edit" title="Importer des personnes depuis un fichier CSV ou JSON">⬆ Importer</button>
+        <button class="btn-ghost" id="p-tpl" title="Télécharger un modèle CSV pour importer des personnes">⬇ Modèle</button>
+        <button class="btn-ghost" id="p-csv" title="Exporter la liste des personnes en CSV">⤓ Exporter CSV</button>
         <button class="btn-ghost" id="p-export" title="Exporter le planning hebdomadaire en CSV (ouvrable dans Excel)">⬇ Planning CSV</button>
         <button class="btn" id="p-add">+ Ajouter une personne</button>
       </div>
@@ -19,6 +21,8 @@ App.views.personnes = {
     document.getElementById('p-role').onchange = e => { this.state.roleFilter = e.target.value; this.draw(); };
     document.getElementById('p-lieu').onchange = e => { this.state.lieuFilter = e.target.value; this.draw(); };
     document.getElementById('p-add').onclick = () => this.openForm(null);
+    document.getElementById('p-tpl').onclick = () => this.downloadPersonnesTemplate();
+    document.getElementById('p-csv').onclick = () => this.exportPersonnesCSV();
     document.getElementById('p-export').onclick = () => this.exportPlanningCSV();
     document.getElementById('p-import').onclick = () => document.getElementById('p-import-file').click();
     document.getElementById('p-import-file').onchange = e => {
@@ -35,12 +39,13 @@ App.views.personnes = {
     if (st.lieuFilter) list = list.filter(p => p.lieuPrincipalId === st.lieuFilter);
 
     const today = D.today();
+    const isoWeek = s => { const d = D.parse(s); const thu = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 4 - (d.getUTCDay() || 7))); return Math.ceil(((thu - new Date(Date.UTC(thu.getUTCFullYear(), 0, 1))) / 864e5 + 1) / 7); };
     // Charge sur 4 semaines glissantes
     const weeks = [];
     let weekStart = today;
     for (let w=0; w<4; w++) {
       const weekEnd = D.addWorkdays(weekStart, 4);
-      weeks.push({ start: weekStart, end: weekEnd });
+      weeks.push({ start: weekStart, end: weekEnd, num: isoWeek(weekStart) });
       weekStart = D.addWorkdays(weekEnd, 1);
     }
     const rows = list.map(p => {
@@ -54,13 +59,16 @@ App.views.personnes = {
       const totalH = perWeek.reduce((n,w) => n + w.h, 0);
       const avgPct = Math.round(perWeek.reduce((n,w) => n + w.pct, 0) / weeks.length);
       const tsNow = ts.filter(t => t.fin >= today && t.debut <= D.addWorkdays(today, 4));
-      const cells = perWeek.map(w => {
+      const cells = perWeek.map((w, wi) => {
         const cls = w.pct > 95 ? 'bad' : w.pct > 80 ? 'warn' : '';
         const jours = w.h / 7;
         const jLbl = jours > 0 ? (Number.isInteger(jours) ? jours + 'j' : jours.toFixed(1) + 'j') : '—';
+        const tooltip = `S${weeks[wi].num} · ${w.h}h assignées · ${jLbl} · capacité ${p.capaciteHebdo}h · ${w.pct}%${w.pct > 95 ? ' ⚠ surcharge' : ''}`;
+        const wNumColor = w.pct > 95 ? 'var(--error,#c43b3b)' : w.pct > 80 ? 'var(--warning,#c47800)' : 'var(--text-muted)';
         return '<div style="text-align:center">'
-          + `<div class="bar-inline ${cls}" style="width:28px" title="${w.h}h · ${jLbl} ouvrés"><div class="fill" style="width:${w.pct}%"></div></div>`
-          + `<div style="font-size:9px;color:var(--text-muted);margin-top:1px;line-height:1">${jLbl}</div>`
+          + `<div style="font-size:9px;font-weight:600;color:${wNumColor};line-height:1;margin-bottom:2px">S${weeks[wi].num}</div>`
+          + `<div class="bar-inline ${cls}" style="width:28px" title="${tooltip}"><div class="fill" style="width:${w.pct}%"></div></div>`
+          + `<div style="font-size:9px;color:${cls==='bad'?'var(--error,#c43b3b)':cls==='warn'?'var(--warning,#c47800)':'var(--text-muted)'};margin-top:1px;line-height:1;font-weight:${cls?'600':'400'}">${jLbl}</div>`
           + '</div>';
       }).join('');
       const avgCls = avgPct > 95 ? 'bad' : avgPct > 80 ? 'warn' : '';
@@ -88,7 +96,7 @@ App.views.personnes = {
 
     document.getElementById('p-table').innerHTML = `
       <table class="data">
-        <thead><tr><th>Personne</th><th>Rôle</th><th>Lieu principal</th><th>Compétences</th><th title="Profil hebdo (L M M J V S D × matin/aprem)">Horaires</th><th>Tâches 7j</th><th>Charge 4 semaines</th><th class="right">Moy.</th><th></th></tr></thead>
+        <thead><tr><th>Personne</th><th>Rôle</th><th>Lieu principal</th><th>Compétences</th><th title="Profil hebdo (L M M J V S D × matin/aprem)">Horaires</th><th>Tâches 7j</th><th title="Charge par semaine · Rouge = ≥96% de la capacité hebdo (surcharge) · Orange = ≥81%">Charge · ${weeks.map(w=>'S'+w.num).join(' · ')}</th><th class="right">Moy.</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <p class="muted small" style="margin-top:10px">${list.length} personne(s) · carrés pleins = dispo · 📅 = planning personnel</p>
@@ -363,6 +371,19 @@ App.views.personnes = {
       App.toast(`Import : ${created} créée(s), ${updated} mise(s) à jour`, 'success');
       App.refresh();
     };
+  },
+
+  exportPersonnesCSV() {
+    const s = DB.state;
+    const rows = [['Prénom','Nom','Rôle','Lieu principal','Compétences','Capacité hebdo (h)']];
+    s.personnes.forEach(p => rows.push([
+      p.prenom, p.nom, p.role||'',
+      DB.lieu(p.lieuPrincipalId)?.nom||'',
+      (p.competences||[]).join('/'),
+      p.capaciteHebdo||35,
+    ]));
+    CSV.download('personnes-' + D.today() + '.csv', rows);
+    App.toast('Export CSV téléchargé', 'success');
   },
 
   downloadPersonnesTemplate() {

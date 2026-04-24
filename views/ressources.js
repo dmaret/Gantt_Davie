@@ -118,7 +118,7 @@ App.views.ressources = {
         <td><strong>${App.personneLabel(p)}</strong><div class="muted small">${lieu?lieu.nom:'—'}</div></td>
         <td>${p.role}<div>${(p.competences||[]).map(c=>`<span class="chip small">${c}</span>`).join('')}</div></td>
         ${cells}
-        <td class="right mono">${dispoCount}/${totalDJ}</td>
+        <td class="right mono">${totalDJ ? Math.round(dispoCount / totalDJ * 100) + '%' : '—'}</td>
       </tr>`;
     }).join('');
 

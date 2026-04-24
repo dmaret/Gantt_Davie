@@ -261,6 +261,36 @@ body {
 .r-scroll { overflow-x: auto; max-width: 100%; }
 
 /* Vue Équipes */
+/* Assignees checkbox list */
+.gantt-bar-comment { position: absolute; right: 2px; top: 1px; font-size: 11px; line-height: 1; filter: drop-shadow(0 0 1px rgba(255,255,255,.8)); pointer-events: none; }
+.gantt-bar.selected { outline: 3px solid #2563eb; outline-offset: 1px; z-index: 5; }
+
+/* Floating selection action bar */
+.selection-bar {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  padding: 10px 16px; display: flex; align-items: center; gap: 10px;
+  z-index: 1000; max-width: 95vw; flex-wrap: wrap;
+}
+.selection-bar select, .selection-bar input { padding: 4px 8px; }
+.selection-bar .spacer { flex: 1; min-width: 10px; }
+
+/* Comments list in task form */
+.comments-list { max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; margin-bottom: 6px; background: var(--surface-2); }
+.comment-item { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.comment-item:last-child { border-bottom: none; }
+.comment-head { display: flex; align-items: center; gap: 4px; margin-bottom: 2px; }
+.comment-text { white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.35; }
+.comment-add { display: flex; flex-direction: column; }
+.comment-add textarea { resize: vertical; }
+
+.assignes-list { max-height: 168px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 2px 0; }
+.assignes-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: pointer; user-select: none; border-radius: 0; transition: background .1s; }
+.assignes-row:hover { background: var(--surface-2); }
+.assignes-row.is-checked { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.assignes-row input[type="checkbox"] { margin: 0; flex-shrink: 0; }
+
 .eq-card { transition: box-shadow .12s; }
 .eq-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
 .eq-slot { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
@@ -747,6 +777,43 @@ body.tablette table.data { font-size: 16px; }
 @media (max-width: 480px) {
   .brand-owner { display: none; }
   .actions #btn-export, .actions #btn-import, .actions #btn-reset, .actions #btn-tablette { display: none; }
+}
+
+/* Gantt hover tooltip */
+.gantt-tooltip {
+  position: fixed; z-index: 9999;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px; box-shadow: var(--shadow);
+  font-size: 12px; max-width: 300px; min-width: 190px;
+  pointer-events: none; line-height: 1.55;
+  opacity: 0; transition: opacity .12s ease;
+}
+.gantt-tooltip.visible { opacity: 1; }
+.gantt-tooltip-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gantt-tooltip-row { display: flex; gap: 6px; align-items: baseline; margin: 1px 0; }
+.gantt-tooltip-row .tt-label { color: var(--text-muted); flex-shrink: 0; font-size: 11px; }
+
+/* Overdue bars (fin < today et avancement < 100 %) */
+.gantt-bar.overdue::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+  background: repeating-linear-gradient(135deg, transparent 0 4px, rgba(0,0,0,.18) 4px 5px);
+  pointer-events: none;
+}
+.gantt-bar-overdue {
+  position: absolute; left: 3px; top: 1px;
+  font-size: 10px; line-height: 1; pointer-events: none;
+  filter: drop-shadow(0 0 1px rgba(0,0,0,.5));
+}
+
+/* Avancement range slider */
+.av-slider { width: 100%; accent-color: var(--primary); cursor: pointer; display: block; margin-top: 4px; }
+.av-display { font-weight: 700; min-width: 36px; display: inline-block; font-variant-numeric: tabular-nums; }
+
+/* Durée j.o. dans le formulaire */
+.dur-badge {
+  display: inline-block; padding: 2px 10px; border-radius: 10px;
+  background: var(--primary-weak); color: var(--primary);
+  font-size: 12px; font-weight: 600; white-space: nowrap;
 }
 
 /* Impression */

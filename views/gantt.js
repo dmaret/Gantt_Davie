@@ -9,8 +9,136 @@ App.views.gantt = {
     showDeps: true,
     showCritical: true,
     autoCascade: true,
+    selectedIds: new Set(),
   },
   newItem() { this.openTacheForm(null); },
+
+  toggleSelection(tid) {
+    const sel = this.state.selectedIds;
+    if (sel.has(tid)) sel.delete(tid); else sel.add(tid);
+    const el = document.querySelector(`.gantt-bar[data-tid="${tid}"]`);
+    if (el) el.classList.toggle('selected', sel.has(tid));
+    this.renderSelectionBar();
+  },
+  clearSelection() {
+    this.state.selectedIds.clear();
+    document.querySelectorAll('.gantt-bar.selected').forEach(b => b.classList.remove('selected'));
+    this.renderSelectionBar();
+  },
+  renderSelectionBar() {
+    const existing = document.getElementById('gantt-selection-bar');
+    const n = this.state.selectedIds.size;
+    if (!n) { if (existing) existing.remove(); return; }
+    const s = DB.state;
+    const projOpts = '<option value="">Projet…</option>' + s.projets.map(p => `<option value="${p.id}">${p.code} — ${p.nom}</option>`).join('');
+    const html = `
+      <strong>${n} tâche(s) sélectionnée(s)</strong>
+      <span class="spacer"></span>
+      <label class="small">Décaler de</label>
+      <input type="number" id="sel-shift" value="1" style="width:60px">
+      <label class="small">j. ouvrés</label>
+      <button class="btn btn-secondary" id="sel-shift-btn" data-perm="edit">⏩ Appliquer</button>
+      <select id="sel-proj" data-perm="edit">${projOpts}</select>
+      <button class="btn btn-secondary" id="sel-proj-btn" data-perm="edit">Changer projet</button>
+      <button class="btn btn-danger" id="sel-del" data-perm="edit">🗑 Supprimer</button>
+      <button class="btn-ghost" id="sel-clear">✕ Désélectionner</button>
+    `;
+    if (existing) { existing.innerHTML = html; }
+    else {
+      const bar = document.createElement('div');
+      bar.id = 'gantt-selection-bar';
+      bar.className = 'selection-bar';
+      bar.innerHTML = html;
+      document.body.appendChild(bar);
+    }
+    document.getElementById('sel-clear').onclick = () => this.clearSelection();
+    document.getElementById('sel-shift-btn').onclick = () => this.bulkShift();
+    document.getElementById('sel-proj-btn').onclick = () => this.bulkChangeProject();
+    document.getElementById('sel-del').onclick = () => this.bulkDelete();
+    App.applyPerms();
+  },
+  bulkShift() {
+    if (!App.can('edit')) { App.toast('Lecture seule','error'); return; }
+    const n = +document.getElementById('sel-shift').value;
+    if (!n) return;
+    const ids = Array.from(this.state.selectedIds);
+    ids.forEach(id => {
+      const t = DB.tache(id); if (!t) return;
+      t.debut = D.addWorkdays(t.debut, n);
+      t.fin = D.addWorkdays(t.fin, n);
+    });
+    DB.save(); this.draw();
+    App.toast(`${ids.length} tâche(s) décalée(s) de ${n>0?'+':''}${n} j.`, 'success');
+  },
+  bulkChangeProject() {
+    if (!App.can('edit')) { App.toast('Lecture seule','error'); return; }
+    const pid = document.getElementById('sel-proj').value;
+    if (!pid) { App.toast('Choisir un projet','warn'); return; }
+    const ids = Array.from(this.state.selectedIds);
+    ids.forEach(id => { const t = DB.tache(id); if (t) t.projetId = pid; });
+    DB.save(); this.draw();
+    App.toast(`${ids.length} tâche(s) déplacée(s)`, 'success');
+  },
+  bulkDelete() {
+    if (!App.can('edit')) { App.toast('Lecture seule','error'); return; }
+    const ids = Array.from(this.state.selectedIds);
+    if (!confirm(`Supprimer ${ids.length} tâche(s) ? Cette action est annulable avec Ctrl+Z.`)) return;
+    DB.state.taches = DB.state.taches.filter(t => !ids.includes(t.id));
+    DB.state.taches.forEach(t => t.dependances = (t.dependances||[]).filter(d => !ids.includes(d)));
+    this.clearSelection();
+    DB.save(); this.draw();
+    App.toast(`${ids.length} tâche(s) supprimée(s)`, 'info');
+  },
+
+  exportICS() {
+    const s = DB.state;
+    const events = [];
+    s.taches.forEach(t => {
+      if (t.jalon) {
+        events.push({
+          uid: ICS.uid('jalon', t.id),
+          summary: '◆ ' + t.nom + (DB.projet(t.projetId) ? ' ['+DB.projet(t.projetId).code+']' : ''),
+          dtstart: t.debut,
+          dtend: D.addDays(t.debut, 1),
+          description: (t.notes||'') + (t.commentaires?.length ? `\n\n${t.commentaires.length} commentaire(s)` : ''),
+          location: DB.lieu(t.lieuId)?.nom || '',
+        });
+      } else {
+        const prj = DB.projet(t.projetId);
+        const assignes = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join(', ');
+        events.push({
+          uid: ICS.uid('tache', t.id),
+          summary: (prj?prj.code+' · ':'') + t.nom + (t.avancement?` (${t.avancement}%)`:''),
+          dtstart: t.debut,
+          dtend: D.addDays(t.fin, 1),
+          description: [assignes ? 'Assignés : '+assignes : '', t.notes||'', t.commentaires?.length ? `${t.commentaires.length} commentaire(s)`:''].filter(Boolean).join('\n'),
+          location: [DB.machine(t.machineId)?.nom, DB.lieu(t.lieuId)?.nom].filter(Boolean).join(' · '),
+        });
+      }
+    });
+    s.personnes.forEach(p => (p.absences||[]).forEach(a => {
+      events.push({
+        uid: ICS.uid('absence', a.id),
+        summary: `🏖 ${a.motif||'Absence'} — ${App.personneLabel(p)}`,
+        dtstart: a.debut,
+        dtend: D.addDays(a.fin, 1),
+        description: a.note||'',
+      });
+    }));
+    s.deplacements.forEach(d => {
+      const p = DB.personne(d.personneId);
+      events.push({
+        uid: ICS.uid('dep', d.id),
+        summary: `🚚 ${d.motif} — ${App.personneLabel(p)}`,
+        dtstart: d.date,
+        dtend: D.addDays(d.date, 1),
+        description: `${DB.lieu(d.origineId)?.nom||''} → ${DB.lieu(d.destinationId)?.nom||''} · ${d.duree||''}`,
+      });
+    });
+    if (!events.length) { App.toast('Aucun événement à exporter','warn'); return; }
+    ICS.download('planning-'+D.today()+'.ics', events);
+    App.toast(`${events.length} événement(s) exporté(s) en .ics`, 'success');
+  },
 
   criticalTasks(projetId) {
     const tasks = DB.state.taches.filter(t => t.projetId === projetId);
@@ -91,11 +219,13 @@ App.views.gantt = {
           <label class="small"><input type="checkbox" id="g-deps" ${st.showDeps?'checked':''}> Dépendances</label>
           <label class="small"><input type="checkbox" id="g-crit" ${st.showCritical?'checked':''}> Chemin critique</label>
           <label class="small"><input type="checkbox" id="g-casc" ${st.autoCascade?'checked':''}> Cascade auto</label>
+          <span class="muted small" title="Ctrl/Cmd + clic pour multi-sélection et actions en lot">💡 Ctrl+clic = sélection multiple</span>
           <span class="spacer"></span>
           <input type="file" id="g-import-file" accept=".csv,.json" hidden>
           <button class="btn-ghost" id="g-tpl" data-perm="edit">⬇ Modèle</button>
           <button class="btn-ghost" id="g-import" data-perm="edit">⬆ Importer</button>
           <button class="btn-ghost" id="g-csv">⤓ Exporter CSV</button>
+          <button class="btn-ghost" id="g-ics" title="Exporter vers Outlook / Google Agenda / Apple Calendar">📅 Export .ics</button>
           <button class="btn" id="g-add">+ Nouvelle tâche</button>
         </div>
         <div class="gantt-scroll"><div id="g-table"></div></div>
@@ -137,18 +267,19 @@ App.views.gantt = {
     document.getElementById('g-import').onclick = () => document.getElementById('g-import-file').click();
     document.getElementById('g-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
     document.getElementById('g-csv').onclick = () => {
-      const head = ['Projet','Tâche','Début','Fin','Durée j. ouvrés','Lieu','Machine','Assignés','Avancement','Jalon'];
+      const head = ['Projet (code)','Nom','Début (YYYY-MM-DD)','Fin (YYYY-MM-DD)','Durée j. ouvrés','Lieu','Machine','Assignés (séparés /)','Avancement (%)','Jalon (OUI/NON)','Notes'];
       const rows = [head];
       DB.state.taches.slice().sort((a,b)=>a.projetId.localeCompare(b.projetId)||a.debut.localeCompare(b.debut)).forEach(t => {
         const prj = DB.projet(t.projetId);
         const lieu = DB.lieu(t.lieuId);
         const mach = DB.machine(t.machineId);
-        const pers = (t.assignes||[]).map(pid => App.personneLabel(DB.personne(pid))).join(', ');
-        rows.push([prj?prj.code:'', t.nom, t.debut, t.fin, D.workdaysBetween(t.debut,t.fin), lieu?lieu.nom:'', mach?mach.nom:'', pers, (t.avancement||0)+'%', t.jalon?'OUI':'']);
+        const pers = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join('/');
+        rows.push([prj?prj.code:'', t.nom, t.debut, t.fin, D.workdaysBetween(t.debut,t.fin), lieu?lieu.nom:'', mach?mach.nom:'', pers, t.avancement||0, t.jalon?'OUI':'NON', t.notes||'']);
       });
       CSV.download('planning-' + D.today() + '.csv', rows);
       App.toast('Export CSV téléchargé','success');
     };
+    document.getElementById('g-ics').onclick = () => this.exportICS();
 
     this.draw();
   },
@@ -244,13 +375,17 @@ App.views.gantt = {
         const label = t.jalon ? '' : (t.nom + ' · ' + Math.round(t.avancement||0) + '%');
         barPos[t.id] = { left, right: left + width, top: top + 11, mid: top + 11 };
 
-        const cls = (isConflict?'conflict ':'') + (crit?'critical ':'');
+        const overdue = !t.jalon && t.fin < D.today() && (t.avancement||0) < 100;
+        const cls = (isConflict?'conflict ':'') + (crit?'critical ':'') + (overdue?'overdue ':'');
         const avPct = Math.min(100, Math.max(0, t.avancement||0));
         const progressW = Math.round(avPct/100*width);
         if (t.jalon) {
           bars.push(`<div class="gantt-bar milestone ${cls}" style="left:${left+width/2-7}px;top:${top+2}px;background:${color}" data-tid="${t.id}" title="${t.nom}"></div>`);
         } else {
-          bars.push(`<div class="gantt-bar ${cls}" style="left:${left}px;width:${width}px;top:${top}px;height:22px;background:${color}" data-tid="${t.id}" title="${t.nom} — ${D.fmt(t.debut)} → ${D.fmt(t.fin)}${crit?' [critique]':''}"><div class="gantt-bar-progress" style="width:${progressW}px"></div><span class="gantt-bar-label">${label}</span></div>`);
+          const nComments = (t.commentaires||[]).length;
+          const badge = nComments ? `<span class="gantt-bar-comment" title="${nComments} commentaire(s)">💬</span>` : '';
+          const overdueBadge = overdue ? '<span class="gantt-bar-overdue" title="En retard !">⚠</span>' : '';
+          bars.push(`<div class="gantt-bar ${cls}" style="left:${left}px;width:${width}px;top:${top}px;height:22px;background:${color}" data-tid="${t.id}" title="${t.nom} — ${D.fmt(t.debut)} → ${D.fmt(t.fin)}${crit?' [critique]':''}${overdue?' ⚠ En retard':''}${nComments?' · '+nComments+' commentaire(s)':''}"><div class="gantt-bar-progress" style="width:${progressW}px"></div>${overdueBadge}<span class="gantt-bar-label">${label}</span>${badge}</div>`);
           if (App.can('edit')) {
             bars.push(`<div class="gantt-resize-handle" data-tid="${t.id}" style="left:${left+width-5}px;top:${top}px;height:22px" title="Glisser pour modifier la durée"></div>`);
           }
@@ -294,12 +429,67 @@ App.views.gantt = {
     overlay.style.position = 'absolute'; overlay.style.inset = '0'; overlay.style.pointerEvents = 'none';
     overlay.innerHTML = depsSvg + bars.join('');
     table.appendChild(overlay);
+
+    if (!bars.length) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'position:absolute;inset:30px 0 0;display:flex;align-items:center;justify-content:center;pointer-events:auto;z-index:2';
+      empty.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px"><div style="font-size:36px;margin-bottom:8px">📋</div><strong style="font-size:15px;color:var(--text)">Aucune tâche visible</strong><p class="small" style="margin:6px 0 16px">Modifie le filtre projet&nbsp;/ la recherche, élargis la plage de dates,<br>ou crée ta première tâche.</p><button class="btn" onclick="App.views.gantt.newItem()">+ Nouvelle tâche</button></div>';
+      table.appendChild(empty);
+    }
+
+    // Tooltip singleton
+    const tip = document.getElementById('gantt-tip') || (() => {
+      const el = document.createElement('div'); el.id = 'gantt-tip'; el.className = 'gantt-tooltip';
+      document.body.appendChild(el); return el;
+    })();
+    let tipTimer;
+
     overlay.querySelectorAll('.gantt-bar').forEach(el => {
       el.style.pointerEvents = 'auto';
-      el.addEventListener('click', () => this.openTacheForm(el.dataset.tid));
+      if (this.state.selectedIds.has(el.dataset.tid)) el.classList.add('selected');
+      el.addEventListener('click', e => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) { e.preventDefault(); this.toggleSelection(el.dataset.tid); return; }
+        if (this.state.selectedIds.size) { this.clearSelection(); }
+        this.openTacheForm(el.dataset.tid);
+      });
       el.addEventListener('contextmenu', e => { e.preventDefault(); this.showContextMenu(e, el.dataset.tid); });
+      el.addEventListener('mouseenter', () => {
+        clearTimeout(tipTimer);
+        tipTimer = setTimeout(() => {
+          if (el.classList.contains('dragging')) return;
+          const t = DB.tache(el.dataset.tid); if (!t) return;
+          const prj = DB.projet(t.projetId);
+          const assignes = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join(', ');
+          const machine = DB.machine(t.machineId)?.nom;
+          const lieu = DB.lieu(t.lieuId)?.nom;
+          const dur = D.workdaysBetween(t.debut, t.fin);
+          const av = t.avancement || 0;
+          const nComm = (t.commentaires||[]).length;
+          tip.innerHTML = [
+            `<div class="gantt-tooltip-title" style="color:${prj?.couleur||'inherit'}">${prj?`<span style="opacity:.7;font-weight:400">[${prj.code}]</span> `:''}${t.nom}</div>`,
+            `<div class="gantt-tooltip-row"><span class="tt-label">📅</span> ${D.fmt(t.debut)} → ${D.fmt(t.fin)} &nbsp;·&nbsp; <strong>${dur} j.o.</strong></div>`,
+            av > 0 ? `<div class="gantt-tooltip-row"><span class="tt-label">⚡</span> <strong>${av}%</strong> avancé</div>` : '',
+            assignes ? `<div class="gantt-tooltip-row"><span class="tt-label">👤</span> ${assignes}</div>` : '',
+            machine ? `<div class="gantt-tooltip-row"><span class="tt-label">⚙</span> ${machine}</div>` : '',
+            lieu ? `<div class="gantt-tooltip-row"><span class="tt-label">📍</span> ${lieu}</div>` : '',
+            nComm ? `<div class="gantt-tooltip-row"><span class="tt-label">💬</span> ${nComm} commentaire(s)</div>` : '',
+            t.notes ? `<div class="gantt-tooltip-row" style="margin-top:4px;font-size:11px;color:var(--text-muted);display:block">${t.notes.substring(0,100)}${t.notes.length>100?'…':''}</div>` : '',
+          ].filter(Boolean).join('');
+          // Position: measure off-screen first
+          tip.style.left = '-9999px'; tip.style.top = '0';
+          const rect = el.getBoundingClientRect();
+          const tw = tip.offsetWidth, th = tip.offsetHeight;
+          let l = rect.left, tt2 = rect.bottom + 8;
+          if (l + tw > window.innerWidth - 12) l = window.innerWidth - tw - 12;
+          if (tt2 + th > window.innerHeight - 12) tt2 = rect.top - th - 8;
+          tip.style.left = l + 'px'; tip.style.top = tt2 + 'px';
+          tip.classList.add('visible');
+        }, 200);
+      });
+      el.addEventListener('mouseleave', () => { clearTimeout(tipTimer); tip.classList.remove('visible'); });
       this.makeDraggable(el, CELL_W);
     });
+    this.renderSelectionBar();
     overlay.querySelectorAll('.gantt-resize-handle').forEach(el => {
       el.style.pointerEvents = 'auto';
       this.makeResizable(el, CELL_W);
@@ -321,6 +511,15 @@ App.views.gantt = {
         if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
         const sep = text.includes(';') ? ';' : ',';
         const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        // Convertit DD.MM.YYYY / DD/MM/YYYY / MM-DD-YYYY vers ISO YYYY-MM-DD
+        const toISO = raw => {
+          if (!raw) return '';
+          const s = raw.trim().replace(/["']/g,'');
+          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+          const eu = s.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{4})$/);
+          if (eu) return `${eu[3]}-${eu[2].padStart(2,'0')}-${eu[1].padStart(2,'0')}`;
+          return s;
+        };
         const lines = text.split(/\r?\n/).filter(l => l.trim());
         const hdrs = lines[0].split(sep).map(h => norm(h.replace(/^"|"$/g,'')));
         const rows = lines.slice(1).map(l => {
@@ -332,8 +531,8 @@ App.views.gantt = {
           const pCode = norm(r['projet (code)'] || r['projet'] || r['project'] || '');
           const prj = s.projets.find(p => norm(p.code) === pCode || norm(p.nom) === pCode);
           const nom = r['nom'] || r['name'] || r['tâche'] || '';
-          const debut = r['début (yyyy-mm-dd)'] || r['debut'] || r['début'] || r['start'] || '';
-          const fin = r['fin (yyyy-mm-dd)'] || r['fin'] || r['end'] || '';
+          const debut = toISO(r['début (yyyy-mm-dd)'] || r['debut'] || r['début'] || r['start'] || '');
+          const fin   = toISO(r['fin (yyyy-mm-dd)']   || r['fin']   || r['end']   || '');
           const lieuNom = norm(r['lieu'] || '');
           const machNom = norm(r['machine'] || '');
           const lieu = lieuNom ? s.lieux.find(l => norm(l.nom) === lieuNom) : null;
@@ -619,8 +818,11 @@ App.views.gantt = {
       </div>
       <div class="row">
         <div class="field"><label>Début</label><input type="date" id="f-debut" value="${t.debut}"></div>
+        <div class="field" style="flex:0;align-self:flex-end;padding-bottom:2px"><span class="dur-badge" id="f-dur">${Math.max(0,D.workdaysBetween(t.debut,t.fin))} j.o.</span></div>
         <div class="field"><label>Fin</label><input type="date" id="f-fin" value="${t.fin}"></div>
-        <div class="field"><label>Avancement (%)</label><input type="number" id="f-avancement" min="0" max="100" value="${t.avancement||0}"></div>
+      </div>
+      <div class="field"><label>Avancement &nbsp;<span class="av-display" id="f-av-val">${t.avancement||0}%</span></label>
+        <input type="range" id="f-avancement" min="0" max="100" value="${Math.min(100,Math.max(0,t.avancement||0))}" class="av-slider">
       </div>
       <div class="row">
         <div class="field"><label>Machine</label>
@@ -630,10 +832,13 @@ App.views.gantt = {
           <select id="f-lieu"><option value="">—</option>${s.lieux.map(l => `<option value="${l.id}" ${l.id===t.lieuId?'selected':''}>${l.nom}</option>`).join('')}</select>
         </div>
       </div>
-      <div class="field"><label>Assignés (multi-sélection, Ctrl/Cmd)</label>
-        <select id="f-assignes" multiple size="6">
-          ${s.personnes.map(p => `<option value="${p.id}" ${(t.assignes||[]).includes(p.id)?'selected':''}>${App.personneLabel(p)} · ${p.role}</option>`).join('')}
-        </select>
+      <div class="field"><label>Assignés</label>
+        <div class="assignes-list" id="f-assignes-wrap">
+          ${s.personnes.map(p => {
+            const chk = (t.assignes||[]).includes(p.id);
+            return `<label class="assignes-row${chk?' is-checked':''}"><input type="checkbox" class="assignes-cb" value="${p.id}"${chk?' checked':''}> <span>${App.personneLabel(p)}</span> <span class="muted small"> · ${p.role}</span></label>`;
+          }).join('')}
+        </div>
       </div>
       <div id="f-sugg" class="muted small" style="margin-top:-4px"></div>
       <div class="field"><label>🎯 Pré-remplir avec une équipe</label>
@@ -651,10 +856,26 @@ App.views.gantt = {
       <div class="field"><label>📝 Notes / consignes</label>
         <textarea id="f-notes" rows="3" placeholder="Instructions d'exécution, références, points d'attention…">${t.notes||''}</textarea>
       </div>
+      <div class="field"><label>💬 Commentaires (${(t.commentaires||[]).length})</label>
+        <div id="f-comments-list" class="comments-list">
+          ${(t.commentaires||[]).length ? (t.commentaires||[]).slice().reverse().map(c => `
+            <div class="comment-item" data-cid="${c.id}">
+              <div class="comment-head"><strong>${c.userName}</strong> <span class="muted small">· ${new Date(c.date).toLocaleString('fr-CH',{dateStyle:'short',timeStyle:'short'})}</span>
+              ${c.userId === App.currentUser().id ? `<button class="btn-ghost comment-del" data-cid="${c.id}" style="padding:0 6px;margin-left:auto" title="Supprimer">🗑</button>` : ''}</div>
+              <div class="comment-text">${c.texte.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>
+            </div>
+          `).join('') : '<p class="muted small" style="margin:4px 0">Aucun commentaire. Partage une info, un blocage, une décision…</p>'}
+        </div>
+        <div class="comment-add">
+          <textarea id="f-comment-new" rows="2" placeholder="Ajouter un commentaire (Ctrl+Entrée pour poster)…"></textarea>
+          <button class="btn btn-secondary" id="f-comment-post" style="margin-top:4px">💬 Poster</button>
+        </div>
+      </div>
       <label class="small"><input type="checkbox" id="f-jalon" ${t.jalon?'checked':''}> Jalon</label>
     `;
     const foot = `
       ${!isNew ? '<button class="btn btn-danger" id="f-del">Supprimer</button>' : ''}
+      ${!isNew ? '<button class="btn btn-secondary" id="f-dup" title="Duplique cette tâche dans le même projet">⎘ Dupliquer</button>' : ''}
       <span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="f-cancel">Annuler</button>
       <button class="btn" id="f-save">${isNew?'Créer':'Enregistrer'}</button>
@@ -667,12 +888,19 @@ App.views.gantt = {
       const sugg = App.suggestAssignees(pseudo, 3);
       document.getElementById('f-sugg').innerHTML = '💡 Suggestions : ' + sugg.map(x => `<button type="button" class="chip" data-sugg="${x.p.id}" style="cursor:pointer">${App.personneLabel(x.p)}${x.compMatch?' ✓':''} · charge ${x.charge}j</button>`).join(' ');
       document.querySelectorAll('[data-sugg]').forEach(b => b.onclick = () => {
-        const sel = document.getElementById('f-assignes');
-        Array.from(sel.options).forEach(o => { if (o.value === b.dataset.sugg) o.selected = true; });
+        const cb = document.querySelector(`#f-assignes-wrap .assignes-cb[value="${b.dataset.sugg}"]`);
+        if (cb && !cb.checked) { cb.checked = true; cb.closest('.assignes-row').classList.add('is-checked'); }
       });
     };
     renderSugg();
     ['f-debut','f-fin','f-machine','f-lieu','f-type'].forEach(id => { const el = document.getElementById(id); if (el) el.onchange = renderSugg; });
+    const updateDur = () => { const el = document.getElementById('f-dur'); if (el) el.textContent = Math.max(0, D.workdaysBetween(document.getElementById('f-debut').value, document.getElementById('f-fin').value)) + ' j.o.'; };
+    ['f-debut','f-fin'].forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('change', updateDur); });
+    const avEl = document.getElementById('f-avancement'); if (avEl) avEl.oninput = e => { const d = document.getElementById('f-av-val'); if (d) d.textContent = e.target.value + '%'; };
+    const assignesWrap = document.getElementById('f-assignes-wrap');
+    if (assignesWrap) assignesWrap.addEventListener('change', e => {
+      if (e.target.classList.contains('assignes-cb')) e.target.closest('.assignes-row').classList.toggle('is-checked', e.target.checked);
+    });
 
     // Pré-remplissage par équipe — avec détection de conflit et popup de choix
     document.getElementById('f-eq-apply').onclick = () => {
@@ -716,8 +944,10 @@ App.views.gantt = {
             }
           });
         });
-        const sel = document.getElementById('f-assignes');
-        Array.from(sel.options).forEach(o => o.selected = selectedIds.has(o.value));
+        document.querySelectorAll('#f-assignes-wrap .assignes-cb').forEach(cb => {
+          cb.checked = selectedIds.has(cb.value);
+          cb.closest('.assignes-row').classList.toggle('is-checked', selectedIds.has(cb.value));
+        });
         const missing = [];
         prop.slots.forEach(sl => {
           const got = sl.selected.filter(c => selectedIds.has(c.p.id)).length;
@@ -782,6 +1012,27 @@ App.views.gantt = {
       };
     };
 
+    // Commentaires
+    const refreshComments = () => { App.closeModal(); this.openTacheForm(t.id); };
+    document.getElementById('f-comment-post').onclick = () => {
+      const ta = document.getElementById('f-comment-new');
+      const txt = ta.value.trim();
+      if (!txt) { App.toast('Commentaire vide', 'warn'); return; }
+      const u = App.currentUser();
+      if (!t.commentaires) t.commentaires = [];
+      t.commentaires.push({ id: DB.uid('CM'), userId: u.id, userName: u.nom, texte: txt, date: new Date().toISOString() });
+      if (isNew) { DB.state.taches.push(t); DB.logAudit('create','tache',t.id,t.nom); DB.save(); App.closeModal(); App.toast('Tâche créée avec commentaire','success'); App.refresh(); return; }
+      DB.save(); App.toast('Commentaire ajouté','success'); refreshComments();
+    };
+    document.getElementById('f-comment-new').onkeydown = e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); document.getElementById('f-comment-post').click(); }
+    };
+    document.querySelectorAll('.comment-del').forEach(b => b.onclick = () => {
+      if (!confirm('Supprimer ce commentaire ?')) return;
+      t.commentaires = (t.commentaires||[]).filter(c => c.id !== b.dataset.cid);
+      DB.save(); refreshComments();
+    });
+
     document.getElementById('f-cancel').onclick = () => App.closeModal();
     document.getElementById('f-save').onclick = () => {
       t.nom = document.getElementById('f-nom').value.trim();
@@ -792,7 +1043,7 @@ App.views.gantt = {
       t.avancement = +document.getElementById('f-avancement').value;
       t.machineId = document.getElementById('f-machine').value || null;
       t.lieuId = document.getElementById('f-lieu').value || null;
-      t.assignes = Array.from(document.getElementById('f-assignes').selectedOptions).map(o => o.value);
+      t.assignes = Array.from(document.querySelectorAll('#f-assignes-wrap .assignes-cb:checked')).map(cb => cb.value);
       t.jalon = document.getElementById('f-jalon').checked;
       t.dependances = Array.from(document.getElementById('f-deps').selectedOptions).map(o => o.value);
       t.notes = document.getElementById('f-notes').value;
@@ -807,6 +1058,14 @@ App.views.gantt = {
         DB.state.taches = DB.state.taches.filter(x => x.id !== t.id);
         DB.logAudit('delete','tache',t.id,t.nom);
         DB.save(); App.closeModal(); App.toast('Tâche supprimée','info'); App.refresh();
+      };
+      document.getElementById('f-dup').onclick = () => {
+        const copy = JSON.parse(JSON.stringify(t));
+        copy.id = DB.uid('T'); copy.nom = t.nom + ' (copie)';
+        copy.avancement = 0; copy.dependances = []; copy.commentaires = [];
+        DB.state.taches.push(copy);
+        DB.logAudit('create','tache',copy.id,copy.nom);
+        DB.save(); App.closeModal(); App.toast('Tâche dupliquée','success'); this.draw();
       };
     }
   },
