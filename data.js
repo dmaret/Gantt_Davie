@@ -33,6 +33,9 @@ const DB = {
     // v3.2 : absences par personne, notes sur tâches, audit log, modèles tâches
     this.state.personnes.forEach(p => { if (!p.absences) p.absences = []; });
     this.state.taches.forEach(t => { if (t.notes === undefined) t.notes = ''; });
+    // v3.4 : checklists par tâche, baselines planning
+    this.state.taches.forEach(t => { if (!t.checklist) t.checklist = []; });
+    if (!this.state.baselines) this.state.baselines = [];
     if (!this.state.audit) this.state.audit = [];
     if (!this.state.modeles) this.state.modeles = [];
   },
