@@ -607,9 +607,18 @@ App.views.gantt = {
           if (!p1 || !p2) return;
           const crit = isCritical(t) && isCritical(DB.tache(depId));
           const x1 = p1.right, y1 = p1.mid;
-          const x2 = p2.left, y2 = p2.mid;
-          const midX = x2 - 8;
-          const d = `M ${x1} ${y1} L ${x1+6} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
+          const x2 = p2.left,  y2 = p2.mid;
+          const EXIT = 8;
+          const midX = x2 - EXIT;
+          let d;
+          if (midX > x1 + EXIT) {
+            // Espace suffisant : sortie droite → vertical → entrée gauche
+            d = `M ${x1} ${y1} H ${x1+EXIT} V ${y2} H ${x2}`;
+          } else {
+            // Barres adjacentes ou chevauchantes : contournement en U
+            const ySwing = Math.max(y1, y2) + 13;
+            d = `M ${x1} ${y1} H ${x1+EXIT} V ${ySwing} H ${midX} V ${y2} H ${x2}`;
+          }
           paths.push(`<path d="${d}" class="${crit?'critical':''}" marker-end="url(#arrow)"/>`);
         });
       });
