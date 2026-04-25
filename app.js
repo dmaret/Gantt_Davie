@@ -11,6 +11,7 @@ const App = {
     this.populateUserSelect();
     this.updateBell();
     this.bellInterval = setInterval(() => this.updateBell(), 30000);
+    this.initNotifications();
     this.applyGroupUI();
     // Login au démarrage si pas de session authentifiée
     if (!this.isAuthed()) {
@@ -249,7 +250,12 @@ const App = {
           </li>`).join('')}</ul>
           <p class="muted small" style="margin-top:8px">Clic sur une ligne pour ouvrir l'élément concerné.</p>`
       : `<p class="muted">Aucune alerte. ✔</p>`;
-    this.openModal(`Alertes proactives (${alerts.length})`, body, `<span class="spacer" style="flex:1"></span><button class="btn" onclick="App.closeModal()">Fermer</button>`);
+    const notifSupported = 'Notification' in window;
+    const notifGranted = notifSupported && Notification.permission === 'granted';
+    const notifBtn = notifSupported
+      ? `<button class="btn-ghost" onclick="App.requestNotificationPermission()" title="${notifGranted ? 'Notifications activées' : 'Activer les notifications navigateur'}">${notifGranted ? '🔔 Notif. ON' : '🔕 Activer notifs'}</button>`
+      : '';
+    this.openModal(`Alertes proactives (${alerts.length})`, body, `${notifBtn}<span class="spacer" style="flex:1"></span><button class="btn" onclick="App.closeModal()">Fermer</button>`);
     document.querySelectorAll('.alert-row').forEach(li => {
       li.addEventListener('click', () => {
         const a = this._lastAlerts[+li.dataset.idx];
@@ -810,6 +816,56 @@ const App = {
 
     return alerts;
   },
+
+  // ── Notifications navigateur ────────────────────────────────────────────
+  _notifLastHash: null,
+  initNotifications() {
+    if (!('Notification' in window)) return;
+    // Si déjà accordée, activer silencieusement
+    if (Notification.permission === 'granted') this._scheduleNotifCheck();
+  },
+  requestNotificationPermission() {
+    if (!('Notification' in window)) { this.toast('Notifications non supportées par ce navigateur', 'warn'); return; }
+    if (Notification.permission === 'granted') { this.toast('Notifications déjà activées ✓', 'success'); return; }
+    Notification.requestPermission().then(perm => {
+      if (perm === 'granted') {
+        this.toast('Notifications activées ✓', 'success');
+        this._scheduleNotifCheck();
+        this._sendBrowserNotif('Atelier Plan', 'Vous recevrez des alertes pour les tâches urgentes.', 'welcome');
+      } else {
+        this.toast('Permission refusée', 'warn');
+      }
+    });
+  },
+  _scheduleNotifCheck() {
+    // Vérifier toutes les heures
+    this._notifTimer = setInterval(() => this._checkAndNotify(), 60 * 60 * 1000);
+    this._checkAndNotify(); // vérification immédiate
+  },
+  _checkAndNotify() {
+    if (Notification.permission !== 'granted') return;
+    const alerts = this.proactiveAlerts().filter(a => a.niveau === 'bad');
+    if (!alerts.length) return;
+    const hash = alerts.map(a => a.msg).join('|');
+    if (hash === this._notifLastHash) return; // déjà notifié pour ces alertes
+    this._notifLastHash = hash;
+    const badCount = alerts.length;
+    this._sendBrowserNotif(
+      `⚠ ${badCount} alerte${badCount > 1 ? 's' : ''} critique${badCount > 1 ? 's' : ''}`,
+      alerts.slice(0, 3).map(a => `• ${a.msg}`).join('\n'),
+      'atelier-alerts'
+    );
+  },
+  _sendBrowserNotif(title, body, tag = 'atelier') {
+    if (Notification.permission !== 'granted') return;
+    const n = new Notification(title, {
+      body, tag, icon: './icons/icon-192.svg', badge: './icons/icon-192.svg',
+      requireInteraction: false,
+    });
+    n.onclick = () => { window.focus(); n.close(); };
+    setTimeout(() => n.close(), 8000);
+  },
+
 };
 
 // Lance après que tous les scripts de vue sont chargés
