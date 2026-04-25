@@ -1162,6 +1162,29 @@ App.views.gantt = {
       t.notes = document.getElementById('f-notes').value;
       t.checklist = localCL;
       if (!t.nom) { App.toast('Nom requis','error'); return; }
+
+      // Séquencement strict : vérifier que debut > fin de chaque prédécesseur
+      if (!t.jalon && t.dependances.length) {
+        const prj = DB.projet(t.projetId);
+        if (prj?.sequencementStrict) {
+          const depTaches = t.dependances.map(id => DB.state.taches.find(x => x.id === id)).filter(Boolean);
+          const violations = depTaches.filter(d => t.debut <= d.fin);
+          if (violations.length) {
+            const maxFin = violations.reduce((m, d) => d.fin > m ? d.fin : m, '');
+            const sugDebut = D.nextWorkday(D.addDays(maxFin, 1));
+            const durWD = Math.max(1, D.workdaysBetween(t.debut, t.fin));
+            const sugFin = D.addWorkdays(sugDebut, durWD - 1);
+            const names = violations.map(d => `"${d.nom}" (fin ${D.fmt(d.fin)})`).join(', ');
+            const msg = `⛓ Séquencement strict\n\n« ${t.nom} » commence avant la fin de :\n${names}\n\nAuto-corriger → ${D.fmt(sugDebut)} → ${D.fmt(sugFin)} (${durWD} j.o.) ?`;
+            if (!confirm(msg)) return;
+            t.debut = sugDebut;
+            t.fin = sugFin;
+            document.getElementById('f-debut').value = sugDebut;
+            document.getElementById('f-fin').value = sugFin;
+          }
+        }
+      }
+
       if (isNew) { DB.state.taches.push(t); DB.logAudit('create','tache',t.id,t.nom); }
       else DB.logAudit('update','tache',t.id,t.nom);
       DB.save(); App.closeModal(); App.toast('Enregistré','success'); App.refresh();

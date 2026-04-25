@@ -36,6 +36,8 @@ const DB = {
     // v3.4 : checklists par tâche, baselines planning
     this.state.taches.forEach(t => { if (!t.checklist) t.checklist = []; });
     if (!this.state.baselines) this.state.baselines = [];
+    // v3.5 : séquencement strict par projet
+    this.state.projets.forEach(p => { if (p.sequencementStrict === undefined) p.sequencementStrict = false; });
     if (!this.state.audit) this.state.audit = [];
     if (!this.state.modeles) this.state.modeles = [];
   },

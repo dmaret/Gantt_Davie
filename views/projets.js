@@ -56,6 +56,7 @@ App.views.projets = {
           <span class="badge muted">${jalons.length} jalons</span>
           <span class="badge ${p.statut==='en-cours'?'good':'muted'}">${p.statut}</span>
           ${retard ? '<span class="badge bad">retard</span>' : ''}
+          ${p.sequencementStrict ? '<span class="badge" title="Séquencement strict activé : les dates des tâches sont validées par rapport aux dépendances" style="background:#7c3aed22;color:#7c3aed;border:1px solid #7c3aed44">⛓ strict</span>' : ''}
           <span style="flex:1"></span>
           <button class="btn-ghost prj-report" data-id="${p.id}" title="Rapport PDF">⎙ Rapport</button>
         </div>
@@ -199,6 +200,13 @@ App.views.projets = {
           <select id="pf-statut">${['planifié','en-cours','suspendu','clos'].map(x=>`<option ${x===p.statut?'selected':''}>${x}</option>`).join('')}</select>
         </div>
       </div>
+      <div class="field" style="margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+          <input type="checkbox" id="pf-strict" ${p.sequencementStrict?'checked':''}>
+          <span>⛓ Séquencement strict</span>
+        </label>
+        <div class="muted small" style="margin-top:3px;padding-left:24px">Si activé : à l'enregistrement d'une tâche, les dates sont vérifiées par rapport à ses dépendances — avec proposition d'auto-correction.</div>
+      </div>
       ${!isNew ? `
         <div style="display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap">
           <h3 style="margin:0;flex:1">👥 Tâches & ressources (${taches.length})</h3>
@@ -229,6 +237,7 @@ App.views.projets = {
       p.fin = document.getElementById('pf-fin').value;
       p.priorite = document.getElementById('pf-prio').value;
       p.statut = document.getElementById('pf-statut').value;
+      p.sequencementStrict = document.getElementById('pf-strict').checked;
       if (!p.nom || !p.code) { App.toast('Code et nom requis','error'); return; }
       if (isNew) { s.projets.push(p); DB.logAudit('create','projet',p.id,`${p.code} · ${p.nom}`); }
       else DB.logAudit('update','projet',p.id,`${p.code} · ${p.nom}`);
