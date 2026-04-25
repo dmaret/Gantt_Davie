@@ -141,6 +141,99 @@ App.views.gantt = {
     App.toast(`${events.length} événement(s) exporté(s) en .ics`, 'success');
   },
 
+  resourceLeveling() {
+    const s = DB.state;
+    const today = D.today();
+    const critical = this.criticalPath(s.taches);
+
+    // Calcule la charge hebdo d'une personne (en heures) sur une semaine donnée (start=lundi)
+    const weekLoad = (pid, wStart, wEnd, exclude = new Set()) =>
+      s.taches.filter(t => !exclude.has(t.id) && (t.assignes||[]).includes(pid) && t.fin >= wStart && t.debut <= wEnd)
+        .reduce((h, t) => h + D.weekdaysBetween(t.debut > wStart ? t.debut : wStart, t.fin < wEnd ? t.fin : wEnd) * 7, 0);
+
+    const proposals = [];
+    // Chercher les tâches déplaçables : non critique, non jalon, non terminées, début dans le futur
+    const movable = s.taches.filter(t =>
+      !t.jalon && !critical.has(t.id) && (t.avancement||0) < 100 && t.debut >= today &&
+      (t.assignes||[]).length > 0
+    );
+
+    movable.forEach(t => {
+      const durWD = Math.max(1, D.workdaysBetween(t.debut, t.fin));
+      (t.assignes||[]).forEach(pid => {
+        const p = DB.personne(pid);
+        if (!p) return;
+        const cap = p.capaciteHebdo || 35;
+        // Semaine actuelle de la tâche
+        const dt = D.parse(t.debut);
+        const dow = dt.getUTCDay() || 7;
+        const wStart = D.addDays(t.debut, -(dow - 1)); // lundi de la semaine
+        const wEnd = D.addDays(wStart, 4);            // vendredi
+        const load = weekLoad(pid, wStart, wEnd);
+        if (load <= cap) return; // pas de surcharge
+
+        // Chercher une semaine avec de la place (jusqu'à 8 semaines après)
+        for (let w = 1; w <= 8; w++) {
+          const nWStart = D.addDays(wStart, w * 7);
+          const nWEnd = D.addDays(nWStart, 4);
+          const nLoad = weekLoad(pid, nWStart, nWEnd, new Set([t.id]));
+          const taskH = durWD * 7;
+          if (nLoad + taskH <= cap * 1.1) { // tolérance 10%
+            const newDebut = D.nextWorkday(nWStart);
+            const newFin = D.addWorkdays(newDebut, durWD - 1);
+            proposals.push({ t, pid, p, wStart, load, cap, newDebut, newFin });
+            break;
+          }
+        }
+      });
+    });
+
+    if (!proposals.length) {
+      App.toast('Aucune surcharge de ressource détectée sur les tâches déplaçables.', 'success');
+      return;
+    }
+
+    // Afficher les propositions
+    const rows = proposals.slice(0, 20).map(pr => {
+      const prj = DB.projet(pr.t.projetId);
+      return `<tr class="level-row" data-tid="${pr.t.id}" data-debut="${pr.newDebut}" data-fin="${pr.newFin}">
+        <td><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="level-cb" checked> <span class="badge" style="background:${prj?.couleur||'#888'}22;color:${prj?.couleur||'#888'}">${prj?.code||'?'}</span> ${pr.t.nom}</label></td>
+        <td class="muted small">${App.personneLabel(pr.p)}</td>
+        <td><span class="badge bad">${pr.load}h / ${pr.cap}h</span></td>
+        <td class="muted small">${D.fmt(pr.t.debut)} → ${D.fmt(pr.t.fin)}</td>
+        <td>→ <strong>${D.fmt(pr.newDebut)} → ${D.fmt(pr.newFin)}</strong></td>
+      </tr>`;
+    }).join('');
+
+    const body = `
+      <p class="muted small" style="margin-bottom:8px">${proposals.length} proposition(s) de rééquilibrage · tâches non critiques uniquement · cocher pour appliquer</p>
+      <div style="overflow:auto;max-height:55vh">
+        <table class="data">
+          <thead><tr><th>Tâche</th><th>Personne</th><th>Surcharge</th><th>Dates actuelles</th><th>Dates proposées</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <p class="muted small" style="margin-top:8px">⚠ Seules les tâches <strong>non critiques</strong>, non terminées et à venir sont proposées. La cascade auto s'applique si activée.</p>
+    `;
+    const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button><span class="spacer" style="flex:1"></span><button class="btn" id="level-apply">⚖ Appliquer les sélectionnées</button>`;
+    App.openModal(`⚖ Équilibrage ressources — ${proposals.length} proposition(s)`, body, foot);
+    document.getElementById('level-apply').onclick = () => {
+      let n = 0;
+      document.querySelectorAll('.level-row').forEach(row => {
+        if (!row.querySelector('.level-cb').checked) return;
+        const tach = DB.tache(row.dataset.tid);
+        if (!tach) return;
+        tach.debut = row.dataset.debut;
+        tach.fin = row.dataset.fin;
+        if (this.state.autoCascade) this.cascadeShift(tach.id, 0);
+        n++;
+      });
+      DB.save(); App.closeModal();
+      App.toast(`${n} tâche(s) rééquilibrée(s)`, 'success');
+      this.draw();
+    };
+  },
+
   saveBaseline() {
     if (!App.can('edit')) { App.toast('Lecture seule','error'); return; }
     const label = prompt('Nom de cette baseline :', 'Baseline ' + D.fmt(D.today()));
@@ -276,6 +369,11 @@ App.views.gantt = {
             <option value="84">12 sem.</option>
             <option value="168">24 sem.</option>
           </select>
+          <select id="g-zoom" title="Niveau de zoom de la grille">
+            <option value="jour">Zoom : jour</option>
+            <option value="semaine">Zoom : semaine</option>
+            <option value="mois">Zoom : mois</option>
+          </select>
           <button class="btn-ghost" id="g-next">▶</button>
           <button class="btn-ghost" id="g-today">Aujourd'hui</button>
           <button class="btn-ghost" id="g-fit" title="Ajuster la plage pour afficher toutes les tâches visibles">Ajuster</button>
@@ -290,6 +388,7 @@ App.views.gantt = {
           <button class="btn-ghost" id="g-csv">⤓ Exporter CSV</button>
           <button class="btn-ghost" id="g-ics" title="Exporter vers Outlook / Google Agenda / Apple Calendar">📅 Export .ics</button>
           <button class="btn-ghost" id="g-rapport" title="Rapport hebdomadaire imprimable par lieu">📋 Rapport</button>
+          <button class="btn-ghost" id="g-level" data-perm="edit" title="Détecter les surcharges et proposer un rééquilibrage automatique des ressources">⚖ Équilibrer</button>
           <button class="btn-ghost" id="g-baseline" data-perm="edit" title="Sauvegarder l'état actuel du planning comme référence (baseline)">📸 Baseline</button>
           <select id="g-bl-sel" title="Comparer avec une baseline sauvegardée"><option value="">— Comparer —</option></select>
           <button class="btn" id="g-add">+ Nouvelle tâche</button>
@@ -303,14 +402,17 @@ App.views.gantt = {
     document.getElementById('g-search').value = st.search;
     document.getElementById('g-start').value = st.rangeStart;
     document.getElementById('g-days').value = String(st.rangeDays);
+    document.getElementById('g-zoom').value = st.zoom || 'jour';
 
     document.getElementById('g-mode').onchange = e => { st.mode = e.target.value; this.draw(); };
     document.getElementById('g-proj').onchange = e => { st.projetFilter = e.target.value; this.draw(); };
     document.getElementById('g-search').oninput = e => { st.search = e.target.value.toLowerCase(); this.draw(); };
     document.getElementById('g-start').onchange = e => { st.rangeStart = e.target.value; this.draw(); };
     document.getElementById('g-days').onchange = e => { st.rangeDays = +e.target.value; this.draw(); };
-    document.getElementById('g-prev').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, -14); this.draw(); };
-    document.getElementById('g-next').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, 14); this.draw(); };
+    document.getElementById('g-zoom').onchange = e => { st.zoom = e.target.value; this.draw(); };
+    const zoomStep = () => st.zoom === 'mois' ? 30 : st.zoom === 'semaine' ? 7 : 14;
+    document.getElementById('g-prev').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, -zoomStep()); this.draw(); };
+    document.getElementById('g-next').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, zoomStep()); this.draw(); };
     document.getElementById('g-today').onclick = () => { st.rangeStart = D.addDays(D.today(), -7); this.draw(); };
     document.getElementById('g-fit').onclick = () => {
       let ts = DB.state.taches;
@@ -347,6 +449,7 @@ App.views.gantt = {
     };
     document.getElementById('g-ics').onclick = () => this.exportICS();
     document.getElementById('g-rapport').onclick = () => this.showRapportHebdo();
+    document.getElementById('g-level').onclick = () => this.resourceLeveling();
     document.getElementById('g-baseline').onclick = () => this.saveBaseline();
     const blSel = document.getElementById('g-bl-sel');
     (DB.state.baselines||[]).forEach(b => { const o = document.createElement('option'); o.value = b.id; o.textContent = `📸 ${b.label}`; if (b.id === st.baselineId) o.selected = true; blSel.appendChild(o); });
@@ -366,9 +469,11 @@ App.views.gantt = {
 
     // Build groups
     const groups = this.buildGroups();
-    const CELL_W = 28;  // largeur jour
+    const zoom = st.zoom || 'jour';
+    const CELL_W = zoom === 'mois' ? 4 : zoom === 'semaine' ? 9 : 28;
     const LABEL_W = 220;
     const dowLetters = ['D','L','M','M','J','V','S']; // dim=0, lun=1, …, sam=6
+    const isoWeekNum = iso => { const d = D.parse(iso); const thu = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 4 - (d.getUTCDay()||7))); return Math.ceil(((thu - new Date(Date.UTC(thu.getUTCFullYear(),0,1)))/864e5+1)/7); };
     const dayClasses = d => {
       const dt = D.parse(d);
       const dow = dt.getUTCDay();
@@ -380,7 +485,7 @@ App.views.gantt = {
       return cls.join(' ');
     };
 
-    // Header (une cellule par jour : numéro + lettre du jour)
+    // Header (une cellule par jour, contenu adapté au zoom)
     const headerCells = [];
     headerCells.push(`<div class="gantt-cell head label">Élément</div>`);
     for (let i=0; i<days; i++) {
@@ -391,11 +496,15 @@ App.views.gantt = {
       const firstOfMonth = dayNum === 1;
       const showMonth = firstOfMonth || i === 0;
       const monthName = showMonth ? dt.toLocaleDateString('fr-CH', { month: 'short', timeZone: 'UTC' }) : '';
-      headerCells.push(`<div class="gantt-cell head day-cell ${dayClasses(d)}">
-        ${showMonth ? `<div class="day-month-name">${monthName}</div>` : ''}
-        <div class="day-num">${showMonth ? '' : dayNum}</div>
-        <div class="day-dow">${dowLetters[dow]}</div>
-      </div>`);
+      let content = '';
+      if (zoom === 'jour') {
+        content = `${showMonth ? `<div class="day-month-name">${monthName}</div>` : ''}<div class="day-num">${showMonth ? '' : dayNum}</div><div class="day-dow">${dowLetters[dow]}</div>`;
+      } else if (zoom === 'semaine') {
+        content = dow === 1 ? `<div class="day-month-name" style="font-size:9px">S${isoWeekNum(d)}</div>` : (showMonth ? `<div class="day-month-name" style="font-size:8px">${monthName}</div>` : '');
+      } else { // mois
+        content = showMonth ? `<div class="day-month-name" style="font-size:8px;writing-mode:horizontal-tb">${monthName}${firstOfMonth?'':''}</div>` : '';
+      }
+      headerCells.push(`<div class="gantt-cell head day-cell ${dayClasses(d)}">${content}</div>`);
     }
 
     // Body rows
@@ -581,6 +690,51 @@ App.views.gantt = {
       el.style.pointerEvents = 'auto';
       this.makeResizable(el, CELL_W);
     });
+
+    // Drag-to-create : clic maintenu sur la grille vide → nouvelle tâche
+    if (App.can('edit')) {
+      const scrollWrap = document.querySelector('.gantt-scroll');
+      let dragStart = null, dragGhost = null;
+      table.addEventListener('mousedown', e => {
+        if (e.target.closest('.gantt-bar,.gantt-resize-handle,.gantt-cell.label,.gantt-cell.head')) return;
+        if (e.button !== 0) return;
+        const rect = table.getBoundingClientRect();
+        const scrollLeft = scrollWrap ? scrollWrap.scrollLeft : 0;
+        const x = e.clientX - rect.left + scrollLeft;
+        if (x < LABEL_W) return;
+        dragStart = { x, y: e.clientY };
+        dragGhost = document.createElement('div');
+        dragGhost.id = 'drag-ghost';
+        dragGhost.style.cssText = `position:fixed;background:var(--primary);opacity:.25;border-radius:3px;pointer-events:none;z-index:800;height:20px`;
+        document.body.appendChild(dragGhost);
+        e.preventDefault();
+      });
+      document.addEventListener('mousemove', e => {
+        if (!dragStart || !dragGhost) return;
+        const rect = table.getBoundingClientRect();
+        const scrollLeft = scrollWrap ? scrollWrap.scrollLeft : 0;
+        const x = e.clientX - rect.left + scrollLeft;
+        const x1 = Math.min(dragStart.x, x), x2 = Math.max(dragStart.x, x);
+        dragGhost.style.left = (rect.left + x1 - scrollLeft) + 'px';
+        dragGhost.style.top = (dragStart.y - 10) + 'px';
+        dragGhost.style.width = Math.max(CELL_W, x2 - x1) + 'px';
+      });
+      document.addEventListener('mouseup', e => {
+        if (!dragStart || !dragGhost) return;
+        const rect = table.getBoundingClientRect();
+        const scrollLeft = scrollWrap ? scrollWrap.scrollLeft : 0;
+        const x = e.clientX - rect.left + scrollLeft;
+        const x1 = Math.min(dragStart.x, x) - LABEL_W;
+        const x2 = Math.max(dragStart.x, x) - LABEL_W;
+        dragGhost.remove(); dragGhost = null; dragStart = null;
+        const dayStart = Math.max(0, Math.floor(x1 / CELL_W));
+        const dayEnd = Math.max(dayStart, Math.floor(x2 / CELL_W));
+        if (dayEnd - dayStart < 0) return;
+        const debut = D.nextWorkday(D.addDays(start, dayStart));
+        const fin = D.addWorkdays(debut, Math.max(0, dayEnd - dayStart));
+        this.openTacheForm(null, { debut, fin });
+      });
+    }
   },
 
   downloadTemplate() {
@@ -883,12 +1037,13 @@ App.views.gantt = {
     });
   },
 
-  openTacheForm(tid) {
+  openTacheForm(tid, prefill = {}) {
     const isNew = !tid;
     const s = DB.state;
     if (isNew && !s.projets.length) { App.toast("Créer d'abord un projet",'error'); App.navigate('projets'); return; }
     const t = tid ? DB.tache(tid) : {
-      id: DB.uid('T'), projetId: s.projets[0].id, nom:'', debut: D.today(), fin: D.addDays(D.today(),2),
+      id: DB.uid('T'), projetId: s.projets[0].id, nom:'',
+      debut: prefill.debut || D.today(), fin: prefill.fin || D.addDays(D.today(), 4),
       assignes:[], machineId:null, lieuId:null, type:'prod', avancement:0, jalon:false, dependances:[],
     };
     const body = `
@@ -968,6 +1123,22 @@ App.views.gantt = {
         </div>
       </div>
       <label class="small"><input type="checkbox" id="f-jalon" ${t.jalon?'checked':''}> Jalon</label>
+
+      ${!isNew ? `<div class="field" style="margin-top:10px">
+        <label>⏱ Temps réel <span class="muted small" id="f-temps-total"></span></label>
+        <div id="f-temps-list" class="cl-list" style="max-height:140px"></div>
+        <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+          <input type="date" id="f-temps-date" value="${D.today()}" style="flex:1;min-width:120px">
+          <select id="f-temps-qui" style="flex:2;min-width:120px">
+            ${(t.assignes||[]).length
+              ? (t.assignes||[]).map(pid => { const p = DB.personne(pid); return p ? `<option value="${pid}">${App.personneLabel(p)}</option>` : ''; }).join('')
+              : s.personnes.map(p => `<option value="${p.id}">${App.personneLabel(p)}</option>`).join('')}
+          </select>
+          <input type="number" id="f-temps-h" min="0.5" max="24" step="0.5" value="7" style="width:65px" title="Heures">
+          <button class="btn btn-secondary" id="f-temps-add" type="button">+ Log</button>
+        </div>
+        <div class="muted small" style="margin-top:3px">Enregistre les heures réelles travaillées sur cette tâche.</div>
+      </div>` : ''}
     `;
     const foot = `
       ${!isNew ? '<button class="btn btn-danger" id="f-del">Supprimer</button>' : ''}
@@ -1145,6 +1316,41 @@ App.views.gantt = {
       t.commentaires = (t.commentaires||[]).filter(c => c.id !== b.dataset.cid);
       DB.save(); refreshComments();
     });
+
+    // Temps réel
+    if (!isNew) {
+      const tempsLog = t.tempsLog || [];
+      const refreshTemps = () => {
+        const total = tempsLog.reduce((s, e) => s + (e.h || 0), 0);
+        const estim = Math.max(1, D.workdaysBetween(t.debut, t.fin)) * 7;
+        const tEl = document.getElementById('f-temps-total');
+        if (tEl) tEl.textContent = `${total}h réelles / ~${estim}h estimées`;
+        const listEl = document.getElementById('f-temps-list');
+        if (!listEl) return;
+        listEl.innerHTML = tempsLog.length
+          ? [...tempsLog].reverse().map(e => {
+              const p = DB.personne(e.pid); const pNom = p ? App.personneLabel(p) : '—';
+              return `<div class="cl-item"><span class="cl-row" style="gap:6px"><span class="muted small">${D.fmt(e.date)}</span><strong style="font-size:12px">${pNom}</strong><span class="muted small">${e.h}h</span>${e.note?`<span class="muted small">· ${e.note}</span>`:''}</span><button class="btn-ghost cl-del" data-eid="${e.id}" style="padding:0 4px;flex-shrink:0">×</button></div>`;
+            }).join('')
+          : '<p class="muted small" style="margin:4px 0">Aucune saisie de temps.</p>';
+        listEl.querySelectorAll('.cl-del').forEach(btn => btn.onclick = () => {
+          const idx = tempsLog.findIndex(x => x.id === btn.dataset.eid);
+          if (idx >= 0) tempsLog.splice(idx, 1);
+          t.tempsLog = tempsLog; DB.save(); refreshTemps();
+        });
+      };
+      refreshTemps();
+      const addBtn = document.getElementById('f-temps-add');
+      if (addBtn) addBtn.onclick = () => {
+        const date = document.getElementById('f-temps-date').value;
+        const pid = document.getElementById('f-temps-qui').value;
+        const h = parseFloat(document.getElementById('f-temps-h').value) || 0;
+        if (!date || !pid || h <= 0) { App.toast('Date, personne et heures requis', 'warn'); return; }
+        tempsLog.push({ id: DB.uid('TL'), date, pid, h });
+        t.tempsLog = tempsLog; DB.save(); refreshTemps();
+        App.toast(`${h}h enregistrées`, 'success');
+      };
+    }
 
     document.getElementById('f-cancel').onclick = () => App.closeModal();
     document.getElementById('f-save').onclick = () => {

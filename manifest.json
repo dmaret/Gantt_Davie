@@ -1,0 +1,14 @@
+{
+  "name": "Atelier Plan",
+  "short_name": "Atelier",
+  "description": "Planification atelier de production",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f8f9fa",
+  "theme_color": "#2c5fb3",
+  "lang": "fr",
+  "icons": [
+    { "src": "icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml" },
+    { "src": "icons/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml" }
+  ]
+}

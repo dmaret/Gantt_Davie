@@ -36,10 +36,84 @@ const DB = {
     // v3.4 : checklists par tâche, baselines planning
     this.state.taches.forEach(t => { if (!t.checklist) t.checklist = []; });
     if (!this.state.baselines) this.state.baselines = [];
-    // v3.5 : séquencement strict par projet
+    // v3.5 : séquencement strict par projet + suivi temps réel
     this.state.projets.forEach(p => { if (p.sequencementStrict === undefined) p.sequencementStrict = false; });
+    this.state.taches.forEach(t => { if (!t.tempsLog) t.tempsLog = []; });
     if (!this.state.audit) this.state.audit = [];
     if (!this.state.modeles) this.state.modeles = [];
+  },
+
+  checkIntegrity() {
+    const s = this.state;
+    const issues = [];
+    const projetIds = new Set(s.projets.map(p => p.id));
+    const personneIds = new Set(s.personnes.map(p => p.id));
+    const lieuIds = new Set(s.lieux.map(l => l.id));
+    const machineIds = new Set(s.machines.map(m => m.id));
+    const tacheIds = new Set(s.taches.map(t => t.id));
+    const stockIds = new Set((s.stock||[]).map(a => a.id));
+
+    // Tâches orphelines (projet supprimé)
+    s.taches.forEach(t => {
+      if (!projetIds.has(t.projetId))
+        issues.push({ type: 'warn', entity: 'tache', id: t.id, msg: `Tâche « ${t.nom} » : projet introuvable (${t.projetId})` });
+    });
+
+    // Tâches avec assignés invalides
+    s.taches.forEach(t => {
+      (t.assignes||[]).forEach(pid => {
+        if (!personneIds.has(pid))
+          issues.push({ type: 'warn', entity: 'tache', id: t.id, msg: `Tâche « ${t.nom} » : personne assignée introuvable (${pid})` });
+      });
+    });
+
+    // Tâches avec lieu/machine invalide
+    s.taches.forEach(t => {
+      if (t.lieuId && !lieuIds.has(t.lieuId))
+        issues.push({ type: 'warn', entity: 'tache', id: t.id, msg: `Tâche « ${t.nom} » : lieu introuvable (${t.lieuId})` });
+      if (t.machineId && !machineIds.has(t.machineId))
+        issues.push({ type: 'warn', entity: 'tache', id: t.id, msg: `Tâche « ${t.nom} » : machine introuvable (${t.machineId})` });
+    });
+
+    // Dépendances invalides
+    s.taches.forEach(t => {
+      (t.dependances||[]).forEach(did => {
+        if (!tacheIds.has(did))
+          issues.push({ type: 'warn', entity: 'tache', id: t.id, msg: `Tâche « ${t.nom} » : dépendance introuvable (${did})` });
+      });
+    });
+
+    // Dates incohérentes (fin < debut)
+    s.taches.forEach(t => {
+      if (!t.jalon && t.fin < t.debut)
+        issues.push({ type: 'error', entity: 'tache', id: t.id, msg: `Tâche « ${t.nom} » : fin (${t.fin}) antérieure au début (${t.debut})` });
+    });
+
+    // Personnes avec lieu principal invalide
+    s.personnes.forEach(p => {
+      if (p.lieuPrincipalId && !lieuIds.has(p.lieuPrincipalId))
+        issues.push({ type: 'warn', entity: 'personne', id: p.id, msg: `Personne « ${p.prenom} ${p.nom} » : lieu principal introuvable` });
+    });
+
+    // Absences chevauchant des tâches affectées
+    s.personnes.forEach(p => {
+      (p.absences||[]).forEach(a => {
+        const conflicts = s.taches.filter(t =>
+          (t.assignes||[]).includes(p.id) && t.debut <= a.fin && t.fin >= a.debut
+        );
+        conflicts.forEach(t => {
+          issues.push({ type: 'info', entity: 'absence', id: p.id, msg: `« ${p.prenom} ${p.nom} » est absent(e) du ${a.debut} au ${a.fin} mais assigné(e) à « ${t.nom} »` });
+        });
+      });
+    });
+
+    // Stock articles avec lieu de stockage invalide
+    (s.stock||[]).forEach(a => {
+      if (a.lieuId && !lieuIds.has(a.lieuId))
+        issues.push({ type: 'warn', entity: 'stock', id: a.id, msg: `Article « ${a.nom} » : lieu de stockage introuvable` });
+    });
+
+    return issues;
   },
 
   // Journal d'audit : garde les 500 dernières actions
