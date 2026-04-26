@@ -1,6 +1,21 @@
 App.views.projets = {
   render(root) {
     const s = DB.state;
+    // Group projects by groupe field
+    const grouped = {};
+    s.projets.forEach(p => {
+      const g = p.groupe || '';
+      if (!grouped[g]) grouped[g] = [];
+      grouped[g].push(p);
+    });
+    const groupKeys = Object.keys(grouped).sort((a,b) => {
+      if (!a) return 1; if (!b) return -1;
+      return a.localeCompare(b);
+    });
+    const cardsHtml = groupKeys.map(g => {
+      const header = g ? `<div class="prj-group-header"><span class="badge" style="background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb);font-size:12px;padding:3px 10px">${g}</span></div>` : '';
+      return header + `<div class="grid grid-3">${grouped[g].map(p => this.renderProjectCard(p)).join('')}</div>`;
+    }).join('');
     root.innerHTML = `
       <div class="toolbar">
         <strong>Projets</strong>
@@ -11,9 +26,7 @@ App.views.projets = {
         <button class="btn-ghost" id="prj-csv">⤓ Exporter CSV</button>
         <button class="btn" id="prj-add">+ Nouveau projet</button>
       </div>
-      <div class="grid grid-3">
-        ${s.projets.map(p => this.renderProjectCard(p)).join('')}
-      </div>
+      ${cardsHtml}
     `;
     document.getElementById('prj-add').onclick = () => this.openForm(null);
     document.getElementById('prj-tpl').onclick = () => this.downloadTemplate();
@@ -56,6 +69,7 @@ App.views.projets = {
           <span class="badge muted">${jalons.length} jalons</span>
           <span class="badge ${p.statut==='en-cours'?'good':'muted'}">${p.statut}</span>
           ${retard ? '<span class="badge bad">retard</span>' : ''}
+          ${p.groupe ? `<span class="badge muted" style="font-size:10px">${p.groupe}</span>` : ''}
           ${p.sequencementStrict ? '<span class="badge" title="Séquencement strict activé : les dates des tâches sont validées par rapport aux dépendances" style="background:#7c3aed22;color:#7c3aed;border:1px solid #7c3aed44">⛓ strict</span>' : ''}
           <span style="flex:1"></span>
           <button class="btn-ghost prj-report" data-id="${p.id}" title="Rapport PDF">⎙ Rapport</button>
@@ -170,9 +184,10 @@ App.views.projets = {
   openForm(id) {
     const isNew = !id;
     const s = DB.state;
+    const existingGroups = [...new Set(s.projets.map(p => p.groupe||'').filter(Boolean))].sort();
     const p = id ? DB.projet(id) : {
       id: DB.uid('PRJ'), code:'PRJ-'+ (s.projets.length+1), nom:'', client:'', couleur:'#2c5fb3',
-      debut:D.today(), fin:D.addDays(D.today(),30), etage:'1er', priorite:'moyenne', statut:'planifié'
+      debut:D.today(), fin:D.addDays(D.today(),30), etage:'1er', priorite:'moyenne', statut:'planifié', groupe:''
     };
     const taches = id ? DB.tachesDuProjet(id) : [];
     const canEdit = App.can('edit');
@@ -182,6 +197,11 @@ App.views.projets = {
         <div class="field"><label>Couleur</label><input type="color" id="pf-color" value="${p.couleur}"></div>
       </div>
       <div class="field"><label>Nom</label><input id="pf-nom" value="${p.nom||''}"></div>
+      <div class="field">
+        <label>Groupe <span class="muted small">(ex: PRJ-Log, PRJ-Emb)</span></label>
+        <input id="pf-groupe" list="pf-groupe-list" value="${p.groupe||''}" placeholder="Laisser vide si sans groupe">
+        <datalist id="pf-groupe-list">${existingGroups.map(g=>`<option value="${g}">`).join('')}</datalist>
+      </div>
       <div class="row">
         <div class="field"><label>Client</label><input id="pf-client" value="${p.client||''}"></div>
         <div class="field"><label>Étage</label>
@@ -207,6 +227,23 @@ App.views.projets = {
         </label>
         <div class="muted small" style="margin-top:3px;padding-left:24px">Si activé : à l'enregistrement d'une tâche, les dates sont vérifiées par rapport à ses dépendances — avec proposition d'auto-correction.</div>
       </div>
+      ${!isNew && p.groupe ? (() => {
+        const linkedModels = (s.modelesProjets||[]).filter(mp => mp.groupe === p.groupe);
+        if (!linkedModels.length) return '';
+        return `<div style="margin-top:14px;padding:10px 12px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="font-size:13px;font-weight:600">🗂 Modèles pour <span class="badge" style="background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb)">${p.groupe}</span></span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            ${linkedModels.map(mp => `
+              <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;border-left:3px solid ${mp.couleur||'#888'}">
+                <span style="font-size:12px;font-weight:500">${mp.nom}</span>
+                <span class="muted small">${(mp.etapes||[]).length} étapes · ${(mp.etapes||[]).reduce((n,e)=>n+(e.duree||0),0)} j.o.</span>
+                <button class="btn btn-secondary pf-use-modele" data-mpid="${mp.id}" style="padding:3px 10px;font-size:11px">▶ Appliquer</button>
+              </div>`).join('')}
+          </div>
+        </div>`;
+      })() : ''}
       ${!isNew ? `
         <div style="display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap">
           <h3 style="margin:0;flex:1">👥 Tâches & ressources (${taches.length})</h3>
@@ -240,11 +277,18 @@ App.views.projets = {
       p.priorite = document.getElementById('pf-prio').value;
       p.statut = document.getElementById('pf-statut').value;
       p.sequencementStrict = document.getElementById('pf-strict').checked;
+      p.groupe = document.getElementById('pf-groupe').value.trim();
       if (!p.nom || !p.code) { App.toast('Code et nom requis','error'); return; }
       if (isNew) { s.projets.push(p); DB.logAudit('create','projet',p.id,`${p.code} · ${p.nom}`); }
       else DB.logAudit('update','projet',p.id,`${p.code} · ${p.nom}`);
       DB.save(); App.closeModal(); App.refresh();
     };
+    document.querySelectorAll('.pf-use-modele').forEach(b => {
+      b.onclick = () => {
+        App.closeModal();
+        App.views.modelesprojets.instancier(b.dataset.mpid, p.id);
+      };
+    });
     if (!isNew) {
       document.getElementById('pf-del').onclick = () => {
         if (!confirm('Supprimer ce projet et toutes ses tâches ?')) return;

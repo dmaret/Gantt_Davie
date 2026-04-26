@@ -825,6 +825,20 @@ const App = {
   lieuLabel(l) { return l ? l.nom : '—'; },
   projetLabel(p) { return p ? p.code + ' — ' + p.nom : '—'; },
 
+  // Build <option>/<optgroup> HTML for project selects; selectedId = currently selected project id
+  projetsOptions(selectedId = '', emptyLabel = '— Aucun projet (tâche libre)') {
+    const projets = DB.state.projets;
+    const grouped = {};
+    projets.forEach(p => { const g = p.groupe||''; if (!grouped[g]) grouped[g]=[]; grouped[g].push(p); });
+    const keys = Object.keys(grouped).sort((a,b) => { if(!a) return 1; if(!b) return -1; return a.localeCompare(b); });
+    let html = `<option value="" ${!selectedId?'selected':''}>${emptyLabel}</option>`;
+    keys.forEach(g => {
+      const opts = grouped[g].map(p => `<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.code} — ${p.nom}</option>`).join('');
+      html += g ? `<optgroup label="${g}">${opts}</optgroup>` : opts;
+    });
+    return html;
+  },
+
   // Suggestions d'affectation basées sur compétence requise + charge actuelle
   suggestAssignees(task, n = 3) {
     const s = DB.state;

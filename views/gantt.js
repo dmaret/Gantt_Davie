@@ -48,7 +48,7 @@ App.views.gantt = {
     const n = this.state.selectedIds.size;
     if (!n) { if (existing) existing.remove(); return; }
     const s = DB.state;
-    const projOpts = '<option value="">Projet…</option>' + s.projets.map(p => `<option value="${p.id}">${p.code} — ${p.nom}</option>`).join('');
+    const projOpts = App.projetsOptions('', 'Projet…');
     const html = `
       <strong>${n} tâche(s) sélectionnée(s)</strong>
       <span class="spacer"></span>
@@ -375,8 +375,7 @@ App.views.gantt = {
             <option value="lieu">Grouper par lieu</option>
           </select>
           <select id="g-proj">
-            <option value="">Tous les projets</option>
-            ${DB.state.projets.map(p => `<option value="${p.id}">${p.code} — ${p.nom}</option>`).join('')}
+            ${App.projetsOptions(st.projetFilter, 'Tous les projets')}
           </select>
           <input type="search" id="g-search" placeholder="Rechercher une tâche...">
           <button class="btn-ghost" id="g-prev">◀</button>
@@ -1128,8 +1127,7 @@ App.views.gantt = {
       <div class="row">
         <div class="field"><label>Projet</label>
           <select id="f-projet">
-            <option value="" ${!t.projetId?'selected':''}>— Aucun projet (tâche libre)</option>
-            ${s.projets.map(p => `<option value="${p.id}" ${p.id===t.projetId?'selected':''}>${p.code} — ${p.nom}</option>`).join('')}
+            ${App.projetsOptions(t.projetId)}
           </select>
         </div>
         <div class="field"><label>Type</label>

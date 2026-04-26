@@ -39,6 +39,7 @@ App.views.modelesprojets = {
         <div>
           <h3 style="margin:0 0 4px">${mp.nom}</h3>
           <div class="muted small">${mp.description || ''}</div>
+          ${mp.groupe ? `<span class="badge" style="margin-top:4px;display:inline-block;background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb);font-size:10px">${mp.groupe}</span>` : ''}
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div class="small" style="font-weight:600">${dureeTotal} j.o.</div>
@@ -165,10 +166,18 @@ App.views.modelesprojets = {
       }).join('');
     };
 
+    const existingGroups = [...new Set((s.projets||[]).map(p => p.groupe||'').filter(Boolean))].sort();
     const body = `
       <div class="row">
         <div class="field"><label>Nom du modèle</label><input id="mpf-nom" value="${mp.nom}" placeholder="Logistique complète…"></div>
         <div class="field"><label>Couleur</label><input type="color" id="mpf-col" value="${mp.couleur || '#2c5fb3'}"></div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Groupe associé <span class="muted small">(ex: PRJ-Log — s'applique aux projets de ce groupe)</span></label>
+          <input id="mpf-groupe" list="mpf-groupe-list" value="${mp.groupe||''}" placeholder="Laisser vide = modèle générique">
+          <datalist id="mpf-groupe-list">${existingGroups.map(g=>`<option value="${g}">`).join('')}</datalist>
+        </div>
       </div>
       <div class="field"><label>Description</label><input id="mpf-desc" value="${mp.description || ''}" placeholder="Description du flux couvert par ce modèle…"></div>
       <div style="display:flex;align-items:center;gap:8px;margin:12px 0 6px">
@@ -258,6 +267,7 @@ App.views.modelesprojets = {
       mp.nom = document.getElementById('mpf-nom').value.trim();
       mp.couleur = document.getElementById('mpf-col').value;
       mp.description = document.getElementById('mpf-desc').value.trim();
+      mp.groupe = document.getElementById('mpf-groupe').value.trim();
       if (!mp.nom) { App.toast('Nom requis', 'error'); return; }
       if (!s.modelesProjets) s.modelesProjets = [];
       if (isNew) { s.modelesProjets.push(mp); DB.logAudit('create', 'modele-projet', mp.id, mp.nom); }
@@ -280,7 +290,7 @@ App.views.modelesprojets = {
 
   // ── Instanciation ────────────────────────────────────────────────────────────
 
-  instancier(id) {
+  instancier(id, presetProjetId = null) {
     if (!App.can('edit')) { App.toast('Lecture seule', 'error'); return; }
     const s = DB.state;
     const mp = (s.modelesProjets || []).find(x => x.id === id);
@@ -335,13 +345,15 @@ App.views.modelesprojets = {
     };
 
     const today = D.today();
+    const presetProjet = presetProjetId ? s.projets.find(p => p.id === presetProjetId) : null;
     const body = `
       <div class="row">
         <div class="field">
           <label>Projet d'affectation</label>
-          <select id="mpi-proj">
-            ${s.projets.map(p => `<option value="${p.id}">${p.code} — ${p.nom}</option>`).join('')}
-          </select>
+          ${presetProjet
+            ? `<input id="mpi-proj" value="${presetProjet.code} — ${presetProjet.nom}" readonly style="background:var(--surface-2);color:var(--text-muted)" data-pid="${presetProjet.id}">`
+            : `<select id="mpi-proj">${App.projetsOptions(presetProjetId||'', '— Choisir un projet —')}</select>`
+          }
         </div>
         <div class="field">
           <label>Date de début</label>
@@ -368,16 +380,23 @@ App.views.modelesprojets = {
     `;
     App.openModal(`Instancier : ${mp.nom}`, body, foot);
 
+    const getPid = () => {
+      const el = document.getElementById('mpi-proj');
+      return el.dataset.pid || el.value;
+    };
     const refreshPreview = () => {
       document.getElementById('mpi-preview').innerHTML = renderPreview();
     };
+    // renderPreview uses mpi-proj.value — for preset readonly input, patch value to be the pid
+    const projEl = document.getElementById('mpi-proj');
+    if (projEl.dataset.pid) projEl.value = projEl.dataset.pid;
     document.getElementById('mpi-proj').onchange = refreshPreview;
     document.getElementById('mpi-debut').onchange = refreshPreview;
     document.getElementById('mpi-qte').oninput = refreshPreview;
     document.getElementById('mpi-refresh').onclick = refreshPreview;
 
     document.getElementById('mpi-ok').onclick = () => {
-      const pid = document.getElementById('mpi-proj').value;
+      const pid = getPid();
       const debut = document.getElementById('mpi-debut').value;
       const qte = +document.getElementById('mpi-qte').value || 1;
       if (!pid || !debut) { App.toast('Projet et date requis', 'error'); return; }
