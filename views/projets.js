@@ -33,11 +33,11 @@ App.views.projets = {
     document.getElementById('prj-import').onclick = () => document.getElementById('prj-import-file').click();
     document.getElementById('prj-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
     document.getElementById('prj-csv').onclick = () => this.exportCSV();
-    document.querySelectorAll('.prj-card').forEach(c => c.onclick = e => {
+    root.querySelectorAll('.prj-card').forEach(c => c.onclick = e => {
       if (e.target.closest('.prj-report')) return;
       this.openForm(c.dataset.id);
     });
-    document.querySelectorAll('.prj-report').forEach(b => b.onclick = e => {
+    root.querySelectorAll('.prj-report').forEach(b => b.onclick = e => {
       e.stopPropagation();
       this.exportReport(b.dataset.id);
     });
@@ -191,6 +191,21 @@ App.views.projets = {
     };
     const taches = id ? DB.tachesDuProjet(id) : [];
     const canEdit = App.can('edit');
+    const linkedModels = (!isNew && p.groupe) ? (s.modelesProjets||[]).filter(mp => mp.groupe === p.groupe) : [];
+    const linkedModelsHtml = linkedModels.length ? `
+      <div style="margin-top:14px;padding:10px 12px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:13px;font-weight:600">🗂 Modèles pour <span class="badge" style="background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb)">${p.groupe}</span></span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${linkedModels.map(mp => `
+            <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;border-left:3px solid ${mp.couleur||'#888'}">
+              <span style="font-size:12px;font-weight:500">${mp.nom}</span>
+              <span class="muted small">${(mp.etapes||[]).length} étapes · ${(mp.etapes||[]).reduce((n,e)=>n+(e.duree||0),0)} j.o.</span>
+              <button class="btn btn-secondary pf-use-modele" data-mpid="${mp.id}" style="padding:3px 10px;font-size:11px">▶ Appliquer</button>
+            </div>`).join('')}
+        </div>
+      </div>` : '';
     const body = `
       <div class="row">
         <div class="field"><label>Code</label><input id="pf-code" value="${p.code||''}"></div>
@@ -227,23 +242,7 @@ App.views.projets = {
         </label>
         <div class="muted small" style="margin-top:3px;padding-left:24px">Si activé : à l'enregistrement d'une tâche, les dates sont vérifiées par rapport à ses dépendances — avec proposition d'auto-correction.</div>
       </div>
-      ${!isNew && p.groupe ? (() => {
-        const linkedModels = (s.modelesProjets||[]).filter(mp => mp.groupe === p.groupe);
-        if (!linkedModels.length) return '';
-        return `<div style="margin-top:14px;padding:10px 12px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border)">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-            <span style="font-size:13px;font-weight:600">🗂 Modèles pour <span class="badge" style="background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb)">${p.groupe}</span></span>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px">
-            ${linkedModels.map(mp => `
-              <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;border-left:3px solid ${mp.couleur||'#888'}">
-                <span style="font-size:12px;font-weight:500">${mp.nom}</span>
-                <span class="muted small">${(mp.etapes||[]).length} étapes · ${(mp.etapes||[]).reduce((n,e)=>n+(e.duree||0),0)} j.o.</span>
-                <button class="btn btn-secondary pf-use-modele" data-mpid="${mp.id}" style="padding:3px 10px;font-size:11px">▶ Appliquer</button>
-              </div>`).join('')}
-          </div>
-        </div>`;
-      })() : ''}
+      ${linkedModelsHtml}
       ${!isNew ? `
         <div style="display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap">
           <h3 style="margin:0;flex:1">👥 Tâches & ressources (${taches.length})</h3>
@@ -283,13 +282,13 @@ App.views.projets = {
       else DB.logAudit('update','projet',p.id,`${p.code} · ${p.nom}`);
       DB.save(); App.closeModal(); App.refresh();
     };
-    document.querySelectorAll('.pf-use-modele').forEach(b => {
-      b.onclick = () => {
-        App.closeModal();
-        App.views.modelesprojets.instancier(b.dataset.mpid, p.id);
-      };
-    });
     if (!isNew) {
+      document.querySelectorAll('.pf-use-modele').forEach(b => {
+        b.onclick = () => {
+          App.closeModal();
+          App.views.modelesprojets.instancier(b.dataset.mpid, p.id);
+        };
+      });
       document.getElementById('pf-del').onclick = () => {
         if (!confirm('Supprimer ce projet et toutes ses tâches ?')) return;
         s.projets = s.projets.filter(x => x.id !== p.id);

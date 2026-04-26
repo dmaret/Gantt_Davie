@@ -242,8 +242,44 @@ App.views.aide = {
   },
 
   tabNouveautes() {
-    const C1 = '#6366f1', C2 = '#2c5fb3', C3 = '#059669', C4 = '#f59e0b';
+    const C1 = '#6366f1', C2 = '#2c5fb3', C3 = '#059669', C4 = '#f59e0b', C5 = '#dc2626', C6 = '#7c3aed';
     return `
+      ${this._section(
+        '📁 Groupes de projets & modèles liés',
+        'Organise les projets par famille (PRJ-Log, PRJ-Emb…) et applique des modèles de gestes en 1 clic.',
+        this._step(1,'📁','Projet','Ouvrir/créer un projet — renseigner le champ Groupe','projets',C6) +
+        this._arrow() +
+        this._step(2,'🗂','Modèle projet','Créer un modèle avec le même Groupe (ex: PRJ-Log)','modelesprojets',C6) +
+        this._arrow() +
+        this._step(3,'▶','Appliquer','Retour dans la fiche projet → section Modèles → ▶ Appliquer','projets',C6) +
+        this._arrow() +
+        this._step(4,'📅','Tâches créées','Toutes les tâches + gestes générées, projet pré-sélectionné','gantt',C6),
+        '💡 Dans la vue Projets, les cartes sont regroupées visuellement par groupe. Dans les sélecteurs (Gantt, Kanban, Commandes), les projets apparaissent groupés en <optgroup>.'
+      )}
+      ${this._section(
+        '👥 Planning équipe (Ma journée)',
+        'Grille personnes × jours sur 15–20 j.o. — voir qui est occupé et imprimer en A3.',
+        this._step(1,'☀','Ma journée','Onglet "Ma journée" ou touche Y','majourney',C4) +
+        this._arrow() +
+        this._step(2,'👥','Mode équipe','Basculer sur "👥 Planning équipe"','majourney',C4) +
+        this._arrow() +
+        this._step(3,'🗓','Grille','Chaque cellule = tâche colorée par projet · badge charge','majourney',C4) +
+        this._arrow() +
+        this._step(4,'⎙','Imprimer A3','Bouton ⎙ → PDF A3 paysage avec légende projets','majourney',C4),
+        '💡 Mode personnel (👤) : navigation semaine ‹ Aujourd\'hui › avec liste des tâches du jour + personnes assignées. Mode équipe : 20 jours ouvrés glissants.'
+      )}
+      ${this._section(
+        '⚖ Résolveur de surcharge',
+        'Quand une personne est surchargée, propose de réassigner ou décaler les tâches avec impact projet.',
+        this._step(1,'👥','Personnes','Clic sur une semaine rouge → liste des conflits','personnes',C5) +
+        this._arrow() +
+        this._step(2,'🔧','Résoudre','Bouton "🔧 Résoudre la surcharge" → overlay','personnes',C5) +
+        this._arrow('réassigner ou') +
+        this._step(3,'🔄','Réassigner','Choisir une personne alternative compétente et disponible','personnes',C5) +
+        this._arrow('ou') +
+        this._step(4,'⏩','Décaler','Décaler à la semaine suivante — affiche l\'impact sur la fin du projet','projets',C5),
+        '💡 L\'overlay indique pour chaque tâche : les alternatives disponibles (compétences compatibles, charge < 85%) et l\'impact en jours si on décale.'
+      )}
       ${this._section(
         '🔗 Vue Flux atelier',
         'Schéma visuel des machines connectées par dépendances de tâches — comme un synoptique de ligne.',
@@ -261,34 +297,24 @@ App.views.aide = {
         'Séquences d\'étapes réutilisables avec gestes du catalogue atelier — instanciation en 1 clic.',
         this._step(1,'🗂','Ouvrir','Onglet "Modèles projet"','modelesprojets',C2) +
         this._arrow() +
-        this._step(2,'✎','Créer','Définir les étapes, durées, dépendances et gestes','modelesprojets',C2) +
+        this._step(2,'✎','Créer','Définir étapes, durées, dépendances, gestes et groupe','modelesprojets',C2) +
         this._arrow('‹ › gestes') +
         this._step(3,'▶','Instancier','Choisir projet + date + quantité → aperçu des dates','modelesprojets',C2) +
         this._arrow() +
         this._step(4,'📅','Résultat','Toutes les tâches créées avec dépendances dans le Gantt','gantt',C2),
-        '💡 42 gestes disponibles (Réception, Contrôle, Étiquetage, Assemblage, Stockage, Préparation, Expédition). Les flèches ‹ › permettent de naviguer entre catégories dans l\'éditeur.'
-      )}
-      ${this._section(
-        '🔓 Tâches libres (sans projet)',
-        'Créer une tâche ponctuelle sans la rattacher à un projet.',
-        this._step(1,'📅','Gantt','+ Nouvelle tâche ou glisser sur la grille','gantt',C3) +
-        this._arrow() +
-        this._step(2,'🔓','Aucun projet','Sélectionner "— Aucun projet (tâche libre)"','gantt',C3) +
-        this._arrow() +
-        this._step(3,'📋','Groupe dédié','Visible en bas du Gantt : "— Tâches libres"','gantt',C3),
-        '💡 Idéal pour les tâches récurrentes (maintenance, nettoyage, réunion) qui ne font pas partie d\'un projet spécifique.'
+        '💡 42 gestes disponibles (Réception, Contrôle, Étiquetage, Assemblage, Stockage, Préparation, Expédition). Associe un groupe au modèle pour l\'activer depuis la fiche projet.'
       )}
       ${this._section(
         '✨ Autres améliorations',
         '',
-        this._step(1,'💾','Filtres Gantt','Zoom, mode, projet, durée sauvegardés automatiquement','gantt',C4) +
+        this._step(1,'‹ ›','Historique nav','Boutons ‹ › près du thème — retour/avance entre vues','dashboard',C3) +
         this._arrow() +
-        this._step(2,'📍','Auto-scroll','Le Gantt s\'ouvre centré sur aujourd\'hui','gantt',C4) +
+        this._step(2,'📌','Headers fixes','Tous les tableaux larges : en-têtes sticky + 1re colonne figée','personnes',C3) +
         this._arrow() +
-        this._step(3,'⌨','Ctrl+P','Palette de commandes — navigation rapide vers toutes les vues','dashboard',C4) +
+        this._step(3,'⌨','Ctrl+P','Palette de commandes — navigation rapide vers toutes les vues','dashboard',C3) +
         this._arrow() +
-        this._step(4,'🔔','Badges nav','Alertes numériques sur les onglets concernés','dashboard',C4),
-        '💡 Vue "Ma journée" (tâches du jour), "Timeline" (personnes × jours) et ce Guide sont également disponibles dans la barre de navigation.'
+        this._step(4,'🔔','Badges nav','Alertes numériques sur les onglets concernés','dashboard',C3),
+        '💡 Alt+← / Alt+→ pour naviguer dans l\'historique de vues. Séparateurs visuels entre groupes de modules dans la navigation.'
       )}
     `;
   },

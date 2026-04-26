@@ -317,9 +317,12 @@ App.views.modelesprojets = {
     };
 
     const renderPreview = () => {
-      const pid = document.getElementById('mpi-proj').value;
-      const debut = document.getElementById('mpi-debut').value;
-      const qte = +document.getElementById('mpi-qte').value || 1;
+      const projEl = document.getElementById('mpi-proj');
+      const debutEl = document.getElementById('mpi-debut');
+      if (!projEl || !debutEl) return '<p class="muted small">Choisir un projet et une date de début</p>';
+      const pid = projEl.dataset.pid || projEl.value;
+      const debut = debutEl.value;
+      const qte = +(document.getElementById('mpi-qte')?.value) || 1;
       if (!pid || !debut) return '<p class="muted small">Choisir un projet et une date de début</p>';
       const rows = preview(pid, debut, qte);
       return `<table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -369,7 +372,7 @@ App.views.modelesprojets = {
           <strong style="font-size:13px">Aperçu des tâches créées</strong>
           <button class="btn-ghost" id="mpi-refresh" style="font-size:11px">↺ Actualiser</button>
         </div>
-        <div id="mpi-preview" style="overflow-x:auto">${renderPreview()}</div>
+        <div id="mpi-preview" style="overflow-x:auto"><p class="muted small">Choisir un projet et une date de début</p></div>
       </div>
       <p class="muted small" style="margin-top:10px">Les gestes seront notés dans les notes de chaque tâche pour référence.</p>
     `;
@@ -382,18 +385,17 @@ App.views.modelesprojets = {
 
     const getPid = () => {
       const el = document.getElementById('mpi-proj');
+      if (!el) return '';
       return el.dataset.pid || el.value;
     };
     const refreshPreview = () => {
       document.getElementById('mpi-preview').innerHTML = renderPreview();
     };
-    // renderPreview uses mpi-proj.value — for preset readonly input, patch value to be the pid
-    const projEl = document.getElementById('mpi-proj');
-    if (projEl.dataset.pid) projEl.value = projEl.dataset.pid;
     document.getElementById('mpi-proj').onchange = refreshPreview;
     document.getElementById('mpi-debut').onchange = refreshPreview;
     document.getElementById('mpi-qte').oninput = refreshPreview;
     document.getElementById('mpi-refresh').onclick = refreshPreview;
+    refreshPreview();
 
     document.getElementById('mpi-ok').onclick = () => {
       const pid = getPid();
