@@ -85,6 +85,13 @@ body {
   background: var(--primary-weak); color: var(--primary); border-color: transparent;
   font-weight: 600;
 }
+.nav-sep { margin-left: 8px; }
+.nav-sep::before {
+  content: '';
+  position: absolute; left: -6px; top: 25%; bottom: 25%;
+  width: 1px; background: var(--border);
+  border-radius: 1px;
+}
 .nav-badge {
   position: absolute; top: -4px; right: -2px;
   background: var(--warning); color: #fff;
