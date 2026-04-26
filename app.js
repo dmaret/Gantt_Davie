@@ -2,7 +2,8 @@
 const App = {
   view: 'dashboard',
   views: {},  // injectées par chaque views/*.js : { render(root) }
-  _navHistory: [],  // historique des vues pour le bouton retour
+  _navHistory: [],
+  _navFuture: [],
 
   init() {
     DB.load();
@@ -417,6 +418,7 @@ const App = {
       btn.addEventListener('click', () => this.navigate(btn.dataset.view));
     });
     document.getElementById('btn-back').addEventListener('click', () => this.navigateBack());
+    document.getElementById('btn-fwd').addEventListener('click', () => this.navigateForward());
     document.getElementById('btn-theme').addEventListener('click', () => {
       const next = document.body.classList.contains('dark') ? 'light' : 'dark';
       this.applyTheme(next);
@@ -462,6 +464,9 @@ const App = {
     // Retour (Alt+←)
     if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'ArrowLeft') {
       e.preventDefault(); this.navigateBack(); return;
+    }
+    if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'ArrowRight') {
+      e.preventDefault(); this.navigateForward(); return;
     }
     // Recherche globale (Ctrl+K / Cmd+K) — fonctionne même depuis un input
     if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
@@ -648,6 +653,7 @@ const App = {
     if (addToHistory && this.view && this.view !== name) {
       this._navHistory.push(this.view);
       if (this._navHistory.length > 30) this._navHistory.shift();
+      this._navFuture = []; // navigation normale efface le futur
     }
     if (this.view === 'gantt' && name !== 'gantt' && this.views.gantt.clearSelection) this.views.gantt.clearSelection();
     this.view = name;
@@ -659,17 +665,32 @@ const App = {
 
   navigateBack() {
     if (!this._navHistory.length) return;
+    this._navFuture.push(this.view);
     const prev = this._navHistory.pop();
     this.view = prev;
     location.hash = prev;
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === prev));
-    this.updateBackBtn();
+    this._updateNavBtns();
     this.refresh();
   },
 
-  updateBackBtn() {
-    const btn = document.getElementById('btn-back');
-    if (btn) btn.hidden = this._navHistory.length === 0;
+  navigateForward() {
+    if (!this._navFuture.length) return;
+    this._navHistory.push(this.view);
+    const next = this._navFuture.pop();
+    this.view = next;
+    location.hash = next;
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === next));
+    this._updateNavBtns();
+    this.refresh();
+  },
+
+  updateBackBtn() { this._updateNavBtns(); },
+  _updateNavBtns() {
+    const back = document.getElementById('btn-back');
+    const fwd  = document.getElementById('btn-fwd');
+    if (back) back.hidden = this._navHistory.length === 0;
+    if (fwd)  fwd.hidden  = this._navFuture.length === 0;
   },
 
   refresh() {

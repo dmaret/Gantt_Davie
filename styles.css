@@ -58,6 +58,12 @@ body {
   flex-shrink: 0;
 }
 .btn-back-nav:hover { background: var(--surface-2); color: var(--primary); border-color: var(--primary); }
+.btn-nav-hist {
+  font-size: 16px; padding: 2px 7px; color: var(--text-muted);
+  opacity: .85;
+}
+.btn-nav-hist:hover { color: var(--primary); }
+.nav-hist-sep { width: 1px; height: 16px; background: var(--border); margin: 0 4px; align-self: center; }
 .logo { color: var(--primary); font-size: 20px; }
 .title { letter-spacing: .3px; }
 .brand-owner {
