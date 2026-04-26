@@ -130,20 +130,20 @@ App.views.projets = {
 
     const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Rapport ${p.code}</title>
       <style>
-        body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color: #222; }
-        h1 { border-bottom: 3px solid ${p.couleur}; padding-bottom: 6px; margin: 0 0 8px 0; }
-        h2 { margin-top: 20px; color: ${p.couleur}; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
-        table.data { width: 100%; border-collapse: collapse; font-size: 12px; }
-        table.data th, table.data td { border-bottom: 1px solid #eee; padding: 4px 6px; text-align: left; }
+        body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 20px; color: #222; font-size: 12px; }
+        h1 { font-size: 18px; border-bottom: 3px solid ${p.couleur}; padding-bottom: 4px; margin: 0 0 6px 0; }
+        h2 { font-size: 13px; margin-top: 10px; margin-bottom: 2px; color: ${p.couleur}; border-bottom: 1px solid #ddd; padding-bottom: 3px; }
+        table.data { width: 100%; border-collapse: collapse; font-size: 11px; }
+        table.data th, table.data td { border-bottom: 1px solid #eee; padding: 3px 5px; text-align: left; }
         table.data th { background: #f6f6f6; }
         .right { text-align: right; }
-        .kpis { display: flex; gap: 14px; margin: 12px 0 4px 0; }
-        .kpi { flex: 1; background: #f6f6f6; padding: 10px; border-radius: 6px; border-left: 4px solid ${p.couleur}; }
-        .kpi .label { font-size: 10px; color: #777; text-transform: uppercase; }
-        .kpi .value { font-size: 22px; font-weight: 600; }
+        .kpis { display: flex; gap: 10px; margin: 8px 0 4px 0; }
+        .kpi { flex: 1; background: #f6f6f6; padding: 6px 8px; border-radius: 5px; border-left: 4px solid ${p.couleur}; }
+        .kpi .label { font-size: 9px; color: #777; text-transform: uppercase; }
+        .kpi .value { font-size: 16px; font-weight: 600; line-height: 1.2; }
         .small { font-size: 11px; color: #666; }
-        .footer { margin-top: 24px; color: #888; font-size: 10px; text-align: center; border-top: 1px solid #ddd; padding-top: 6px; }
-        @media print { @page { size: A4 landscape; margin: 12mm; } body { margin: 0; } }
+        .footer { margin-top: 12px; color: #888; font-size: 9px; text-align: center; border-top: 1px solid #ddd; padding-top: 4px; }
+        @media print { @page { size: A4 portrait; margin: 10mm; } body { margin: 0; font-size: 11px; } }
       </style></head><body>
       <h1>${p.code} — ${p.nom}</h1>
       <p class="small">Client : <strong>${p.client||'—'}</strong> · Étage ${p.etage} · Priorité ${p.priorite} · Statut ${p.statut}</p>
