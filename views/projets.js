@@ -210,6 +210,7 @@ App.views.projets = {
       ${!isNew ? `
         <div style="display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap">
           <h3 style="margin:0;flex:1">👥 Tâches & ressources (${taches.length})</h3>
+          <button class="btn-ghost pf-open-gantt" data-pid="${p.id}" title="Ouvrir le Gantt filtré sur ce projet">📅 Gantt →</button>
           <button class="btn-ghost" id="pf-export-csv" title="Exporter les tâches de ce projet en CSV (ouvrable dans Excel)">⬇ CSV</button>
           ${canEdit && (s.equipes||[]).length ? `
             <select id="pf-equipe-sel" class="small">
@@ -256,6 +257,13 @@ App.views.projets = {
       if (applyBtn) applyBtn.onclick = () => this.applyEquipeToProject(p.id);
       const csvBtn = document.getElementById('pf-export-csv');
       if (csvBtn) csvBtn.onclick = () => this.exportTachesCSV(p.id);
+      document.querySelectorAll('.pf-open-gantt').forEach(btn => {
+        btn.onclick = () => {
+          App.closeModal();
+          App.views.gantt.state.projetFilter = btn.dataset.pid;
+          App.navigate('gantt');
+        };
+      });
     }
   },
 
@@ -282,7 +290,11 @@ App.views.projets = {
   renderTasksList(projetId, canEdit) {
     const s = DB.state;
     const taches = DB.tachesDuProjet(projetId).sort((a,b) => a.debut.localeCompare(b.debut));
-    if (!taches.length) return '<p class="muted small">Aucune tâche. Créer des tâches depuis le Gantt.</p>';
+    if (!taches.length) return `
+      <div style="text-align:center;padding:20px 0">
+        <p class="muted small" style="margin:0 0 12px">Aucune tâche pour ce projet.</p>
+        <button class="btn pf-open-gantt" data-pid="${projetId}">📅 Créer des tâches dans le Gantt →</button>
+      </div>`;
     return taches.map(t => this.renderTaskRow(t, canEdit)).join('');
   },
 
