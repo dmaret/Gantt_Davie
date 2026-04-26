@@ -1111,8 +1111,9 @@ App.views.gantt = {
               <div style="display:flex;flex-wrap:wrap;gap:4px">
                 ${gestes.map(g => {
                   const checked = sel.includes(g.code);
-                  return `<label title="${g.description} — ${g.notes||''}" style="display:flex;align-items:center;gap:3px;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:10px;border:1px solid ${checked?'var(--primary)':'var(--border)'};background:${checked?'var(--primary-weak)':'transparent'}">
-                    <input type="checkbox" class="f-geste-cb" data-code="${g.code}" ${checked?'checked':''} style="margin:0"> ${g.code}
+                  return `<label title="${g.notes||''}" style="display:flex;align-items:flex-start;gap:3px;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:10px;border:1px solid ${checked?'var(--primary)':'var(--border)'};background:${checked?'var(--primary-weak)':'transparent'}">
+                    <input type="checkbox" class="f-geste-cb" data-code="${g.code}" ${checked?'checked':''} style="margin:2px 0 0">
+                    <span><span style="font-weight:600">${g.code}</span><br><span class="muted" style="font-size:9px">${g.description}</span></span>
                   </label>`;
                 }).join('')}
               </div>
@@ -1120,7 +1121,7 @@ App.views.gantt = {
         </div>
         <button type="button" class="btn-ghost f-geste-next" title="Catégorie suivante" style="flex-shrink:0;padding:2px 8px;font-size:18px;line-height:1;align-self:center">›</button>
       </div>
-      ${sel.length ? `<div class="muted small" style="margin-top:4px">⏱ Estimation : ${fmtT(totalSec)} / pièce · ${sel.length} geste(s) sélectionné(s)</div>` : ''}`;
+      ${sel.length ? `<div class="muted small f-geste-est" style="margin-top:4px">⏱ Estimation : ${fmtT(totalSec)} / pièce · ${sel.length} geste(s) sélectionné(s)</div>` : ''}`;
     };
     const body = `
       <div class="field"><label>Nom</label><input id="f-nom" value="${t.nom||''}"></div>
@@ -1250,18 +1251,37 @@ App.views.gantt = {
     // Gestes — checkboxes + navigation catégorie
     const refreshGestes = () => {
       t.gestes = Array.from(document.querySelectorAll('#f-gestes-wrap .f-geste-cb:checked')).map(cb => cb.dataset.code);
-      document.getElementById('f-gestes-wrap').innerHTML = renderGestesSection();
-      bindGestes();
+      // Update label styles without re-rendering (preserves scroll position)
+      document.querySelectorAll('#f-gestes-wrap .f-geste-cb').forEach(cb => {
+        const label = cb.closest('label');
+        if (!label) return;
+        const checked = cb.checked;
+        label.style.borderColor = checked ? 'var(--primary)' : 'var(--border)';
+        label.style.background = checked ? 'var(--primary-weak)' : 'transparent';
+      });
+      // Update estimation text
+      const totalSec = t.gestes.reduce((n, code) => n + DB.tempsGeste(code), 0);
+      const fmtT = s => s < 60 ? s+'s' : Math.round(s/60) < 60 ? Math.round(s/60)+'min' : Math.floor(s/3600)+'h'+Math.round((s%3600)/60)+'min';
+      const wrap = document.getElementById('f-gestes-wrap');
+      let est = wrap ? wrap.querySelector('.f-geste-est') : null;
+      if (t.gestes.length) {
+        if (!est) { est = document.createElement('div'); est.className = 'muted small f-geste-est'; est.style.marginTop = '4px'; if (wrap) wrap.appendChild(est); }
+        est.textContent = `⏱ Estimation : ${fmtT(totalSec)} / pièce · ${t.gestes.length} geste(s) sélectionné(s)`;
+      } else if (est) {
+        est.remove();
+      }
     };
     const bindGestes = () => {
       document.querySelectorAll('#f-gestes-wrap .f-geste-cb').forEach(cb => cb.onchange = refreshGestes);
-      document.querySelector('#f-gestes-wrap .f-geste-prev').onclick = () => {
+      const prevBtn = document.querySelector('#f-gestes-wrap .f-geste-prev');
+      const nextBtn = document.querySelector('#f-gestes-wrap .f-geste-next');
+      if (prevBtn) prevBtn.onclick = () => {
         const c = document.querySelector('#f-gestes-wrap .f-geste-scroll');
         const secs = c.querySelectorAll('.ep-cat-section');
         let cur = 0; secs.forEach((s,i) => { if (s.offsetTop <= c.scrollTop + 8) cur = i; });
         if (cur > 0) c.scrollTop = secs[cur - 1].offsetTop;
       };
-      document.querySelector('#f-gestes-wrap .f-geste-next').onclick = () => {
+      if (nextBtn) nextBtn.onclick = () => {
         const c = document.querySelector('#f-gestes-wrap .f-geste-scroll');
         const secs = c.querySelectorAll('.ep-cat-section');
         let cur = 0; secs.forEach((s,i) => { if (s.offsetTop <= c.scrollTop + 8) cur = i; });
