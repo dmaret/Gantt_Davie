@@ -1188,7 +1188,7 @@ App.views.gantt = {
         </div>
         <div style="display:flex;gap:6px;margin-top:4px">
           <input id="f-cl-new" type="text" placeholder="Nouvelle sous-tâche (Entrée pour ajouter)…" style="flex:1">
-          <button class="btn btn-secondary" id="f-cl-add" style="padding:4px 10px;flex-shrink:0">+</button>
+          <button type="button" class="btn btn-secondary" id="f-cl-add" style="padding:4px 10px;flex-shrink:0">+</button>
         </div>
       </div>
       <div class="field"><label>💬 Commentaires (${(t.commentaires||[]).length})</label>
@@ -1302,8 +1302,23 @@ App.views.gantt = {
       listEl.querySelectorAll('.cl-cb').forEach(cb => cb.onchange = () => { const i = localCL.find(x=>x.id===cb.dataset.id); if (i) i.done = cb.checked; refreshCL(); });
       listEl.querySelectorAll('.cl-del').forEach(btn => btn.onclick = () => { const idx = localCL.findIndex(x=>x.id===btn.dataset.id); if (idx>=0) localCL.splice(idx,1); refreshCL(); });
     };
-    const addCLItem = () => { const inp = document.getElementById('f-cl-new'); if (!inp) return; const txt = inp.value.trim(); if (!txt) return; localCL.push({id:DB.uid('CL'),texte:txt,done:false}); inp.value=''; refreshCL(); };
-    const clAddBtn = document.getElementById('f-cl-add'); if (clAddBtn) clAddBtn.onclick = addCLItem;
+    const addCLItem = () => {
+      const inp = document.getElementById('f-cl-new');
+      if (!inp) return;
+      const txt = inp.value.trim();
+      if (!txt) { inp.focus(); inp.style.outline = '2px solid var(--danger)'; setTimeout(() => inp.style.outline = '', 1000); return; }
+      localCL.push({id:DB.uid('CL'),texte:txt,done:false});
+      inp.value = '';
+      inp.focus();
+      refreshCL();
+      // Scroll la liste pour voir le nouvel item
+      const listEl = document.getElementById('f-cl-list');
+      if (listEl) listEl.scrollTop = listEl.scrollHeight;
+    };
+    // Délégation sur modal-body pour être robuste aux re-renders
+    document.getElementById('modal-body').addEventListener('click', e => {
+      if (e.target.closest('#f-cl-add')) addCLItem();
+    });
     const clNewInp = document.getElementById('f-cl-new'); if (clNewInp) clNewInp.onkeydown = e => { if (e.key==='Enter') { e.preventDefault(); addCLItem(); } };
     refreshCL();
     const assignesWrap = document.getElementById('f-assignes-wrap');
