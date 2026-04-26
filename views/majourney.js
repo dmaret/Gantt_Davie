@@ -1,6 +1,6 @@
 // Vue "Ma journée" — planning personnel filtré sur l'utilisateur connecté
 App.views.majourney = {
-  state: { selectedPersonneId: null },
+  state: { selectedPersonneId: null, weekOffset: 0 },
 
   // Résout la personne courante depuis currentUser().nom (format "Prénom Nom")
   _resolvePersonne() {
@@ -18,6 +18,14 @@ App.views.majourney = {
     ) || null;
   },
 
+  // Calcule le lundi de la semaine courante + offset semaines
+  _weekBounds(offset) {
+    const today = D.today();
+    // On cherche le lundi de la semaine de today + offset*5 jours ouvrés
+    const base = offset === 0 ? today : D.addWorkdays(today, offset * 5);
+    return { start: base, end: D.addWorkdays(base, 4) };
+  },
+
   render(root) {
     const s = DB.state;
     const today = D.today();
@@ -31,23 +39,23 @@ App.views.majourney = {
     const personne = autoPersonne || s.personnes.find(p => p.id === st.selectedPersonneId) || null;
     const showSelector = !autoPersonne;
 
-    // Libellé de l'utilisateur
     const userLabel = personne ? App.personneLabel(personne) : 'Inconnu';
 
-    // Limites de la semaine courante (L→V) et de la semaine prochaine
-    const weekStart = today;
-    const weekEnd   = D.addWorkdays(today, 4);
-    const nextWeekStart = D.addWorkdays(today, 5);
-    const nextWeekEnd   = D.addWorkdays(today, 9);
+    // Bornes de la semaine affichée
+    const { start: weekStart, end: weekEnd } = this._weekBounds(st.weekOffset);
+    const isCurrentWeek = st.weekOffset === 0;
 
     // Tâches de la personne
     const mesTaches = personne
       ? s.taches.filter(t => !t.jalon && (t.assignes || []).includes(personne.id))
       : [];
 
-    // ---- Statistiques rapides ----
+    // Tâches actives aujourd'hui (toujours sur aujourd'hui)
     const tachesActives = mesTaches.filter(t => t.debut <= today && t.fin >= today);
+
+    // Tâches de la semaine affichée
     const tachesSemaine = mesTaches.filter(t => t.fin >= weekStart && t.debut <= weekEnd);
+
     const heuresSemaine = tachesSemaine.reduce((n, t) => {
       const a = t.debut < weekStart ? weekStart : t.debut;
       const b = t.fin   > weekEnd   ? weekEnd   : t.fin;
@@ -57,14 +65,14 @@ App.views.majourney = {
       ? Math.round(tachesActives.reduce((n, t) => n + (t.avancement || 0), 0) / tachesActives.length)
       : 0;
 
-    // ---- Absences à venir (30 j) ----
+    // Absences à venir (30 j)
     const horizon30 = D.addDays(today, 30);
     const mesAbsences = personne
       ? (personne.absences || []).filter(a => a.fin >= today && a.debut <= horizon30)
           .slice().sort((a, b) => a.debut.localeCompare(b.debut))
       : [];
 
-    // ---- Déplacements à venir (7 j) ----
+    // Déplacements à venir (7 j)
     const horizon7 = D.addDays(today, 7);
     const mesDeplacements = personne
       ? s.deplacements
@@ -72,7 +80,9 @@ App.views.majourney = {
           .slice().sort((a, b) => a.date.localeCompare(b.date))
       : [];
 
-    // ---- Rendu ----
+    // Label semaine
+    const weekLabel = isCurrentWeek ? 'Cette semaine' : st.weekOffset === 1 ? 'Semaine prochaine' : st.weekOffset < 0 ? `Semaine ${st.weekOffset}` : `Semaine +${st.weekOffset}`;
+
     root.innerHTML = `
       <div class="toolbar">
         <strong>🗓 Ma journée — ${userLabel}</strong>
@@ -83,8 +93,9 @@ App.views.majourney = {
             ${s.personnes.map(p => `<option value="${p.id}" ${p.id === (personne && personne.id) ? 'selected' : ''}>${App.personneLabel(p)}</option>`).join('')}
           </select>
         ` : ''}
-        <button class="btn-ghost" id="mj-btn-week">📅 Cette semaine</button>
-        <button class="btn-ghost" id="mj-btn-nextweek">📆 Semaine prochaine</button>
+        <button class="btn-ghost" id="mj-prev" title="Semaine précédente">‹</button>
+        <button class="btn-ghost${isCurrentWeek ? ' active' : ''}" id="mj-today" style="font-size:12px">Aujourd'hui</button>
+        <button class="btn-ghost" id="mj-next" title="Semaine suivante">›</button>
       </div>
 
       <!-- Statistiques rapides -->
@@ -95,7 +106,7 @@ App.views.majourney = {
           <div class="small muted">${tachesActives.length ? tachesActives.map(t => t.nom).join(', ').substring(0, 60) + (tachesActives.map(t=>t.nom).join(', ').length > 60 ? '…' : '') : 'Aucune'}</div>
         </div>
         <div class="card">
-          <div class="muted small">Heures estimées cette semaine</div>
+          <div class="muted small">Heures estimées — ${weekLabel}</div>
           <div style="font-size:28px;font-weight:700">${heuresSemaine}<span class="small muted"> h</span></div>
           <div class="small muted">${tachesSemaine.length} tâche(s) · capacité ${personne && personne.capaciteHebdo ? personne.capaciteHebdo : 35} h</div>
         </div>
@@ -112,9 +123,9 @@ App.views.majourney = {
         ${this._renderAujourdhui(tachesActives)}
       </div>
 
-      <!-- Section Cette semaine -->
+      <!-- Section Semaine -->
       <div class="card" style="margin-bottom:14px">
-        <h2>Cette semaine <span class="muted small">(${D.fmt(weekStart)} → ${D.fmt(weekEnd)})</span></h2>
+        <h2>${weekLabel} <span class="muted small">(${D.fmt(weekStart)} → ${D.fmt(weekEnd)})</span></h2>
         ${this._renderSemaine(tachesSemaine)}
       </div>
 
@@ -131,21 +142,15 @@ App.views.majourney = {
       </div>
     `;
 
-    // Bindings
+    // Bindings navigation semaine
+    document.getElementById('mj-prev').onclick = () => { st.weekOffset--; App.refresh(); };
+    document.getElementById('mj-next').onclick = () => { st.weekOffset++; App.refresh(); };
+    document.getElementById('mj-today').onclick = () => { st.weekOffset = 0; App.refresh(); };
+
     if (showSelector) {
       const sel = document.getElementById('mj-personne-sel');
       if (sel) sel.onchange = e => { st.selectedPersonneId = e.target.value; App.refresh(); };
     }
-
-    const btnWeek = document.getElementById('mj-btn-week');
-    if (btnWeek) btnWeek.onclick = () => {
-      App.navigate('calendrier');
-    };
-
-    const btnNextWeek = document.getElementById('mj-btn-nextweek');
-    if (btnNextWeek) btnNextWeek.onclick = () => {
-      App.navigate('gantt');
-    };
 
     // Rendre chaque ligne de tâche cliquable
     document.querySelectorAll('[data-tache-id]').forEach(el => {
@@ -184,30 +189,40 @@ App.views.majourney = {
 
   _renderSemaine(taches) {
     if (!taches.length) return `<p class="muted">Aucune tâche cette semaine.</p>`;
+    const today = D.today();
     return `<table class="data">
       <thead>
         <tr>
           <th>Tâche</th>
           <th>Projet</th>
+          <th>Personnes assignées</th>
           <th>Début</th>
           <th>Fin</th>
           <th>Avancement</th>
-          <th>Actions</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
         ${taches.map(t => {
           const prj  = DB.projet(t.projetId);
           const pct  = t.avancement || 0;
-          const today = D.today();
           const isLate = t.fin < today && pct < 100;
           const barCls = isLate ? 'bad' : pct >= 100 ? 'good' : '';
+          const assignes = (t.assignes || [])
+            .map(id => DB.personne(id))
+            .filter(Boolean)
+            .map(p => {
+              const initials = ((p.prenom||'').charAt(0) + (p.nom||'').charAt(0)).toUpperCase();
+              const label = App.personneLabel(p);
+              return `<span title="${label}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--primary-weak);color:var(--primary);font-size:9px;font-weight:700;border:1px solid var(--primary)">${initials}</span>`;
+            }).join('');
           return `<tr data-tache-id="${t.id}" role="button" tabindex="0">
             <td>
               <strong>${t.nom}</strong>
               ${isLate ? '<span class="badge bad" style="font-size:9px;margin-left:4px">retard</span>' : ''}
             </td>
             <td>${prj ? `<span class="badge" style="background:${prj.couleur}22;color:${prj.couleur}">${prj.code}</span>` : '<span class="muted">—</span>'}</td>
+            <td><div style="display:flex;gap:3px;flex-wrap:wrap">${assignes || '<span class="muted small">—</span>'}</div></td>
             <td class="mono">${D.fmt(t.debut)}</td>
             <td class="mono">${D.fmt(t.fin)}</td>
             <td style="min-width:120px">
@@ -264,7 +279,5 @@ App.views.majourney = {
     }).join('')}</ul>`;
   },
 
-  draw() {
-    // draw() vide — la vue ne fait pas de rendu canvas/SVG incrémental
-  },
+  draw() {},
 };
