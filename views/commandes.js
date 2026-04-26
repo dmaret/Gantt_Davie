@@ -71,7 +71,7 @@ App.views.commandes = {
       </tr>`;
     }).join('');
     document.getElementById('c-table').innerHTML = `
-      <table class="data">
+      <div class="tbl-wrap"><table class="data col-freeze-1">
         <thead><tr>
           <th>Réf</th><th>Fournisseur</th><th>Projet</th>
           <th class="right">HT</th><th class="right">TVA</th><th class="right">TTC</th>
@@ -80,7 +80,7 @@ App.views.commandes = {
           <th>Progression</th><th>Statut</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
-      </table>
+      </table></div>
     `;
     document.querySelectorAll('.axe-tg').forEach(b => b.onclick = () => {
       const c = DB.state.commandes.find(x => x.id === b.dataset.cmd);
