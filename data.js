@@ -33,8 +33,91 @@ const DB = {
     // v3.2 : absences par personne, notes sur tâches, audit log, modèles tâches
     this.state.personnes.forEach(p => { if (!p.absences) p.absences = []; });
     this.state.taches.forEach(t => { if (t.notes === undefined) t.notes = ''; });
+    // v3.4 : checklists par tâche, baselines planning
+    this.state.taches.forEach(t => { if (!t.checklist) t.checklist = []; });
+    if (!this.state.baselines) this.state.baselines = [];
+    // v3.5 : séquencement strict par projet + suivi temps réel
+    this.state.projets.forEach(p => { if (p.sequencementStrict === undefined) p.sequencementStrict = false; });
+    this.state.taches.forEach(t => { if (!t.tempsLog) t.tempsLog = []; });
     if (!this.state.audit) this.state.audit = [];
     if (!this.state.modeles) this.state.modeles = [];
+    // v3.6 : modèles de projet (séquences d'étapes avec gestes)
+    if (!this.state.modelesProjets) {
+      this.state.modelesProjets = defaultModelesProjets();
+    }
+  },
+
+  checkIntegrity() {
+    const s = this.state;
+    const issues = [];
+    const projetIds = new Set(s.projets.map(p => p.id));
+    const personneIds = new Set(s.personnes.map(p => p.id));
+    const lieuIds = new Set(s.lieux.map(l => l.id));
+    const machineIds = new Set(s.machines.map(m => m.id));
+    const tacheIds = new Set(s.taches.map(t => t.id));
+    const stockIds = new Set((s.stock||[]).map(a => a.id));
+
+    // Tâches orphelines (projet supprimé)
+    s.taches.forEach(t => {
+      if (!projetIds.has(t.projetId))
+        issues.push({ type: 'warn', entity: 'tache', id: t.id, msg: `Tâche « ${t.nom} » : projet introuvable (${t.projetId})` });
+    });
+
+    // Tâches avec assignés invalides
+    s.taches.forEach(t => {
+      (t.assignes||[]).forEach(pid => {
+        if (!personneIds.has(pid))
+          issues.push({ type: 'warn', entity: 'tache', id: t.id, msg: `Tâche « ${t.nom} » : personne assignée introuvable (${pid})` });
+      });
+    });
+
+    // Tâches avec lieu/machine invalide
+    s.taches.forEach(t => {
+      if (t.lieuId && !lieuIds.has(t.lieuId))
+        issues.push({ type: 'warn', entity: 'tache', id: t.id, msg: `Tâche « ${t.nom} » : lieu introuvable (${t.lieuId})` });
+      if (t.machineId && !machineIds.has(t.machineId))
+        issues.push({ type: 'warn', entity: 'tache', id: t.id, msg: `Tâche « ${t.nom} » : machine introuvable (${t.machineId})` });
+    });
+
+    // Dépendances invalides
+    s.taches.forEach(t => {
+      (t.dependances||[]).forEach(did => {
+        if (!tacheIds.has(did))
+          issues.push({ type: 'warn', entity: 'tache', id: t.id, msg: `Tâche « ${t.nom} » : dépendance introuvable (${did})` });
+      });
+    });
+
+    // Dates incohérentes (fin < debut)
+    s.taches.forEach(t => {
+      if (!t.jalon && t.fin < t.debut)
+        issues.push({ type: 'error', entity: 'tache', id: t.id, msg: `Tâche « ${t.nom} » : fin (${t.fin}) antérieure au début (${t.debut})` });
+    });
+
+    // Personnes avec lieu principal invalide
+    s.personnes.forEach(p => {
+      if (p.lieuPrincipalId && !lieuIds.has(p.lieuPrincipalId))
+        issues.push({ type: 'warn', entity: 'personne', id: p.id, msg: `Personne « ${p.prenom} ${p.nom} » : lieu principal introuvable` });
+    });
+
+    // Absences chevauchant des tâches affectées
+    s.personnes.forEach(p => {
+      (p.absences||[]).forEach(a => {
+        const conflicts = s.taches.filter(t =>
+          (t.assignes||[]).includes(p.id) && t.debut <= a.fin && t.fin >= a.debut
+        );
+        conflicts.forEach(t => {
+          issues.push({ type: 'info', entity: 'absence', id: p.id, msg: `« ${p.prenom} ${p.nom} » est absent(e) du ${a.debut} au ${a.fin} mais assigné(e) à « ${t.nom} »` });
+        });
+      });
+    });
+
+    // Stock articles avec lieu de stockage invalide
+    (s.stock||[]).forEach(a => {
+      if (a.lieuId && !lieuIds.has(a.lieuId))
+        issues.push({ type: 'warn', entity: 'stock', id: a.id, msg: `Article « ${a.nom} » : lieu de stockage introuvable` });
+    });
+
+    return issues;
   },
 
   // Journal d'audit : garde les 500 dernières actions
@@ -174,6 +257,39 @@ const CSV = {
   },
   download(filename, rows) {
     const blob = new Blob([CSV.build(rows)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  },
+};
+
+// Export iCalendar (.ics) — compatible Outlook / Google / Apple Calendar
+const ICS = {
+  esc(v) { return String(v||'').replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;'); },
+  dateOnly(d) { return d.replace(/-/g,''); }, // YYYYMMDD
+  uid(prefix, id) { return `${prefix}-${id}@gantt-davie`; },
+  build(events) {
+    // events = [{ uid, summary, description, dtstart (YYYY-MM-DD), dtend (YYYY-MM-DD exclusive), location }]
+    const stamp = new Date().toISOString().replace(/[-:]|\.\d+/g,'').slice(0,15) + 'Z';
+    const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Gantt Davie//FR','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+    events.forEach(e => {
+      lines.push('BEGIN:VEVENT',
+        `UID:${e.uid}`,
+        `DTSTAMP:${stamp}`,
+        `DTSTART;VALUE=DATE:${ICS.dateOnly(e.dtstart)}`,
+        `DTEND;VALUE=DATE:${ICS.dateOnly(e.dtend)}`,
+        `SUMMARY:${ICS.esc(e.summary)}`,
+      );
+      if (e.description) lines.push(`DESCRIPTION:${ICS.esc(e.description)}`);
+      if (e.location) lines.push(`LOCATION:${ICS.esc(e.location)}`);
+      lines.push('END:VEVENT');
+    });
+    lines.push('END:VCALENDAR');
+    return lines.join('\r\n');
+  },
+  download(filename, events) {
+    const blob = new Blob([ICS.build(events)], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = filename; a.click();
@@ -459,4 +575,111 @@ function seed() {
       ],
     },
   };
+}
+
+// ── Catalogue des gestes (depuis l'outil de chiffrage atelier) ────────────────
+// Temps en secondes (valeur finale = temps × coef)
+DB.CATALOGUE_GESTES = [
+  // Réception
+  { code:'REC-01', categorie:'Réception',    description:'Décharger palette',              temps:180, coef:1.2, notes:'Avec transpalette électrique' },
+  { code:'REC-02', categorie:'Réception',    description:'Contrôle visuel palette',        temps: 60, coef:1.0, notes:'État général palette et emballages' },
+  { code:'REC-03', categorie:'Réception',    description:'Déballage d\'un élément',        temps:  5, coef:1.0, notes:'Niveau 1' },
+  { code:'REC-04', categorie:'Réception',    description:'Ouvrir carton',                  temps: 20, coef:1.0, notes:'Avec cutter sécurisé' },
+  { code:'REC-05', categorie:'Réception',    description:'Compter articles (par 10)',      temps: 30, coef:1.1, notes:'Par tranche de 10 unités' },
+  // Contrôle
+  { code:'CTR-01', categorie:'Contrôle',     description:'Contrôle visuel unitaire',       temps: 10, coef:1.0, notes:'Vérification état produit' },
+  { code:'CTR-02', categorie:'Contrôle',     description:'Contrôle élément fini',          temps:  1.5, coef:1.2, notes:'Niveau 2' },
+  { code:'CTR-03', categorie:'Contrôle',     description:'Mise en conformité caisse/carton',temps:10, coef:1.5, notes:'Contrôle fin - Niveau 3' },
+  { code:'CTR-04', categorie:'Contrôle',     description:'Mise en conformité palette',     temps: 60, coef:1.5, notes:'Contrôle fin - Niveau 3' },
+  // Étiquetage
+  { code:'ETI-01', categorie:'Étiquetage',   description:'Imprimer étiquette',             temps: 10, coef:1.0, notes:'Imprimante thermique' },
+  { code:'ETI-02', categorie:'Étiquetage',   description:'Coller étiquette',               temps: 12, coef:1.0, notes:'Position selon consignes client' },
+  { code:'ETI-03', categorie:'Étiquetage',   description:'Retirer étiquette',              temps: 25, coef:1.2, notes:'Avec décapeur thermique si nécessaire' },
+  { code:'ETI-04', categorie:'Étiquetage',   description:'Collage étiquette orientée (complexe)', temps:5, coef:1.2, notes:'Niveau 2' },
+  { code:'ETI-05', categorie:'Étiquetage',   description:'Collage étiquette orientée (simple)',   temps:3, coef:1.0, notes:'Niveau 1' },
+  { code:'ETI-06', categorie:'Étiquetage',   description:'Impression Inkjet / manuscrit',  temps:  3, coef:1.2, notes:'Niveau 2' },
+  // Assemblage
+  { code:'ASS-01', categorie:'Assemblage',   description:'Kit 2 pièces',                  temps: 40, coef:1.2, notes:'Assemblage simple, contrôle visuel final' },
+  { code:'ASS-02', categorie:'Assemblage',   description:'Kit 3-5 pièces',               temps: 90, coef:1.3, notes:'Assemblage complexe selon fiche technique' },
+  { code:'ASS-03', categorie:'Assemblage',   description:'Emballer film bulles',          temps: 30, coef:1.1, notes:'Protection renforcée produits fragiles' },
+  { code:'ASS-04', categorie:'Assemblage',   description:'Calage (carton / caisse)',      temps:  3, coef:1.2, notes:'Niveau 2' },
+  { code:'ASS-05', categorie:'Assemblage',   description:'Fermeture sachet mini-grip',    temps:  3, coef:1.2, notes:'Niveau 2' },
+  { code:'ASS-06', categorie:'Assemblage',   description:'Filmage élément unitaire',      temps: 12, coef:1.2, notes:'Niveau 2' },
+  { code:'ASS-07', categorie:'Assemblage',   description:'Banderolage produit',           temps: 12, coef:1.2, notes:'Niveau 2' },
+  { code:'ASS-08', categorie:'Assemblage',   description:'Formage + fermeture étui complexe', temps:10, coef:1.2, notes:'Niveau 2' },
+  { code:'ASS-09', categorie:'Assemblage',   description:'Formage + fermeture étui simple',   temps: 5, coef:1.0, notes:'Niveau 1' },
+  { code:'ASS-10', categorie:'Assemblage',   description:'Fourreau orienté',              temps: 10, coef:1.2, notes:'Niveau 2' },
+  { code:'ASS-11', categorie:'Assemblage',   description:'Groupage avec élastique',       temps: 10, coef:1.2, notes:'Niveau 2' },
+  { code:'ASS-12', categorie:'Assemblage',   description:'Insertion complexe (orienté)',  temps:  5, coef:1.2, notes:'Niveau 2' },
+  { code:'ASS-13', categorie:'Assemblage',   description:'Insertion par balance',         temps:  0.5, coef:1.2, notes:'Niveau 2' },
+  { code:'ASS-14', categorie:'Assemblage',   description:'Insertion simple orientée',     temps:  2, coef:1.0, notes:'Niveau 1' },
+  { code:'ASS-15', categorie:'Assemblage',   description:'Pliage complexe',               temps:  6, coef:1.2, notes:'Niveau 2' },
+  { code:'ASS-16', categorie:'Assemblage',   description:'Pliage simple (par rainure)',   temps:  3, coef:1.0, notes:'Niveau 1' },
+  // Stockage
+  { code:'STO-01', categorie:'Stockage',     description:'Déplacer palette',              temps:120, coef:1.2, notes:'Vers zone stockage désignée' },
+  { code:'STO-02', categorie:'Stockage',     description:'Ranger rayonnage',              temps: 25, coef:1.1, notes:'Respecter plan FIFO' },
+  { code:'STO-03', categorie:'Stockage',     description:'Prélever stock',                temps: 30, coef:1.1, notes:'Vérifier référence et quantité' },
+  { code:'STO-04', categorie:'Stockage',     description:'Inventaire',                    temps:180, coef:1.2, notes:'Comptage physique et saisie informatique' },
+  // Préparation
+  { code:'PRE-01', categorie:'Préparation',  description:'Imprimer bon de préparation',   temps: 30, coef:1.0, notes:'Bon de préparation commande' },
+  { code:'PRE-02', categorie:'Préparation',  description:'Picking',                       temps: 20, coef:1.1, notes:'Prélèvement article selon bon' },
+  { code:'PRE-03', categorie:'Préparation',  description:'Reconditionnement (comptage/orientation)', temps:3, coef:1.2, notes:'Niveau 2' },
+  // Expédition
+  { code:'EXP-01', categorie:'Expédition',   description:'Peser colis',                   temps: 15, coef:1.0, notes:'Balance de précision' },
+  { code:'EXP-02', categorie:'Expédition',   description:'Filmer palette',                temps:180, coef:1.2, notes:'Film étirable machine ou manuel' },
+  { code:'EXP-03', categorie:'Expédition',   description:'Livraison par la Poste',        temps: 15, coef:1.0, notes:'Dépôt en bureau de poste' },
+  { code:'EXP-04', categorie:'Expédition',   description:'Mise à disposition EPI',        temps: 10, coef:1.0, notes:'Préparation et remise au transporteur EPI' },
+];
+
+// Retourne le temps final d'un geste (temps × coef), en secondes
+DB.tempsGeste = code => {
+  const g = DB.CATALOGUE_GESTES.find(x => x.code === code);
+  return g ? Math.round(g.temps * g.coef) : 0;
+};
+
+// ── Modèles de projet par défaut ──────────────────────────────────────────────
+function defaultModelesProjets() {
+  return [
+    {
+      id: 'MPRJ-001',
+      nom: 'Logistique entrée-sortie complète',
+      couleur: '#2c5fb3',
+      description: 'Réception → Contrôle → Étiquetage → Assemblage/Reconditionnement → Emballage → Expédition → Facturation',
+      etapes: [
+        { id:'e1', nom:'Réception marchandise',       type:'appro',     duree:1, gestes:['REC-01','REC-02','REC-03','REC-04','REC-05'], dependsDe:[], notes:'Décharge, contrôle visuel palette et déballage' },
+        { id:'e2', nom:'Contrôle qualité entrée',     type:'etude',     duree:1, gestes:['CTR-01','CTR-02'], dependsDe:['e1'], notes:'Contrôle visuel unitaire et conformité' },
+        { id:'e3', nom:'Identification & étiquetage', type:'prod',      duree:1, gestes:['ETI-01','ETI-05','ETI-06'], dependsDe:['e2'], notes:'Impression et collage des étiquettes' },
+        { id:'e4', nom:'Assemblage & reconditionnement', type:'prod',   duree:2, gestes:['PRE-01','PRE-02','PRE-03','ASS-01','ASS-06'], dependsDe:['e3'], notes:'Picking, reconditionnement, assemblage kits' },
+        { id:'e5', nom:'Contrôle final avant expédition', type:'etude', duree:1, gestes:['CTR-03'], dependsDe:['e4'], notes:'Mise en conformité caisse/carton' },
+        { id:'e6', nom:'Emballage & filmage',         type:'prod',      duree:1, gestes:['ASS-03','ASS-06','EXP-01','EXP-02'], dependsDe:['e5'], notes:'Film bulles, filmage palette, pesée' },
+        { id:'e7', nom:'Mise à disposition / Expédition', type:'livraison', duree:1, gestes:['EXP-03','EXP-04'], dependsDe:['e6'], notes:'Remise au transporteur ou dépôt Poste' },
+        { id:'e8', nom:'Facturation & clôture projet',type:'jalon',     duree:0, gestes:[], dependsDe:['e7'], notes:'Jalon de fin — édition de la facture', jalon:true },
+      ],
+    },
+    {
+      id: 'MPRJ-002',
+      nom: 'Réception & mise en stock',
+      couleur: '#059669',
+      description: 'Flux court : réception → contrôle → rangement stock',
+      etapes: [
+        { id:'e1', nom:'Réception palette',           type:'appro',  duree:1, gestes:['REC-01','REC-02','REC-04','REC-05'], dependsDe:[], notes:'' },
+        { id:'e2', nom:'Contrôle & identification',   type:'etude',  duree:1, gestes:['CTR-01','ETI-01','ETI-05'], dependsDe:['e1'], notes:'' },
+        { id:'e3', nom:'Rangement stock',             type:'prod',   duree:1, gestes:['STO-01','STO-02'], dependsDe:['e2'], notes:'FIFO respecté' },
+        { id:'e4', nom:'Stock disponible',            type:'jalon',  duree:0, gestes:[], dependsDe:['e3'], notes:'Jalon : articles disponibles à la préparation', jalon:true },
+      ],
+    },
+    {
+      id: 'MPRJ-003',
+      nom: 'Préparation & expédition commande',
+      couleur: '#f59e0b',
+      description: 'Picking → conditionnement → contrôle → expédition',
+      etapes: [
+        { id:'e1', nom:'Préparation commande (picking)', type:'prod', duree:1, gestes:['PRE-01','PRE-02','STO-03'], dependsDe:[], notes:'Bon de préparation imprimé' },
+        { id:'e2', nom:'Conditionnement & filmage',   type:'prod',   duree:1, gestes:['ASS-09','ASS-06','EXP-01'], dependsDe:['e1'], notes:'' },
+        { id:'e3', nom:'Contrôle expédition',         type:'etude',  duree:1, gestes:['CTR-03','ETI-02'], dependsDe:['e2'], notes:'' },
+        { id:'e4', nom:'Expédition',                  type:'livraison', duree:1, gestes:['EXP-02','EXP-03','EXP-04'], dependsDe:['e3'], notes:'Filmer palette, remettre au transporteur' },
+        { id:'e5', nom:'Expédié',                     type:'jalon',  duree:0, gestes:[], dependsDe:['e4'], notes:'Jalon : colis remis au transporteur', jalon:true },
+      ],
+    },
+  ];
 }

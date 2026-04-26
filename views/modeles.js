@@ -115,20 +115,49 @@ App.views.modeles = {
     const m = s.modeles.find(x => x.id === id);
     if (!m) return;
     if (!s.projets.length) { App.toast('Créer d\'abord un projet','error'); App.navigate('projets'); return; }
-    // Demander quel projet et à quelle date
+
+    const lastFinOfProject = pid => {
+      const fins = s.taches.filter(t => t.projetId === pid && !t.jalon).map(t => t.fin);
+      return fins.length ? fins.sort().at(-1) : null;
+    };
+    const suggestDebut = pid => {
+      const last = lastFinOfProject(pid);
+      return last ? D.nextWorkday(D.addDays(last, 1)) : D.nextWorkday(D.today());
+    };
+    const firstPid = s.projets[0]?.id;
+
     const body = `
       <div class="field"><label>Projet d'affectation</label>
         <select id="inst-prj">${s.projets.map(p => `<option value="${p.id}">${p.code} — ${p.nom}</option>`).join('')}</select>
       </div>
-      <div class="field"><label>Date de début</label><input type="date" id="inst-debut" value="${D.today()}"></div>
-      <p class="muted small">La tâche sera créée avec durée <strong>${m.duree} j</strong>, type <strong>${m.type}</strong>, les mêmes machine/lieu/notes. Tu pourras ensuite la modifier dans le Gantt.</p>
+      <div class="field">
+        <label>Date de début</label>
+        <input type="date" id="inst-debut" value="${suggestDebut(firstPid)}">
+        <div id="inst-hint" class="muted small" style="margin-top:4px"></div>
+      </div>
+      <p class="muted small">La tâche sera créée avec durée <strong>${m.duree} j.o.</strong> (jours ouvrés, week-ends exclus), type <strong>${m.type}</strong>, les mêmes machine/lieu/notes. Tu pourras ensuite la modifier dans le Gantt.</p>
     `;
     const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button><span class="spacer" style="flex:1"></span><button class="btn" id="inst-ok">Créer la tâche</button>`;
     App.openModal(`Instancier : ${m.nom}`, body, foot);
+
+    const updateHint = pid => {
+      const last = lastFinOfProject(pid);
+      const hint = document.getElementById('inst-hint');
+      if (hint) hint.textContent = last
+        ? `Dernière tâche du projet se termine le ${D.fmt(last)} — début suggéré : ${D.fmt(D.nextWorkday(D.addDays(last, 1)))}`
+        : 'Aucune tâche dans ce projet encore.';
+    };
+    updateHint(firstPid);
+    document.getElementById('inst-prj').onchange = e => {
+      const pid = e.target.value;
+      document.getElementById('inst-debut').value = suggestDebut(pid);
+      updateHint(pid);
+    };
+
     document.getElementById('inst-ok').onclick = () => {
       const pid = document.getElementById('inst-prj').value;
-      const debut = document.getElementById('inst-debut').value;
-      const fin = D.addDays(debut, m.duree - 1);
+      const debut = D.nextWorkday(document.getElementById('inst-debut').value);
+      const fin = D.addWorkdays(debut, m.duree - 1);
       const t = {
         id: DB.uid('T'), projetId: pid, nom: m.nom,
         debut, fin, assignes:[], machineId: m.machineId || null, lieuId: m.lieuId || null,

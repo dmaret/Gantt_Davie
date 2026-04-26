@@ -123,6 +123,7 @@ App.views.deplacements = {
         if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
         const sep = text.includes(';') ? ';' : ',';
         const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        const toISO = raw => { const s = (raw||'').trim().replace(/["']/g,''); if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; const m = s.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{4})$/); return m ? `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}` : s; };
         const lines = text.split(/\r?\n/).filter(l => l.trim());
         const hdrs = lines[0].split(sep).map(h => norm(h.replace(/^"|"$/g,'')));
         const rows = lines.slice(1).map(l => {
@@ -131,7 +132,7 @@ App.views.deplacements = {
         }).filter(r => Object.values(r).some(v => v));
         const s = DB.state;
         const parsed = rows.map(r => {
-          const date = r['date (yyyy-mm-dd)'] || r['date'] || '';
+          const date = toISO(r['date (yyyy-mm-dd)'] || r['date'] || '');
           const prenom = r['prenom'] || r['prénom'] || '';
           const nomP = r['nom'] || '';
           const origNom = norm(r['lieu origine'] || r['origine'] || '');

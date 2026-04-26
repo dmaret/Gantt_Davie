@@ -63,11 +63,12 @@ App.views.personnes = {
         const cls = w.pct > 95 ? 'bad' : w.pct > 80 ? 'warn' : '';
         const jours = w.h / 7;
         const jLbl = jours > 0 ? (Number.isInteger(jours) ? jours + 'j' : jours.toFixed(1) + 'j') : '—';
-        const tooltip = `S${weeks[wi].num} · ${w.h}h assignées · ${jLbl} · capacité ${p.capaciteHebdo}h · ${w.pct}%${w.pct > 95 ? ' ⚠ surcharge' : ''}`;
+        const tooltip = `S${weeks[wi].num} · ${w.h}h assignées · ${jLbl} · capacité ${p.capaciteHebdo}h · ${w.pct}%${w.pct > 95 ? ' ⚠ surcharge — cliquer pour voir les tâches' : w.pct > 80 ? ' — cliquer pour voir les tâches' : ''}`;
         const wNumColor = w.pct > 95 ? 'var(--error,#c43b3b)' : w.pct > 80 ? 'var(--warning,#c47800)' : 'var(--text-muted)';
-        return '<div style="text-align:center">'
+        const hasLoad = w.h > 0;
+        return `<div class="week-cell${cls ? ' week-cell-clickable' : (hasLoad ? ' week-cell-clickable' : '')}" data-pid="${p.id}" data-wi="${wi}" style="text-align:center;cursor:${hasLoad||cls?'pointer':'default'};border-radius:4px;padding:1px 2px" title="${tooltip}">`
           + `<div style="font-size:9px;font-weight:600;color:${wNumColor};line-height:1;margin-bottom:2px">S${weeks[wi].num}</div>`
-          + `<div class="bar-inline ${cls}" style="width:28px" title="${tooltip}"><div class="fill" style="width:${w.pct}%"></div></div>`
+          + `<div class="bar-inline ${cls}" style="width:28px"><div class="fill" style="width:${w.pct}%"></div></div>`
           + `<div style="font-size:9px;color:${cls==='bad'?'var(--error,#c43b3b)':cls==='warn'?'var(--warning,#c47800)':'var(--text-muted)'};margin-top:1px;line-height:1;font-weight:${cls?'600':'400'}">${jLbl}</div>`
           + '</div>';
       }).join('');
@@ -94,15 +95,21 @@ App.views.personnes = {
       </tr>`;
     }).join('');
 
+    this._weeks = weeks;
     document.getElementById('p-table').innerHTML = `
       <table class="data">
-        <thead><tr><th>Personne</th><th>Rôle</th><th>Lieu principal</th><th>Compétences</th><th title="Profil hebdo (L M M J V S D × matin/aprem)">Horaires</th><th>Tâches 7j</th><th title="Charge par semaine · Rouge = ≥96% de la capacité hebdo (surcharge) · Orange = ≥81%">Charge · ${weeks.map(w=>'S'+w.num).join(' · ')}</th><th class="right">Moy.</th><th></th></tr></thead>
+        <thead><tr><th>Personne</th><th>Rôle</th><th>Lieu principal</th><th>Compétences</th><th title="Profil hebdo (L M M J V S D × matin/aprem)">Horaires</th><th>Tâches 7j</th><th title="Charge par semaine · Rouge = ≥96% de la capacité hebdo (surcharge) · Orange = ≥81% · Cliquer sur une semaine pour voir les tâches">Charge · ${weeks.map(w=>'S'+w.num).join(' · ')}</th><th class="right">Moy.</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="muted small" style="margin-top:10px">${list.length} personne(s) · carrés pleins = dispo · 📅 = planning personnel</p>
+      <p class="muted small" style="margin-top:10px">${list.length} personne(s) · carrés pleins = dispo · 📅 = planning personnel · cliquer sur une semaine pour voir le détail</p>
     `;
     document.querySelectorAll('#p-table tbody .p-name').forEach(el => el.onclick = () => this.openForm(el.closest('tr').dataset.id));
     document.querySelectorAll('#p-table tbody .p-semaine').forEach(b => b.onclick = e => { e.stopPropagation(); this.openSemaine(b.dataset.id); });
+    document.querySelectorAll('#p-table .week-cell-clickable').forEach(el => {
+      el.onclick = e => { e.stopPropagation(); this.openWeekDetail(el.dataset.pid, +el.dataset.wi); };
+      el.onmouseenter = () => el.style.background = 'var(--surface-2,#f3f4f6)';
+      el.onmouseleave = () => el.style.background = '';
+    });
     document.querySelectorAll('#p-table tbody .h-slot.clickable').forEach(el => {
       el.onclick = e => {
         e.stopPropagation();
@@ -115,6 +122,68 @@ App.views.personnes = {
         DB.save();
         el.classList.toggle('on');
       };
+    });
+  },
+
+  openWeekDetail(pid, wi) {
+    const p = DB.personne(pid);
+    if (!p) return;
+    const w = (this._weeks || [])[wi];
+    if (!w) return;
+    const s = DB.state;
+    const ts = s.taches.filter(t => (t.assignes||[]).includes(p.id) && t.fin >= w.start && t.debut <= w.end)
+      .sort((a,b) => a.debut.localeCompare(b.debut));
+    const absences = (p.absences||[]).filter(a => a.fin >= w.start && a.debut <= w.end);
+    const h = ts.reduce((n,t) => n + D.weekdaysBetween(t.debut > w.start ? t.debut : w.start, t.fin < w.end ? t.fin : w.end) * 7, 0);
+    const pct = Math.min(100, Math.round(h / p.capaciteHebdo * 100));
+    const cls = pct > 95 ? 'bad' : pct > 80 ? 'warn' : 'good';
+    const statusLabel = pct > 95 ? '⚠ Surcharge' : pct > 80 ? '⚡ Proche du max' : '✓ OK';
+
+    const taskRows = ts.length ? ts.map(t => {
+      const prj = DB.projet(t.projetId);
+      const lieu = DB.lieu(t.lieuId);
+      const av = t.avancement || 0;
+      const avCls = av === 100 ? 'good' : av > 0 ? 'warn' : '';
+      const jours = D.weekdaysBetween(t.debut > w.start ? t.debut : w.start, t.fin < w.end ? t.fin : w.end);
+      return `<tr class="wd-task-row" data-tid="${t.id}" style="cursor:pointer">
+        <td><span class="badge" style="background:${prj?prj.couleur+'22':''};color:${prj?prj.couleur:'var(--text-muted)'};border:1px solid ${prj?prj.couleur+'55':'var(--border)'}">${prj?prj.code:'—'}</span></td>
+        <td><strong>${t.nom}</strong></td>
+        <td class="muted small">${lieu?lieu.nom:'—'}</td>
+        <td class="muted small">${D.fmt(t.debut)} → ${D.fmt(t.fin)}</td>
+        <td class="right"><span class="muted small">${jours}j</span></td>
+        <td class="right"><span class="badge ${avCls}">${av}%</span></td>
+        <td class="right"><span class="wd-goto" title="Voir sur le Gantt" style="cursor:pointer;font-size:16px;color:var(--primary)">›</span></td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="7" class="muted" style="text-align:center;padding:12px">Aucune tâche cette semaine</td></tr>`;
+
+    const absRows = absences.map(a => `<tr>
+      <td colspan="5" class="muted small">🏖 Absence : ${a.motif||'—'} · ${D.fmt(a.debut)} → ${D.fmt(a.fin)}</td>
+    </tr>`).join('');
+
+    const body = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:10px 14px;border-radius:8px;background:var(--surface-2)">
+        <div style="flex:1">
+          <div class="muted small">${p.role} · ${DB.lieu(p.lieuPrincipalId)?.nom||'—'}</div>
+          <div style="margin-top:4px;font-size:13px">${h}h assignées sur ${p.capaciteHebdo}h de capacité</div>
+          <div class="bar-inline ${cls}" style="margin-top:6px"><div class="fill" style="width:${pct}%"></div></div>
+        </div>
+        <div style="text-align:center">
+          <div class="badge ${cls}" style="font-size:16px;padding:6px 14px">${pct}%</div>
+          <div class="muted small" style="margin-top:4px">${statusLabel}</div>
+        </div>
+      </div>
+      <table class="data" style="width:100%">
+        <thead><tr><th>Projet</th><th>Tâche</th><th>Lieu</th><th>Période</th><th class="right">Durée S${w.num}</th><th class="right">Avanc.</th><th></th></tr></thead>
+        <tbody>${taskRows}${absRows}</tbody>
+      </table>
+      <p class="muted small" style="margin-top:8px">Cliquer sur une ligne pour aller sur le Gantt · Semaine du ${D.fmt(w.start)} au ${D.fmt(w.end)}</p>
+    `;
+    const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Fermer</button>`;
+    App.openModal(`S${w.num} — ${App.personneLabel(p)}`, body, foot);
+    document.querySelectorAll('.wd-task-row').forEach(el => {
+      el.onclick = () => { App.closeModal(); App.navigateToTarget({ view: 'gantt', tacheId: el.dataset.tid }); };
+      el.onmouseenter = () => el.style.background = 'var(--surface-2)';
+      el.onmouseleave = () => el.style.background = '';
     });
   },
 
