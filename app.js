@@ -238,6 +238,117 @@ const App = {
     badge.classList.toggle('hidden', count === 0);
     badge.classList.toggle('bad', alerts.some(a => a.niveau === 'bad'));
   },
+
+  updateNavBadges() {
+    const alerts = this.proactiveAlerts();
+    const counts = {};
+    alerts.forEach(a => {
+      if (a.target && a.target.view) {
+        const prev = counts[a.target.view] || { total: 0, bad: false };
+        counts[a.target.view] = { total: prev.total + 1, bad: prev.bad || a.niveau === 'bad' };
+      }
+    });
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      const view = btn.dataset.view;
+      const info = counts[view] || null;
+      let badge = btn.querySelector('.nav-badge');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'nav-badge';
+        btn.appendChild(badge);
+      }
+      if (info) {
+        badge.textContent = info.total;
+        badge.style.display = '';
+        badge.classList.toggle('bad', info.bad);
+      } else {
+        badge.style.display = 'none';
+      }
+    });
+  },
+
+  showCommandPalette() {
+    if (document.getElementById('cmd-palette')) return;
+    const VIEWS = [
+      { view:'dashboard', label:'Tableau de bord', key:'D' },
+      { view:'gantt', label:'Gantt', key:'G' },
+      { view:'kanban', label:'Kanban', key:'' },
+      { view:'calendrier', label:'Calendrier', key:'C' },
+      { view:'personnes', label:'Personnes', key:'P' },
+      { view:'lieux', label:'Lieux', key:'L' },
+      { view:'machines', label:'Machines', key:'M' },
+      { view:'projets', label:'Projets', key:'J' },
+      { view:'stock', label:'Stock', key:'S' },
+      { view:'bom', label:'BOM', key:'B' },
+      { view:'deplacements', label:'Déplacements', key:'V' },
+      { view:'commandes', label:'Commandes', key:'O' },
+      { view:'capacite', label:'Capacité', key:'X' },
+      { view:'ressources', label:'Ressources', key:'R' },
+      { view:'equipes', label:'Équipes', key:'E' },
+      { view:'plan', label:'Plan', key:'A' },
+      { view:'absences', label:'Absences', key:'F' },
+      { view:'modeles', label:'Modèles de tâche', key:'T' },
+      { view:'modelesprojets', label:'Modèles de projet', key:'' },
+      { view:'audit', label:'Historique', key:'H' },
+      { view:'whatif', label:'What-if', key:'W' },
+      { view:'majourney', label:'Ma journée', key:'' },
+      { view:'timeline', label:'Timeline', key:'' },
+      { view:'aide', label:'🎓 Guide & Flux de travail', key:'I' },
+    ];
+    const ACTIONS = [
+      { label:'+ Nouvelle tâche Gantt', meta:'action', action: () => { this.navigate('gantt'); setTimeout(() => this.views.gantt?.newItem?.(), 80); } },
+      { label:'+ Nouveau projet', meta:'action', action: () => { this.navigate('projets'); setTimeout(() => this.views.projets?.newItem?.(), 80); } },
+      { label:'+ Nouvelle personne', meta:'action', action: () => { this.navigate('personnes'); setTimeout(() => this.views.personnes?.newItem?.(), 80); } },
+      { label:'Exporter JSON', meta:'action', action: () => this.exportData() },
+      { label:'Alertes proactives', meta:'action', action: () => this.showBellPanel() },
+      { label:'Aide · raccourcis clavier', meta:'action', action: () => this.showHelp() },
+    ];
+    const el = document.createElement('div');
+    el.id = 'cmd-palette';
+    el.className = 'gs-overlay';
+    el.innerHTML = `<div class="gs-panel">
+      <input type="text" id="cp-input" placeholder="Naviguer vers… ou action (↑↓ · Entrée · Esc)" autofocus>
+      <div id="cp-results" class="gs-results"></div>
+      <div class="gs-hint muted small">Ctrl+P · ↑↓ naviguer · Entrée ouvrir · Esc fermer</div>
+    </div>`;
+    document.body.appendChild(el);
+    el.onclick = ev => { if (ev.target === el) this.closeCommandPalette(); };
+    this._cpSelected = 0;
+    this._cpItems = [];
+    const input = document.getElementById('cp-input');
+    const renderCp = () => {
+      const q = input.value.toLowerCase();
+      const viewItems = VIEWS
+        .filter(v => !q || v.label.toLowerCase().includes(q) || v.view.toLowerCase().includes(q))
+        .map(v => ({ label: v.label, meta: v.key ? `Touche ${v.key}` : 'vue', action: () => this.navigate(v.view) }));
+      const actionItems = ACTIONS.filter(a => !q || a.label.toLowerCase().includes(q));
+      this._cpItems = [...viewItems, ...actionItems];
+      this._cpSelected = Math.min(this._cpSelected, Math.max(0, this._cpItems.length - 1));
+      document.getElementById('cp-results').innerHTML = this._cpItems.length
+        ? this._cpItems.map((it, i) => `<div class="gs-item ${i === this._cpSelected ? 'on' : ''}" data-i="${i}"><span class="gs-label">${it.label}</span><span class="gs-meta muted small">${it.meta || ''}</span></div>`).join('')
+        : `<div class="muted small" style="padding:10px">Aucun résultat.</div>`;
+      document.querySelectorAll('#cp-results .gs-item').forEach(item => {
+        item.onclick = () => { this._cpSelected = +item.dataset.i; this._execCpItem(); };
+      });
+    };
+    this._execCpItem = () => {
+      const it = this._cpItems[this._cpSelected];
+      if (it) { this.closeCommandPalette(); it.action(); }
+    };
+    input.oninput = renderCp;
+    input.onkeydown = e => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); this._cpSelected = Math.min(this._cpItems.length - 1, this._cpSelected + 1); renderCp(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); this._cpSelected = Math.max(0, this._cpSelected - 1); renderCp(); }
+      else if (e.key === 'Enter') { e.preventDefault(); this._execCpItem(); }
+      else if (e.key === 'Escape') { e.preventDefault(); this.closeCommandPalette(); }
+    };
+    renderCp();
+    setTimeout(() => input.focus(), 10);
+  },
+  closeCommandPalette() {
+    const el = document.getElementById('cmd-palette');
+    if (el) el.remove();
+  },
   showBellPanel() {
     const alerts = this.proactiveAlerts();
     this._lastAlerts = alerts;
@@ -257,12 +368,12 @@ const App = {
       : '';
     this.openModal(`Alertes proactives (${alerts.length})`, body, `${notifBtn}<span class="spacer" style="flex:1"></span><button class="btn" onclick="App.closeModal()">Fermer</button>`);
     document.querySelectorAll('.alert-row').forEach(li => {
-      li.addEventListener('click', () => {
+      li.onclick = () => {
         const a = this._lastAlerts[+li.dataset.idx];
         if (!a || !a.target) return;
         this.closeModal();
         this.navigateToTarget(a.target);
-      });
+      };
     });
   },
 
@@ -355,6 +466,10 @@ const App = {
     if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
       e.preventDefault(); this.showGlobalSearch(); return;
     }
+    // Palette de commandes (Ctrl+P / Cmd+P)
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'p' || e.key === 'P')) {
+      e.preventDefault(); this.showCommandPalette(); return;
+    }
     // Undo / Redo (Ctrl+Z / Ctrl+Shift+Z)
     if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -364,7 +479,7 @@ const App = {
     }
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const map = { d:'dashboard', g:'gantt', c:'calendrier', p:'personnes', l:'lieux', m:'machines', j:'projets', s:'stock', v:'deplacements', o:'commandes', b:'bom', x:'capacite', w:'whatif', r:'ressources', e:'equipes', a:'plan', f:'absences', h:'audit', t:'modeles' };
+    const map = { d:'dashboard', g:'gantt', c:'calendrier', p:'personnes', l:'lieux', m:'machines', j:'projets', s:'stock', v:'deplacements', o:'commandes', b:'bom', x:'capacite', w:'whatif', r:'ressources', e:'equipes', a:'plan', f:'absences', h:'audit', t:'modeles', i:'aide' };
     if (map[e.key]) { this.navigate(map[e.key]); e.preventDefault(); return; }
     if (e.key === '?') { this.showHelp(); e.preventDefault(); return; }
     if (e.key === 'n' && this.views[this.view].newItem) { this.views[this.view].newItem(); e.preventDefault(); return; }
@@ -511,7 +626,7 @@ const App = {
       <p><kbd>L</kbd> Lieux · <kbd>M</kbd> Machines · <kbd>J</kbd> Projets · <kbd>S</kbd> Stock</p>
       <p><kbd>V</kbd> Déplacements · <kbd>O</kbd> Commandes · <kbd>B</kbd> BOM · <kbd>X</kbd> Capacité · <kbd>W</kbd> What-if</p>
       <p><kbd>R</kbd> Ressources · <kbd>E</kbd> Équipes · <kbd>A</kbd> Plan atelier</p>
-      <p><kbd>Ctrl</kbd>+<kbd>K</kbd> Recherche globale · <kbd>/</kbd> Recherche vue · <kbd>N</kbd> Nouveau · <kbd>?</kbd> Aide</p>
+      <p><kbd>Ctrl</kbd>+<kbd>K</kbd> Recherche globale · <kbd>Ctrl</kbd>+<kbd>P</kbd> Palette de commandes · <kbd>I</kbd> Guide · <kbd>/</kbd> Recherche vue · <kbd>N</kbd> Nouveau · <kbd>?</kbd> Aide</p>
       <p><kbd>Ctrl</kbd>+<kbd>Z</kbd> Annuler · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> Refaire · <kbd>Alt</kbd>+<kbd>←</kbd> Vue précédente · <kbd>Esc</kbd> Fermer</p>
       <p class="muted small">Clic-droit sur une barre Gantt pour un menu d'actions rapides.</p>
       <p style="text-align:right;margin:14px 0 0 0"><button class="btn" id="help-close">OK</button></p>
@@ -561,6 +676,7 @@ const App = {
     root.innerHTML = '';
     this.views[this.view].render(root);
     this.updateBell();
+    this.updateNavBadges();
     this.applyPerms();
     this.applyGroupUI();
   },

@@ -78,12 +78,22 @@ body {
   background: transparent; border: 1px solid transparent;
   padding: 6px 12px; border-radius: 6px; color: var(--text-muted);
   cursor: pointer; font-size: 13px; font-family: inherit;
+  position: relative;
 }
 .nav-btn:hover { background: var(--surface-2); color: var(--text); }
 .nav-btn.active {
   background: var(--primary-weak); color: var(--primary); border-color: transparent;
   font-weight: 600;
 }
+.nav-badge {
+  position: absolute; top: -4px; right: -2px;
+  background: var(--warning); color: #fff;
+  font-size: 9px; font-weight: 700;
+  min-width: 14px; height: 14px; padding: 0 3px;
+  border-radius: 7px; line-height: 14px; text-align: center;
+  box-shadow: 0 0 0 2px var(--surface); pointer-events: none;
+}
+.nav-badge.bad { background: var(--danger); }
 .actions { display: flex; gap: 6px; align-items: center; }
 .btn-ghost {
   background: transparent; border: 1px solid var(--border);
@@ -162,6 +172,41 @@ body {
 .gs-label { font-weight: 500; }
 .gs-meta { margin-left: auto; }
 .gs-hint { padding: 8px 14px; border-top: 1px solid var(--border); background: var(--surface-2); text-align: center; }
+
+/* Vue Aide & Flux */
+.flux-flow { display: flex; align-items: flex-start; gap: 0; flex-wrap: wrap; margin-bottom: 8px; }
+.flux-step {
+  background: var(--surface-2); border: 1.5px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; min-width: 110px; max-width: 150px; text-align: center;
+  cursor: pointer; transition: border-color .15s, box-shadow .15s; flex-shrink: 0;
+}
+.flux-step:hover { border-color: var(--primary); box-shadow: 0 3px 10px rgba(44,95,179,.15); }
+.flux-num {
+  width: 22px; height: 22px; border-radius: 50%; background: var(--primary);
+  color: #fff; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 6px;
+}
+.flux-icon { font-size: 20px; margin-bottom: 5px; }
+.flux-title { font-weight: 600; font-size: 12px; margin-bottom: 3px; }
+.flux-desc { font-size: 10px; color: var(--text-muted); line-height: 1.3; }
+.flux-arrow {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0 8px; color: var(--text-muted); font-size: 18px; margin-top: 18px;
+  flex-shrink: 0; gap: 2px;
+}
+.flux-arrow-label { font-size: 9px; color: var(--text-muted); white-space: nowrap; }
+.flux-tip {
+  margin-top: 12px; padding: 8px 12px;
+  background: var(--primary-weak); border-radius: 6px;
+  font-size: 12px; color: var(--text-muted);
+}
+.aide-kbd {
+  display: inline-block; padding: 2px 7px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 4px; font-family: ui-monospace, monospace;
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
 
 /* Menu contextuel (clic-droit Gantt) */
 .ctx-menu {

@@ -1,7 +1,24 @@
 App.views.gantt = {
+  _PERSIST_KEY: 'gantt_filters_v1',
+  _loadPersistedState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(this._PERSIST_KEY) || '{}');
+      if (saved.mode)        this.state.mode        = saved.mode;
+      if (saved.zoom)        this.state.zoom        = saved.zoom;
+      if (saved.projetFilter !== undefined) this.state.projetFilter = saved.projetFilter;
+      if (saved.rangeDays)   this.state.rangeDays   = saved.rangeDays;
+      if (saved.showDeps     !== undefined) this.state.showDeps     = saved.showDeps;
+      if (saved.showCritical !== undefined) this.state.showCritical = saved.showCritical;
+      if (saved.autoCascade  !== undefined) this.state.autoCascade  = saved.autoCascade;
+    } catch(e) {}
+  },
+  _savePersistedState() {
+    const st = this.state;
+    try { localStorage.setItem(this._PERSIST_KEY, JSON.stringify({ mode:st.mode, zoom:st.zoom, projetFilter:st.projetFilter, rangeDays:st.rangeDays, showDeps:st.showDeps, showCritical:st.showCritical, autoCascade:st.autoCascade })); } catch(e) {}
+  },
   state: {
     mode: 'projet',      // 'projet' | 'personne' | 'machine' | 'lieu'
-    zoom: 'jour',        // 'jour' | 'semaine'
+    zoom: 'jour',        // 'jour' | 'semaine' | 'mois'
     rangeStart: null,
     rangeDays: 56,
     projetFilter: '',
@@ -345,6 +362,7 @@ App.views.gantt = {
   render(root) {
     const st = this.state;
     if (!st.rangeStart) st.rangeStart = D.addDays(D.today(), -14);
+    this._loadPersistedState();
 
     root.innerHTML = `
       <div class="gantt-wrap">
@@ -404,12 +422,12 @@ App.views.gantt = {
     document.getElementById('g-days').value = String(st.rangeDays);
     document.getElementById('g-zoom').value = st.zoom || 'jour';
 
-    document.getElementById('g-mode').onchange = e => { st.mode = e.target.value; this.draw(); };
-    document.getElementById('g-proj').onchange = e => { st.projetFilter = e.target.value; this.draw(); };
+    document.getElementById('g-mode').onchange = e => { st.mode = e.target.value; this._savePersistedState(); this.draw(); };
+    document.getElementById('g-proj').onchange = e => { st.projetFilter = e.target.value; this._savePersistedState(); this.draw(); };
     document.getElementById('g-search').oninput = e => { st.search = e.target.value.toLowerCase(); this.draw(); };
     document.getElementById('g-start').onchange = e => { st.rangeStart = e.target.value; this.draw(); };
-    document.getElementById('g-days').onchange = e => { st.rangeDays = +e.target.value; this.draw(); };
-    document.getElementById('g-zoom').onchange = e => { st.zoom = e.target.value; this.draw(); };
+    document.getElementById('g-days').onchange = e => { st.rangeDays = +e.target.value; this._savePersistedState(); this.draw(); };
+    document.getElementById('g-zoom').onchange = e => { st.zoom = e.target.value; this._savePersistedState(); this.draw(); };
     const zoomStep = () => st.zoom === 'mois' ? 30 : st.zoom === 'semaine' ? 7 : 14;
     document.getElementById('g-prev').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, -zoomStep()); this.draw(); };
     document.getElementById('g-next').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, zoomStep()); this.draw(); };
@@ -427,9 +445,9 @@ App.views.gantt = {
       document.getElementById('g-days').value = String(st.rangeDays);
       this.draw();
     };
-    document.getElementById('g-deps').onchange = e => { st.showDeps = e.target.checked; this.draw(); };
-    document.getElementById('g-crit').onchange = e => { st.showCritical = e.target.checked; this.draw(); };
-    document.getElementById('g-casc').onchange = e => { st.autoCascade = e.target.checked; };
+    document.getElementById('g-deps').onchange = e => { st.showDeps = e.target.checked; this._savePersistedState(); this.draw(); };
+    document.getElementById('g-crit').onchange = e => { st.showCritical = e.target.checked; this._savePersistedState(); this.draw(); };
+    document.getElementById('g-casc').onchange = e => { st.autoCascade = e.target.checked; this._savePersistedState(); };
     document.getElementById('g-add').onclick = () => this.openTacheForm(null);
     document.getElementById('g-tpl').onclick = () => this.downloadTemplate();
     document.getElementById('g-import').onclick = () => document.getElementById('g-import-file').click();
@@ -456,6 +474,16 @@ App.views.gantt = {
     blSel.onchange = e => { st.baselineId = e.target.value || null; this.draw(); };
 
     this.draw();
+    // Scroll to today on initial render
+    const scroll = document.querySelector('.gantt-scroll');
+    if (scroll) {
+      const zoom = st.zoom || 'jour';
+      const cellW = zoom === 'mois' ? 4 : zoom === 'semaine' ? 9 : 28;
+      const todayIdx = D.diffDays(st.rangeStart, D.today());
+      if (todayIdx >= 0 && todayIdx < st.rangeDays) {
+        scroll.scrollLeft = Math.max(0, 220 + todayIdx * cellW - scroll.clientWidth / 2);
+      }
+    }
   },
 
   draw() {
@@ -858,9 +886,12 @@ App.views.gantt = {
     menu.style.top = e.clientY + 'px';
     const items = [
       { label:'✎ Éditer', perm:true, act:() => this.openTacheForm(tid) },
-      { label:'✓ Marquer terminée (100%)', perm:canEdit, act:() => { t.avancement = 100; DB.save(); this.draw(); App.toast('Tâche terminée','success'); } },
-      { label:'◐ Avancement 50%', perm:canEdit, act:() => { t.avancement = 50; DB.save(); this.draw(); } },
-      { label:'○ Avancement 0%', perm:canEdit, act:() => { t.avancement = 0; DB.save(); this.draw(); } },
+      { sep:true },
+      { label:'● 100% — Terminée', perm:canEdit, act:() => { t.avancement=100; DB.save(); this.draw(); App.toast('Terminée ✓','success'); } },
+      { label:'◕ 75%', perm:canEdit, act:() => { t.avancement=75; DB.save(); this.draw(); } },
+      { label:'◑ 50%', perm:canEdit, act:() => { t.avancement=50; DB.save(); this.draw(); } },
+      { label:'◔ 25%', perm:canEdit, act:() => { t.avancement=25; DB.save(); this.draw(); } },
+      { label:'○ 0% — À démarrer', perm:canEdit, act:() => { t.avancement=0; DB.save(); this.draw(); } },
       { sep:true },
       { label:'⎘ Dupliquer', perm:canEdit, act:() => {
         const copy = JSON.parse(JSON.stringify(t));
