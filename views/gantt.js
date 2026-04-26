@@ -1090,7 +1090,37 @@ App.views.gantt = {
     const t = tid ? DB.tache(tid) : {
       id: DB.uid('T'), projetId: prefill.projetId || (s.projets[0]?.id || ''), nom:'',
       debut: prefill.debut || D.today(), fin: prefill.fin || D.addDays(D.today(), 4),
-      assignes:[], machineId:null, lieuId:null, type:'prod', avancement:0, jalon:false, dependances:[],
+      assignes:[], machineId:null, lieuId:null, type:'prod', avancement:0, jalon:false, dependances:[], gestes:[],
+    };
+    if (!t.gestes) t.gestes = [];
+    const gestesParCat = (DB.CATALOGUE_GESTES || []).reduce((acc, g) => {
+      if (!acc[g.categorie]) acc[g.categorie] = [];
+      acc[g.categorie].push(g);
+      return acc;
+    }, {});
+    const renderGestesSection = () => {
+      const sel = t.gestes || [];
+      const totalSec = sel.reduce((n, code) => n + DB.tempsGeste(code), 0);
+      const fmtT = s => s < 60 ? s+'s' : Math.round(s/60) < 60 ? Math.round(s/60)+'min' : Math.floor(s/3600)+'h'+Math.round((s%3600)/60)+'min';
+      return `<div style="display:flex;align-items:center;gap:4px">
+        <button type="button" class="btn-ghost f-geste-prev" title="Catégorie précédente" style="flex-shrink:0;padding:2px 8px;font-size:18px;line-height:1;align-self:center">‹</button>
+        <div class="ep-geste-scroll f-geste-scroll" style="max-height:120px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px;background:var(--surface-2);flex:1">
+          ${Object.entries(gestesParCat).map(([cat, gestes], catIdx) => `
+            <div class="ep-cat-section" data-cat-idx="${catIdx}" style="margin-bottom:6px">
+              <div class="muted small" style="font-weight:600;margin-bottom:3px">${cat}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px">
+                ${gestes.map(g => {
+                  const checked = sel.includes(g.code);
+                  return `<label title="${g.description} — ${g.notes||''}" style="display:flex;align-items:center;gap:3px;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:10px;border:1px solid ${checked?'var(--primary)':'var(--border)'};background:${checked?'var(--primary-weak)':'transparent'}">
+                    <input type="checkbox" class="f-geste-cb" data-code="${g.code}" ${checked?'checked':''} style="margin:0"> ${g.code}
+                  </label>`;
+                }).join('')}
+              </div>
+            </div>`).join('')}
+        </div>
+        <button type="button" class="btn-ghost f-geste-next" title="Catégorie suivante" style="flex-shrink:0;padding:2px 8px;font-size:18px;line-height:1;align-self:center">›</button>
+      </div>
+      ${sel.length ? `<div class="muted small" style="margin-top:4px">⏱ Estimation : ${fmtT(totalSec)} / pièce · ${sel.length} geste(s) sélectionné(s)</div>` : ''}`;
     };
     const body = `
       <div class="field"><label>Nom</label><input id="f-nom" value="${t.nom||''}"></div>
@@ -1146,6 +1176,10 @@ App.views.gantt = {
       </div>
       <div class="field"><label>📝 Notes / consignes</label>
         <textarea id="f-notes" rows="3" placeholder="Instructions d'exécution, références, points d'attention…">${t.notes||''}</textarea>
+      </div>
+      <div class="field">
+        <label>🏷 Gestes associés <span class="muted small">(catalogue atelier — optionnel)</span></label>
+        <div id="f-gestes-wrap">${renderGestesSection()}</div>
       </div>
       <div class="field"><label>✅ Sous-tâches <span class="muted small" id="f-cl-count">${(t.checklist||[]).length ? (t.checklist||[]).filter(i=>i.done).length+'/'+(t.checklist||[]).length : ''}</span></label>
         <div id="f-cl-list" class="cl-list">
@@ -1213,6 +1247,28 @@ App.views.gantt = {
     const updateDur = () => { const el = document.getElementById('f-dur'); if (el) el.textContent = Math.max(0, D.workdaysBetween(document.getElementById('f-debut').value, document.getElementById('f-fin').value)) + ' j.o.'; };
     ['f-debut','f-fin'].forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('change', updateDur); });
     const avEl = document.getElementById('f-avancement'); if (avEl) avEl.oninput = e => { const d = document.getElementById('f-av-val'); if (d) d.textContent = e.target.value + '%'; };
+    // Gestes — checkboxes + navigation catégorie
+    const refreshGestes = () => {
+      t.gestes = Array.from(document.querySelectorAll('#f-gestes-wrap .f-geste-cb:checked')).map(cb => cb.dataset.code);
+      document.getElementById('f-gestes-wrap').innerHTML = renderGestesSection();
+      bindGestes();
+    };
+    const bindGestes = () => {
+      document.querySelectorAll('#f-gestes-wrap .f-geste-cb').forEach(cb => cb.onchange = refreshGestes);
+      document.querySelector('#f-gestes-wrap .f-geste-prev').onclick = () => {
+        const c = document.querySelector('#f-gestes-wrap .f-geste-scroll');
+        const secs = c.querySelectorAll('.ep-cat-section');
+        let cur = 0; secs.forEach((s,i) => { if (s.offsetTop <= c.scrollTop + 8) cur = i; });
+        if (cur > 0) c.scrollTop = secs[cur - 1].offsetTop;
+      };
+      document.querySelector('#f-gestes-wrap .f-geste-next').onclick = () => {
+        const c = document.querySelector('#f-gestes-wrap .f-geste-scroll');
+        const secs = c.querySelectorAll('.ep-cat-section');
+        let cur = 0; secs.forEach((s,i) => { if (s.offsetTop <= c.scrollTop + 8) cur = i; });
+        if (cur < secs.length - 1) c.scrollTop = secs[cur + 1].offsetTop;
+      };
+    };
+    bindGestes();
     // Checklist sous-tâches
     const localCL = JSON.parse(JSON.stringify(t.checklist || []));
     const refreshCL = () => {
@@ -1415,6 +1471,7 @@ App.views.gantt = {
       t.jalon = document.getElementById('f-jalon').checked;
       t.dependances = Array.from(document.getElementById('f-deps').selectedOptions).map(o => o.value);
       t.notes = document.getElementById('f-notes').value;
+      t.gestes = Array.from(document.querySelectorAll('#f-gestes-wrap .f-geste-cb:checked')).map(cb => cb.dataset.code);
       t.checklist = localCL;
       if (!t.nom) { App.toast('Nom requis','error'); return; }
 

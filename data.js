@@ -175,7 +175,7 @@ const DB = {
     localStorage.setItem(STORAGE_KEY, snap);
     return true;
   },
-  reset() { this.state = seed(); this.save(); },
+  reset() { this.state = seed(); this.migrate(); this.save(); },
   importJSON(obj) { this.state = obj; this.save(); },
   exportJSON() { return JSON.stringify(this.state, null, 2); },
 
