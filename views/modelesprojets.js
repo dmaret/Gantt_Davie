@@ -125,20 +125,24 @@ App.views.modelesprojets = {
           </div>
           <div class="field" style="margin-top:6px">
             <label style="font-size:11px">Gestes associés <span class="muted small">(temps/pièce estimé : ${this._fmtTemps(tempsTotalEtape)})</span></label>
-            <div style="max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px;background:var(--surface-2)">
-              ${Object.entries(gestesParCat).map(([cat, gestes]) => `
-                <div style="margin-bottom:4px">
-                  <div class="muted small" style="font-weight:600;margin-bottom:2px">${cat}</div>
-                  <div style="display:flex;flex-wrap:wrap;gap:4px">
-                    ${gestes.map(g => {
-                      const sel = (e.gestes || []).includes(g.code);
-                      return `<label title="${g.description} — ${g.notes}" style="display:flex;align-items:center;gap:3px;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:10px;border:1px solid ${sel ? 'var(--primary)' : 'var(--border)'};background:${sel ? 'var(--primary-weak)' : 'transparent'}">
-                        <input type="checkbox" class="ep-geste" data-i="${idx}" data-code="${g.code}" ${sel ? 'checked' : ''} style="margin:0">
-                        ${g.code}
-                      </label>`;
-                    }).join('')}
-                  </div>
-                </div>`).join('')}
+            <div style="display:flex;align-items:stretch;gap:4px">
+              <button class="btn-ghost ep-cat-prev" data-i="${idx}" title="Catégorie précédente" style="flex-shrink:0;padding:2px 8px;font-size:18px;line-height:1;align-self:center">‹</button>
+              <div class="ep-geste-scroll" data-i="${idx}" style="max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px;background:var(--surface-2);flex:1">
+                ${Object.entries(gestesParCat).map(([cat, gestes], catIdx) => `
+                  <div class="ep-cat-section" data-cat-idx="${catIdx}" style="margin-bottom:4px">
+                    <div class="muted small" style="font-weight:600;margin-bottom:2px">${cat}</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:4px">
+                      ${gestes.map(g => {
+                        const sel = (e.gestes || []).includes(g.code);
+                        return `<label title="${g.description} — ${g.notes}" style="display:flex;align-items:center;gap:3px;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:10px;border:1px solid ${sel ? 'var(--primary)' : 'var(--border)'};background:${sel ? 'var(--primary-weak)' : 'transparent'}">
+                          <input type="checkbox" class="ep-geste" data-i="${idx}" data-code="${g.code}" ${sel ? 'checked' : ''} style="margin:0">
+                          ${g.code}
+                        </label>`;
+                      }).join('')}
+                    </div>
+                  </div>`).join('')}
+              </div>
+              <button class="btn-ghost ep-cat-next" data-i="${idx}" title="Catégorie suivante" style="flex-shrink:0;padding:2px 8px;font-size:18px;line-height:1;align-self:center">›</button>
             </div>
           </div>
           ${prevEtapes.length ? `<div class="field" style="margin-top:4px">
@@ -229,6 +233,18 @@ App.views.modelesprojets = {
       document.querySelectorAll('.ep-del').forEach(el => el.onclick = e => {
         mp.etapes.splice(+e.target.dataset.i, 1);
         rebind();
+      });
+      document.querySelectorAll('.ep-cat-prev, .ep-cat-next').forEach(el => el.onclick = e => {
+        const i = e.currentTarget.dataset.i;
+        const container = document.querySelector(`.ep-geste-scroll[data-i="${i}"]`);
+        if (!container) return;
+        const sections = container.querySelectorAll('.ep-cat-section');
+        if (!sections.length) return;
+        const dir = e.currentTarget.classList.contains('ep-cat-next') ? 1 : -1;
+        let currentIdx = 0;
+        sections.forEach((sec, si) => { if (sec.offsetTop <= container.scrollTop + 8) currentIdx = si; });
+        const next = Math.max(0, Math.min(sections.length - 1, currentIdx + dir));
+        container.scrollTop = sections[next].offsetTop;
       });
     };
     bindEtapes();

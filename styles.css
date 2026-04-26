@@ -201,6 +201,37 @@ body {
   background: var(--primary-weak); border-radius: 6px;
   font-size: 12px; color: var(--text-muted);
 }
+
+/* Flux atelier — vue schéma machines */
+.flux-wrap { display: flex; flex-direction: column; height: calc(100vh - var(--topbar-h, 56px) - var(--footer-h, 36px) - 8px); }
+.flux-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.flux-sidebar {
+  width: 190px; flex-shrink: 0; border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 12px; font-size: 12px;
+}
+.flux-canvas { flex: 1; position: relative; overflow: auto; background: var(--surface-2); }
+.fx-block {
+  position: absolute; width: 160px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px;
+  cursor: pointer; user-select: none; box-sizing: border-box;
+  transition: box-shadow .15s, opacity .1s;
+}
+.fx-block:hover { box-shadow: 0 4px 16px rgba(0,0,0,.14); }
+.fx-draggable { cursor: grab; }
+.fx-draggable:active { cursor: grabbing; }
+.fx-block-name { font-weight: 700; font-size: 13px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx-block-lieu { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
+.fx-block-status { font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+.fx-block-task { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx-bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 5px; }
+.fx-bar > div { height: 100%; border-radius: 2px; transition: width .3s; }
+.fx-bar-pct { font-size: 9px; color: var(--text-muted); text-align: right; margin-top: 2px; }
+.fx-sb-title { font-weight: 700; font-size: 12px; margin-bottom: 8px; }
+.fx-leg { display: flex; align-items: center; justify-content: space-between; padding: 3px 0; font-size: 11px; }
+.fx-sb-task { padding: 5px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 4px; }
+.fx-sb-task-name { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-sb-task-sub { font-size: 10px; color: var(--text-muted); }
 .aide-kbd {
   display: inline-block; padding: 2px 7px;
   background: var(--surface-2); border: 1px solid var(--border);
