@@ -977,6 +977,8 @@ App.views.gantt = {
         const ts = taches.filter(t => t.projetId === p.id).sort((a,b) => a.debut.localeCompare(b.debut));
         if (ts.length) pushGroup(p.id, p.code + ' — ' + p.nom, ts);
       });
+      const libres = taches.filter(t => !t.projetId).sort((a,b) => a.debut.localeCompare(b.debut));
+      if (libres.length) pushGroup('__libre__', '— Tâches libres (sans projet)', libres);
     } else if (st.mode === 'personne') {
       const perTs = {};
       taches.forEach(t => (t.assignes||[]).forEach(pid => (perTs[pid] = perTs[pid] || []).push(t)));
@@ -1085,9 +1087,8 @@ App.views.gantt = {
   openTacheForm(tid, prefill = {}) {
     const isNew = !tid;
     const s = DB.state;
-    if (isNew && !s.projets.length) { App.toast("Créer d'abord un projet",'error'); App.navigate('projets'); return; }
     const t = tid ? DB.tache(tid) : {
-      id: DB.uid('T'), projetId: s.projets[0].id, nom:'',
+      id: DB.uid('T'), projetId: prefill.projetId || (s.projets[0]?.id || ''), nom:'',
       debut: prefill.debut || D.today(), fin: prefill.fin || D.addDays(D.today(), 4),
       assignes:[], machineId:null, lieuId:null, type:'prod', avancement:0, jalon:false, dependances:[],
     };
@@ -1095,7 +1096,10 @@ App.views.gantt = {
       <div class="field"><label>Nom</label><input id="f-nom" value="${t.nom||''}"></div>
       <div class="row">
         <div class="field"><label>Projet</label>
-          <select id="f-projet">${s.projets.map(p => `<option value="${p.id}" ${p.id===t.projetId?'selected':''}>${p.code} — ${p.nom}</option>`).join('')}</select>
+          <select id="f-projet">
+            <option value="" ${!t.projetId?'selected':''}>— Aucun projet (tâche libre)</option>
+            ${s.projets.map(p => `<option value="${p.id}" ${p.id===t.projetId?'selected':''}>${p.code} — ${p.nom}</option>`).join('')}
+          </select>
         </div>
         <div class="field"><label>Type</label>
           <select id="f-type">
