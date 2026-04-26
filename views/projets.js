@@ -211,6 +211,7 @@ App.views.projets = {
         <div style="display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap">
           <h3 style="margin:0;flex:1">👥 Tâches & ressources (${taches.length})</h3>
           <button class="btn-ghost pf-open-gantt" data-pid="${p.id}" title="Ouvrir le Gantt filtré sur ce projet">📅 Gantt →</button>
+          <button class="btn-ghost pf-open-flux" data-pid="${p.id}" title="Voir le flux machines pour ce projet">🔗 Flux →</button>
           <button class="btn-ghost" id="pf-export-csv" title="Exporter les tâches de ce projet en CSV (ouvrable dans Excel)">⬇ CSV</button>
           ${canEdit && (s.equipes||[]).length ? `
             <select id="pf-equipe-sel" class="small">
@@ -262,6 +263,13 @@ App.views.projets = {
           App.closeModal();
           App.views.gantt.state.projetFilter = btn.dataset.pid;
           App.navigate('gantt');
+        };
+      });
+      document.querySelectorAll('.pf-open-flux').forEach(btn => {
+        btn.onclick = () => {
+          App.closeModal();
+          App.views.flux.state.projet = btn.dataset.pid;
+          App.navigate('flux');
         };
       });
     }

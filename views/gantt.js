@@ -406,6 +406,7 @@ App.views.gantt = {
           <button class="btn-ghost" id="g-csv">⤓ Exporter CSV</button>
           <button class="btn-ghost" id="g-ics" title="Exporter vers Outlook / Google Agenda / Apple Calendar">📅 Export .ics</button>
           <button class="btn-ghost" id="g-rapport" title="Rapport hebdomadaire imprimable par lieu">📋 Rapport</button>
+          <button class="btn-ghost" id="g-flux" title="Vue flux atelier — schéma machines & dépendances">🔗 Flux</button>
           <button class="btn-ghost" id="g-level" data-perm="edit" title="Détecter les surcharges et proposer un rééquilibrage automatique des ressources">⚖ Équilibrer</button>
           <button class="btn-ghost" id="g-baseline" data-perm="edit" title="Sauvegarder l'état actuel du planning comme référence (baseline)">📸 Baseline</button>
           <select id="g-bl-sel" title="Comparer avec une baseline sauvegardée"><option value="">— Comparer —</option></select>
@@ -467,6 +468,10 @@ App.views.gantt = {
     };
     document.getElementById('g-ics').onclick = () => this.exportICS();
     document.getElementById('g-rapport').onclick = () => this.showRapportHebdo();
+    document.getElementById('g-flux').onclick = () => {
+      if (st.projetFilter) App.views.flux.state.projet = st.projetFilter;
+      App.navigate('flux');
+    };
     document.getElementById('g-level').onclick = () => this.resourceLeveling();
     document.getElementById('g-baseline').onclick = () => this.saveBaseline();
     const blSel = document.getElementById('g-bl-sel');

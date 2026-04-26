@@ -291,9 +291,10 @@ const App = {
       { view:'modelesprojets', label:'Modèles de projet', key:'' },
       { view:'audit', label:'Historique', key:'H' },
       { view:'whatif', label:'What-if', key:'W' },
-      { view:'majourney', label:'Ma journée', key:'' },
-      { view:'timeline', label:'Timeline', key:'' },
-      { view:'aide', label:'🎓 Guide & Flux de travail', key:'I' },
+      { view:'majourney',      label:'Ma journée',              key:'' },
+      { view:'timeline',       label:'Timeline',                key:'' },
+      { view:'flux',           label:'Flux atelier',            key:'' },
+      { view:'aide',           label:'🎓 Guide & Flux de travail', key:'I' },
     ];
     const ACTIONS = [
       { label:'+ Nouvelle tâche Gantt', meta:'action', action: () => { this.navigate('gantt'); setTimeout(() => this.views.gantt?.newItem?.(), 80); } },
@@ -479,7 +480,7 @@ const App = {
     }
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const map = { d:'dashboard', g:'gantt', c:'calendrier', p:'personnes', l:'lieux', m:'machines', j:'projets', s:'stock', v:'deplacements', o:'commandes', b:'bom', x:'capacite', w:'whatif', r:'ressources', e:'equipes', a:'plan', f:'absences', h:'audit', t:'modeles', i:'aide' };
+    const map = { d:'dashboard', g:'gantt', c:'calendrier', p:'personnes', l:'lieux', m:'machines', j:'projets', s:'stock', v:'deplacements', o:'commandes', b:'bom', x:'capacite', w:'whatif', r:'ressources', e:'equipes', a:'plan', f:'absences', h:'audit', t:'modeles', i:'aide', u:'flux' };
     if (map[e.key]) { this.navigate(map[e.key]); e.preventDefault(); return; }
     if (e.key === '?') { this.showHelp(); e.preventDefault(); return; }
     if (e.key === 'n' && this.views[this.view].newItem) { this.views[this.view].newItem(); e.preventDefault(); return; }

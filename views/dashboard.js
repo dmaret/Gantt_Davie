@@ -15,6 +15,7 @@ App.views.dashboard = {
     'top-articles':{ title:'🏷 Top articles (besoins BOM)',                 size:1, render(s) { return App.views.dashboard.renderTopArticles(s); } },
     'avancement-projets': { title:'📊 Avancement par projet',              size:1, render(s) { return App.views.dashboard.renderAvancementProjets(s); } },
     'sante-donnees':      { title:'🩺 Santé des données',                   size:1, render() { return App.views.dashboard.renderIntegrity(); } },
+    'flux-machines':      { title:'🔗 Flux machines — état en temps réel',   size:1, render(s, today) { return App.views.dashboard.renderFluxMachines(s, today); } },
   },
 
   render(root) {
@@ -410,6 +411,43 @@ App.views.dashboard = {
       </div>
       <ul class="list list-clickable">${rows.join('')}</ul>
       ${issues.length > 12 ? `<p class="muted small">+${issues.length - 12} autre(s) — corrige pour voir la liste complète</p>` : ''}
+    `;
+  },
+
+  renderFluxMachines(s, today) {
+    const machines = s.machines || [];
+    if (!machines.length) return `<p class="muted small">Aucune machine configurée. <a href="#" onclick="App.navigate('machines');return false">Configurer →</a></p>`;
+
+    const status = m => {
+      const taches = (s.taches || []).filter(t => t.machineId === m.id);
+      const running = taches.filter(t => t.debut <= today && t.fin >= today && t.avancement < 100);
+      const late    = taches.filter(t => t.fin < today && t.avancement < 100);
+      if (running.length > 1) return { c: '#dc2626', l: 'Surchargé',  t: running[0] };
+      if (late.length)         return { c: '#f59e0b', l: 'En retard',  t: late[0]    };
+      if (running.length)      return { c: '#2c5fb3', l: 'En cours',   t: running[0] };
+      return                          { c: '#059669', l: 'Libre',      t: null        };
+    };
+
+    const rows = machines.slice(0, 12).map(m => {
+      const st = status(m);
+      return `<li class="alert-row" onclick="App.views.flux.state.projet='';App.navigate('flux')" role="button" tabindex="0"
+          style="display:flex;align-items:center;gap:8px;padding:6px 10px">
+        <span style="color:${st.c};font-size:14px;flex-shrink:0">●</span>
+        <span style="flex:1;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.nom}</span>
+        <span style="font-size:11px;color:${st.c};flex-shrink:0">${st.l}</span>
+        ${st.t ? `<span class="muted" style="font-size:10px;flex-shrink:0;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${st.t.nom}</span>` : ''}
+      </li>`;
+    });
+
+    const counts = machines.reduce((a, m) => { a[status(m).l] = (a[status(m).l]||0)+1; return a; }, {});
+    return `
+      <div style="display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+        ${[['#059669','Libre'],['#2c5fb3','En cours'],['#f59e0b','En retard'],['#dc2626','Surchargé']].map(([c,l]) =>
+          `<span style="font-size:12px;color:${c}">● ${l} <strong>${counts[l]||0}</strong></span>`).join('')}
+      </div>
+      <ul class="list list-clickable">${rows.join('')}</ul>
+      ${machines.length > 12 ? `<p class="muted small">${machines.length - 12} machine(s) supplémentaires</p>` : ''}
+      <div style="margin-top:8px"><button class="btn-ghost" onclick="App.navigate('flux')" style="font-size:12px">🔗 Ouvrir la vue Flux →</button></div>
     `;
   },
 };

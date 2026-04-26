@@ -45,6 +45,8 @@ const DB = {
     if (!this.state.modelesProjets) {
       this.state.modelesProjets = defaultModelesProjets();
     }
+    // v3.7 : positions des blocs dans la vue Flux atelier
+    if (!this.state.fluxLayout) this.state.fluxLayout = {};
   },
 
   checkIntegrity() {
