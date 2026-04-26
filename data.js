@@ -47,6 +47,9 @@ const DB = {
     }
     // v3.7 : positions des blocs dans la vue Flux atelier
     if (!this.state.fluxLayout) this.state.fluxLayout = {};
+    // v3.8 : groupe sur les projets + groupe sur les modèles de projet
+    this.state.projets.forEach(p => { if (p.groupe === undefined) p.groupe = ''; });
+    (this.state.modelesProjets || []).forEach(mp => { if (mp.groupe === undefined) mp.groupe = ''; });
   },
 
   checkIntegrity() {
