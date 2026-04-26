@@ -9,6 +9,7 @@ App.views.aide = {
       { id:'daily',     label:'📅 Quotidien'           },
       { id:'urgence',   label:'⚠ Surcharge / Urgence' },
       { id:'fin',       label:'✅ Clôture projet'      },
+      { id:'nouveautes',label:'✨ Nouveautés'          },
       { id:'shortcuts', label:'⌨ Raccourcis'          },
     ];
     root.innerHTML = `
@@ -30,7 +31,7 @@ App.views.aide = {
   },
 
   renderTab(el) {
-    const map = { start: 'tabStart', daily: 'tabDaily', urgence: 'tabUrgence', fin: 'tabFin', shortcuts: 'tabShortcuts' };
+    const map = { start:'tabStart', daily:'tabDaily', urgence:'tabUrgence', fin:'tabFin', nouveautes:'tabNouveautes', shortcuts:'tabShortcuts' };
     el.innerHTML = this[map[this.state.tab] || 'tabStart']();
     el.querySelectorAll('[data-nav]').forEach(card => {
       card.onclick = () => App.navigate(card.dataset.nav);
@@ -41,7 +42,7 @@ App.views.aide = {
 
   _step(num, icon, title, desc, view, color) {
     const border = color ? `border-top:3px solid ${color}` : '';
-    const dot = color ? `background:${color}` : '';
+    const dot    = color ? `background:${color}` : '';
     return `<div class="flux-step" data-nav="${view}" title="→ Ouvrir : ${title}" style="${border}">
       <div class="flux-num" style="${dot}">${num}</div>
       <div class="flux-icon">${icon}</div>
@@ -66,36 +67,52 @@ App.views.aide = {
   // ── Onglets ──────────────────────────────────────────────────────────────────
 
   tabStart() {
-    const C1 = '#6366f1', C2 = '#2c5fb3', C3 = '#059669';
+    const C1 = '#6366f1', C2 = '#2c5fb3', C3 = '#059669', C4 = '#f59e0b';
     return `
       ${this._section(
         '1 · Mise en place de la structure (une seule fois)',
-        'Avant de planifier, configure les éléments permanents de l\'atelier.',
+        "Avant de planifier, configure les éléments permanents de l'atelier.",
         this._step(1,'🏭','Lieux','Espaces de production, stockage, bureaux','lieux',C1) +
         this._arrow() +
         this._step(2,'⚙','Machines','Équipements et capacités par lieu','machines',C1) +
         this._arrow() +
         this._step(3,'👥','Personnes','Collaborateurs, compétences, capacité hebdo','personnes',C1) +
         this._arrow() +
-        this._step(4,'🤝','Équipes','Regrouper les personnes par équipe','equipes',C1),
-        '💡 Ces données sont réutilisées par tous les projets. Une seule fois suffit.'
+        this._step(4,'🤝','Équipes','Regrouper les personnes par équipe','equipes',C1) +
+        this._arrow() +
+        this._step(5,'🔗','Flux atelier','Visualiser le schéma machines et le flux de production','flux',C1),
+        '💡 Ces données sont réutilisées par tous les projets. Configure-les une seule fois, puis visualise le tout dans la vue Flux.'
       )}
       ${this._section(
         '2 · Créer et planifier un projet',
         'Flux principal de planification — répété pour chaque nouveau projet.',
         this._step(1,'📁','Projet','Créer : code, nom, client, statut','projets',C2) +
         this._arrow() +
-        this._step(2,'🗂','Modèles projet','Instancier une séquence complète de tâches','modelesprojets',C2) +
+        this._step(2,'🗂','Modèles projet','Instancier une séquence complète de tâches en 1 clic','modelesprojets',C2) +
         this._arrow() +
-        this._step(3,'📅','Gantt','Ajouter tâches, durées, dépendances','gantt',C2) +
+        this._step(3,'📅','Gantt','Ajouter / ajuster tâches, durées, dépendances','gantt',C2) +
         this._arrow() +
         this._step(4,'👤','Affecter','Personnes · machines · lieux sur chaque tâche','gantt',C2) +
         this._arrow() +
-        this._step(5,'📸','Baseline','Sauver le planning de référence','gantt',C2),
-        '💡 Dans le Gantt : glisse sur la grille vide pour créer une tâche, clic-droit sur une barre pour les actions rapides.'
+        this._step(5,'🔗','Flux','Vérifier le flux machines du projet','flux',C2) +
+        this._arrow() +
+        this._step(6,'📸','Baseline','Sauver le planning de référence','gantt',C2),
+        '💡 Modèles projet : 42 gestes du catalogue atelier disponibles. Instancier crée toutes les tâches avec dates et dépendances calculées automatiquement.'
       )}
       ${this._section(
-        '3 · Gérer les achats & stocks liés au projet',
+        '3 · Tâches rapides sans projet',
+        "Pour une tâche ponctuelle non rattachée à un projet (nettoyage, maintenance, formation…).",
+        this._step(1,'📅','Gantt','Ouvrir le Gantt','gantt',C4) +
+        this._arrow() +
+        this._step(2,'➕','Nouvelle tâche','Cliquer + Nouvelle tâche ou glisser sur la grille','gantt',C4) +
+        this._arrow() +
+        this._step(3,'🔓','Aucun projet','Choisir "— Aucun projet (tâche libre)"','gantt',C4) +
+        this._arrow() +
+        this._step(4,'📋','Planifier','Renseigner dates, assignés, machine, lieu','gantt',C4),
+        '💡 Les tâches libres apparaissent dans un groupe "— Tâches libres (sans projet)" en bas du Gantt.'
+      )}
+      ${this._section(
+        '4 · Gérer les achats & stocks liés au projet',
         'Si le projet nécessite des composants ou matériaux.',
         this._step(1,'🔩','BOM','Nomenclature — articles nécessaires','bom',C3) +
         this._arrow() +
@@ -114,26 +131,31 @@ App.views.aide = {
     return `
       ${this._section(
         'Routine du matin',
-        'Ce que tu fais en arrivant à l\'atelier.',
-        this._step(1,'☀','Ma journée','Mes tâches d\'aujourd\'hui et de la semaine','majourney',C1) +
+        "Ce que tu fais en arrivant à l'atelier.",
+        this._step(1,'☀','Ma journée','Mes tâches du jour et de la semaine','majourney',C1) +
         this._arrow() +
         this._step(2,'🔔','Alertes','Vérifier la cloche (rouge = urgent)','dashboard',C1) +
         this._arrow() +
-        this._step(3,'📋','Kanban','État des tâches en cours / bloquées','kanban',C1) +
+        this._step(3,'🔗','Flux atelier','Statut visuel de toutes les machines','flux',C1) +
         this._arrow() +
-        this._step(4,'📅','Calendrier','Vue jour/semaine pour l\'équipe','calendrier',C1)
+        this._step(4,'📋','Kanban','État des tâches en cours / bloquées','kanban',C1) +
+        this._arrow() +
+        this._step(5,'📅','Calendrier','Vue jour/semaine pour l\'équipe','calendrier',C1),
+        '💡 La vue Flux colore chaque machine en vert/bleu/orange/rouge selon son statut — un coup d\'œil suffit pour détecter un problème.'
       )}
       ${this._section(
-        'Mettre à jour l\'avancement',
+        "Mettre à jour l'avancement",
         'Tenir le planning à jour au fil de la journée.',
-        this._step(1,'📅','Gantt','Ouvrir le Gantt — filtrer le projet','gantt',C2) +
+        this._step(1,'📅','Gantt','Ouvrir le Gantt — filtrer sur le projet','gantt',C2) +
         this._arrow('clic-droit') +
         this._step(2,'✏','Avancement','Choisir 0 / 25 / 50 / 75 / 100 %','gantt',C2) +
         this._arrow() +
         this._step(3,'⏱','Temps réel','Logger les heures dans la fiche tâche','gantt',C2) +
         this._arrow() +
-        this._step(4,'📈','Capacité','Vérifier le taux de charge prévisionnel','capacite',C2),
-        '💡 Ctrl+clic sur les barres Gantt pour sélectionner plusieurs tâches et les décaler en une fois.'
+        this._step(4,'🔗','Flux','Vérifier que les machines sont libérées','flux',C2) +
+        this._arrow() +
+        this._step(5,'📈','Capacité','Vérifier le taux de charge prévisionnel','capacite',C2),
+        '💡 Ctrl+clic sur les barres Gantt pour sélectionner plusieurs tâches et les décaler en une fois. Bouton 🔗 Flux dans la barre Gantt pour basculer directement.'
       )}
       ${this._section(
         'Signaler une absence ou un déplacement',
@@ -155,16 +177,18 @@ App.views.aide = {
       ${this._section(
         'Résoudre une surcharge de ressources',
         'Une personne ou une machine est sur-affectée sur la même période.',
-        this._step(1,'🔔','Alertes','Cloche rouge → badge sur l\'onglet Personnes','dashboard',C1) +
+        this._step(1,'🔗','Flux atelier','Vue d\'ensemble : machines rouges = surchargées','flux',C1) +
         this._arrow() +
-        this._step(2,'👥','Personnes','Clic sur une semaine rouge → liste des conflits','personnes',C1) +
+        this._step(2,'🔔','Alertes','Cloche rouge → badge sur les onglets concernés','dashboard',C1) +
         this._arrow() +
-        this._step(3,'📏','Timeline','Vue mur : toutes personnes × jours en un coup d\'œil','timeline',C1) +
+        this._step(3,'👥','Personnes','Clic sur une semaine rouge → liste des conflits','personnes',C1) +
         this._arrow() +
-        this._step(4,'⚖','Équilibrer','Gantt → bouton ⚖ pour le rééquilibrage auto','gantt',C1) +
+        this._step(4,'📏','Timeline','Vue mur : toutes personnes × jours en un coup d\'œil','timeline',C1) +
         this._arrow() +
-        this._step(5,'📈','Vérifier','Recheck la vue Capacité pour confirmer','capacite',C1),
-        '💡 L\'équilibrage ne déplace que les tâches hors chemin critique pour préserver les jalons.'
+        this._step(5,'⚖','Équilibrer','Gantt → bouton ⚖ pour le rééquilibrage auto','gantt',C1) +
+        this._arrow() +
+        this._step(6,'📈','Vérifier','Recheck Capacité + Flux pour confirmer','capacite',C1),
+        '💡 Commence toujours par la vue Flux : les blocs rouges (Surchargé) et orange (En retard) identifient immédiatement les machines à problème.'
       )}
       ${this._section(
         'Gérer un retard de projet',
@@ -175,10 +199,12 @@ App.views.aide = {
         this._arrow('simuler ?') +
         this._step(3,'🔮','What-if','Scénario alternatif sans toucher au plan réel','whatif',C2) +
         this._arrow() +
-        this._step(4,'🔁','Modèle','Ajouter une tâche d\'urgence via un modèle','modeles',C2) +
+        this._step(4,'🗂','Modèles','Ajouter des tâches d\'urgence via un modèle projet','modelesprojets',C2) +
         this._arrow() +
-        this._step(5,'📸','Baseline','Nouvelle baseline après ajustements','gantt',C2),
-        '💡 Le mode What-if te permet de tester un décalage ou une compression sans risquer le planning de production.'
+        this._step(5,'🔗','Flux','Vérifier que les machines cibles sont disponibles','flux',C2) +
+        this._arrow() +
+        this._step(6,'📸','Baseline','Nouvelle baseline après ajustements','gantt',C2),
+        '💡 Le mode What-if permet de tester un décalage ou une compression sans risquer le planning de production.'
       )}
     `;
   },
@@ -187,15 +213,15 @@ App.views.aide = {
     const C1 = '#059669', C2 = '#6366f1';
     return `
       ${this._section(
-        'Clôture et archivage d\'un projet',
+        "Clôture et archivage d'un projet",
         'Quand toutes les tâches sont à 100 %.',
         this._step(1,'📅','Gantt','Vérifier que toutes les tâches sont à 100 %','gantt',C1) +
         this._arrow() +
-        this._step(2,'📋','Rapport','Générer le rapport hebdomadaire imprimable','gantt',C1) +
+        this._step(2,'🔗','Flux','Confirmer que toutes les machines sont libres','flux',C1) +
         this._arrow() +
-        this._step(3,'⤓','Export CSV','Exporter le planning pour archivage','gantt',C1) +
+        this._step(3,'📋','Rapport','Générer le rapport hebdomadaire imprimable','gantt',C1) +
         this._arrow() +
-        this._step(4,'📅','Export .ics','Envoyer vers Outlook / Google Agenda','gantt',C1) +
+        this._step(4,'⤓','Export CSV','Exporter le planning pour archivage','gantt',C1) +
         this._arrow() +
         this._step(5,'📁','Projet','Passer le statut à "Terminé"','projets',C1),
         '💡 Garde toujours la baseline de référence pour pouvoir comparer prévu vs réalisé plus tard.'
@@ -205,40 +231,103 @@ App.views.aide = {
         'Transformer l\'expérience en efficacité future.',
         this._step(1,'📜','Historique','Consulter l\'audit pour le retour d\'expérience','audit',C2) +
         this._arrow() +
-        this._step(2,'🔁','Modèles','Créer des modèles depuis les tâches récurrentes','modeles',C2) +
+        this._step(2,'🗂','Modèles projet','Enrichir ou créer des modèles depuis ce projet','modelesprojets',C2) +
         this._arrow() +
-        this._step(3,'📁','Nouveau projet','Démarrer le prochain projet — structure déjà en place','projets',C2),
-        '💡 Un bon modèle de tâche récurrente (nettoyage, réception, préparation commandes…) fait gagner 2 min à chaque planification.'
+        this._step(3,'🔁','Modèles tâche','Créer des modèles depuis les tâches récurrentes','modeles',C2) +
+        this._arrow() +
+        this._step(4,'📁','Nouveau projet','Démarrer le prochain — structure déjà en place','projets',C2),
+        '💡 Un modèle de projet bien rempli (étapes + gestes du catalogue) permet de chiffrer et planifier un projet similaire en moins de 2 minutes.'
+      )}
+    `;
+  },
+
+  tabNouveautes() {
+    const C1 = '#6366f1', C2 = '#2c5fb3', C3 = '#059669', C4 = '#f59e0b';
+    return `
+      ${this._section(
+        '🔗 Vue Flux atelier',
+        'Schéma visuel des machines connectées par dépendances de tâches — comme un synoptique de ligne.',
+        this._step(1,'🔗','Ouvrir','Onglet "Flux" ou touche U','flux',C1) +
+        this._arrow() +
+        this._step(2,'🎨','Lire les couleurs','Vert=libre · Bleu=en cours · Orange=retard · Rouge=surcharge','flux',C1) +
+        this._arrow() +
+        this._step(3,'👆','Clic sur bloc','Panneau détail : tâches actives + avancement','flux',C1) +
+        this._arrow() +
+        this._step(4,'⚡','Disposition','Mode "Déplacer blocs" → drag-and-drop + 💾 Sauver','flux',C1),
+        '💡 Filtre par projet pour ne voir que les machines impliquées dans ce chantier. Bouton 🔗 Flux disponible directement depuis le Gantt et les fiches projet.'
+      )}
+      ${this._section(
+        '🗂 Modèles de projet',
+        'Séquences d\'étapes réutilisables avec gestes du catalogue atelier — instanciation en 1 clic.',
+        this._step(1,'🗂','Ouvrir','Onglet "Modèles projet"','modelesprojets',C2) +
+        this._arrow() +
+        this._step(2,'✎','Créer','Définir les étapes, durées, dépendances et gestes','modelesprojets',C2) +
+        this._arrow('‹ › gestes') +
+        this._step(3,'▶','Instancier','Choisir projet + date + quantité → aperçu des dates','modelesprojets',C2) +
+        this._arrow() +
+        this._step(4,'📅','Résultat','Toutes les tâches créées avec dépendances dans le Gantt','gantt',C2),
+        '💡 42 gestes disponibles (Réception, Contrôle, Étiquetage, Assemblage, Stockage, Préparation, Expédition). Les flèches ‹ › permettent de naviguer entre catégories dans l\'éditeur.'
+      )}
+      ${this._section(
+        '🔓 Tâches libres (sans projet)',
+        'Créer une tâche ponctuelle sans la rattacher à un projet.',
+        this._step(1,'📅','Gantt','+ Nouvelle tâche ou glisser sur la grille','gantt',C3) +
+        this._arrow() +
+        this._step(2,'🔓','Aucun projet','Sélectionner "— Aucun projet (tâche libre)"','gantt',C3) +
+        this._arrow() +
+        this._step(3,'📋','Groupe dédié','Visible en bas du Gantt : "— Tâches libres"','gantt',C3),
+        '💡 Idéal pour les tâches récurrentes (maintenance, nettoyage, réunion) qui ne font pas partie d\'un projet spécifique.'
+      )}
+      ${this._section(
+        '✨ Autres améliorations',
+        '',
+        this._step(1,'💾','Filtres Gantt','Zoom, mode, projet, durée sauvegardés automatiquement','gantt',C4) +
+        this._arrow() +
+        this._step(2,'📍','Auto-scroll','Le Gantt s\'ouvre centré sur aujourd\'hui','gantt',C4) +
+        this._arrow() +
+        this._step(3,'⌨','Ctrl+P','Palette de commandes — navigation rapide vers toutes les vues','dashboard',C4) +
+        this._arrow() +
+        this._step(4,'🔔','Badges nav','Alertes numériques sur les onglets concernés','dashboard',C4),
+        '💡 Vue "Ma journée" (tâches du jour), "Timeline" (personnes × jours) et ce Guide sont également disponibles dans la barre de navigation.'
       )}
     `;
   },
 
   tabShortcuts() {
     const nav = [
-      ['D','Dashboard'], ['G','Gantt'], ['C','Calendrier'], ['P','Personnes'],
-      ['L','Lieux'], ['M','Machines'], ['J','Projets'], ['S','Stock'],
-      ['V','Déplacements'], ['O','Commandes'], ['B','BOM'], ['X','Capacité'],
-      ['R','Ressources'], ['E','Équipes'], ['A','Plan atelier'], ['F','Absences'],
-      ['T','Modèles'], ['H','Historique'], ['W','What-if'], ['I','🎓 Guide'],
+      ['D','Dashboard'],  ['G','Gantt'],       ['C','Calendrier'],  ['P','Personnes'],
+      ['L','Lieux'],      ['M','Machines'],     ['U','Flux atelier'],['J','Projets'],
+      ['S','Stock'],      ['V','Déplacements'], ['O','Commandes'],   ['B','BOM'],
+      ['X','Capacité'],   ['R','Ressources'],   ['E','Équipes'],     ['A','Plan atelier'],
+      ['F','Absences'],   ['T','Modèles tâche'],['H','Historique'],  ['W','What-if'],
+      ['I','🎓 Guide'],   ['K','Kanban'],
     ];
     const special = [
-      ['Ctrl+K', 'Recherche globale — personnes, projets, tâches, articles, commandes'],
-      ['Ctrl+P', 'Palette de commandes — naviguer ou lancer une action rapidement'],
-      ['N', 'Créer un nouvel élément dans la vue courante'],
-      ['/', 'Focus la barre de recherche de la vue'],
-      ['?', 'Afficher le panneau raccourcis clavier'],
-      ['Ctrl+Z', 'Annuler la dernière action'],
+      ['Ctrl+K',       'Recherche globale — personnes, projets, tâches, articles'],
+      ['Ctrl+P',       'Palette de commandes — naviguer ou lancer une action'],
+      ['N',            'Créer un nouvel élément dans la vue courante'],
+      ['/',            'Focus la barre de recherche de la vue'],
+      ['?',            'Afficher le panneau raccourcis clavier'],
+      ['Ctrl+Z',       'Annuler la dernière action'],
       ['Ctrl+Shift+Z', 'Refaire'],
-      ['Alt+←', 'Retour à la vue précédente'],
-      ['Esc', 'Fermer le modal ou l\'overlay ouvert'],
+      ['Alt+←',        'Retour à la vue précédente'],
+      ['Esc',          'Fermer le modal ou l\'overlay ouvert'],
     ];
     const gantt = [
-      ['Clic-droit sur une barre', 'Avancement rapide : 0 / 25 / 50 / 75 / 100 %'],
-      ['Ctrl+clic sur plusieurs barres', 'Sélection multiple → décaler, changer projet, supprimer'],
-      ['Glisser sur la grille vide', 'Créer une nouvelle tâche directement'],
-      ['Bouton ⚖ Équilibrer', 'Rééquilibrage auto des ressources surchargées'],
-      ['Bouton 📸 Baseline', 'Sauvegarder le planning actuel comme référence'],
-      ['Select Comparer', 'Superposer une baseline passée sur le Gantt actuel'],
+      ['Clic-droit sur une barre',    'Avancement rapide : 0 / 25 / 50 / 75 / 100 %'],
+      ['Ctrl+clic sur plusieurs barres','Sélection multiple → décaler, changer projet, supprimer'],
+      ['Glisser sur la grille vide',  'Créer une nouvelle tâche directement'],
+      ['Bouton 🔗 Flux',              'Ouvrir la vue Flux filtrée sur le projet actif'],
+      ['Bouton ⚖ Équilibrer',         'Rééquilibrage auto des ressources surchargées'],
+      ['Bouton 📸 Baseline',          'Sauvegarder le planning actuel comme référence'],
+      ['Select Comparer',             'Superposer une baseline passée sur le Gantt'],
+    ];
+    const flux = [
+      ['Mode "Déplacer blocs"', 'Drag-and-drop des machines sur le canvas'],
+      ['💾 Sauver',             'Persiste les positions des blocs en localStorage'],
+      ['⚡ Auto',               'Réorganise les blocs en grille automatique'],
+      ['Filtre projet',         'Affiche uniquement les connexions du projet sélectionné'],
+      ['Clic sur un bloc',      'Panneau détail : tâches actives, prochaines, avancement'],
     ];
     return `
       <div class="grid grid-2" style="gap:16px">
@@ -260,6 +349,12 @@ App.views.aide = {
             <h3 style="margin:0 0 10px">Actions Gantt</h3>
             <table style="width:100%;border-collapse:collapse">
               ${gantt.map(([k,v]) => `<tr><td style="padding:5px 10px 5px 0;white-space:nowrap;vertical-align:top;font-size:12px;color:var(--text-muted)">${k}</td><td class="small" style="padding:5px 0">${v}</td></tr>`).join('')}
+            </table>
+          </div>
+          <div class="card">
+            <h3 style="margin:0 0 10px">Vue Flux atelier</h3>
+            <table style="width:100%;border-collapse:collapse">
+              ${flux.map(([k,v]) => `<tr><td style="padding:5px 10px 5px 0;white-space:nowrap;vertical-align:top;font-size:12px;color:var(--text-muted)">${k}</td><td class="small" style="padding:5px 0">${v}</td></tr>`).join('')}
             </table>
           </div>
         </div>
