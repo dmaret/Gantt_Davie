@@ -97,10 +97,10 @@ App.views.personnes = {
 
     this._weeks = weeks;
     document.getElementById('p-table').innerHTML = `
-      <table class="data">
+      <div class="tbl-wrap"><table class="data col-freeze-1">
         <thead><tr><th>Personne</th><th>Rôle</th><th>Lieu principal</th><th>Compétences</th><th title="Profil hebdo (L M M J V S D × matin/aprem)">Horaires</th><th>Tâches 7j</th><th title="Charge par semaine · Rouge = ≥96% de la capacité hebdo (surcharge) · Orange = ≥81% · Cliquer sur une semaine pour voir les tâches">Charge · ${weeks.map(w=>'S'+w.num).join(' · ')}</th><th class="right">Moy.</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>
+      </table></div>
       <p class="muted small" style="margin-top:10px">${list.length} personne(s) · carrés pleins = dispo · 📅 = planning personnel · cliquer sur une semaine pour voir le détail</p>
     `;
     document.querySelectorAll('#p-table tbody .p-name').forEach(el => el.onclick = () => this.openForm(el.closest('tr').dataset.id));

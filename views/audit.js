@@ -31,7 +31,7 @@ App.views.audit = {
       </div>
       <div class="card">
         ${list.length ? `
-          <table class="data">
+          <div class="tbl-wrap"><table class="data col-freeze-1">
             <thead><tr><th>Horodatage</th><th>Utilisateur</th><th>Action</th><th>Type</th><th>Détails</th><th>ID</th></tr></thead>
             <tbody>${list.slice(0, 300).map(e => `
               <tr>
@@ -42,7 +42,7 @@ App.views.audit = {
                 <td>${e.details||'—'}</td>
                 <td class="mono small muted">${e.entityId||''}</td>
               </tr>`).join('')}</tbody>
-          </table>
+          </table></div>
           ${list.length > 300 ? `<p class="muted small" style="margin-top:8px">Affichage limité aux 300 dernières entrées (filtré).</p>` : ''}
         ` : '<p class="muted">Aucune action enregistrée avec ces filtres.</p>'}
       </div>
