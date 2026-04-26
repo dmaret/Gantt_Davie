@@ -30,7 +30,7 @@ App.views.machines = {
     document.getElementById('m-csv').onclick = () => {
       const conflicts = App.detectConflicts();
       const conflSet = new Set(conflicts.machines.map(c => c.machineId));
-      const head = ['Machine','Type','Lieu','Capacité/j','Tâches 7j','Charge j-h','Capacité j-h','Utilisation %','Conflit'];
+      const head = ['Nom','Type','Lieu de production','Capacité (h/j)','Tâches 7j','Charge j-h','Capacité j-h','Utilisation %','Conflit'];
       const rows = [head];
       const today = D.today();
       const end = D.addWorkdays(today, 6);

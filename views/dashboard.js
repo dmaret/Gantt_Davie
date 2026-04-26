@@ -14,6 +14,7 @@ App.views.dashboard = {
     'kpi-velocity':{ title:'📐 Respect des délais',                         size:1, render(s) { return App.views.dashboard.renderVelocity(s); } },
     'top-articles':{ title:'🏷 Top articles (besoins BOM)',                 size:1, render(s) { return App.views.dashboard.renderTopArticles(s); } },
     'avancement-projets': { title:'📊 Avancement par projet',              size:1, render(s) { return App.views.dashboard.renderAvancementProjets(s); } },
+    'sante-donnees':      { title:'🩺 Santé des données',                   size:1, render() { return App.views.dashboard.renderIntegrity(); } },
   },
 
   render(root) {
@@ -354,5 +355,61 @@ App.views.dashboard = {
         <div class="small muted" style="margin-top:3px">${done}/${total} terminées · ${inProg} en cours · fin ${D.fmt(p.fin)}</div>
       </li>`;
     }).join('')}</ul>`;
+  },
+
+  renderIntegrity() {
+    const issues = DB.checkIntegrity();
+    if (!issues.length) {
+      return `<p style="color:var(--green,#22a55a);font-weight:600">✔ Données cohérentes</p>`;
+    }
+
+    const viewForEntity = { tache: 'gantt', personne: 'personnes', absence: 'absences', stock: 'stock' };
+    const badgeClass = { error: 'bad', warn: 'warn', info: 'info' };
+    const typeLabel  = { error: 'Erreur', warn: 'Alerte', info: 'Info' };
+
+    const rows = issues.map(issue => {
+      const view = viewForEntity[issue.entity] || 'gantt';
+      const navTarget = issue.entity === 'tache'
+        ? `App.navigateToTarget({view:'${view}',tacheId:'${issue.id}'})`
+        : `App.navigate('${view}')`;
+      return `<li class="alert-row" onclick="${navTarget}" role="button" tabindex="0">
+        <span class="badge ${badgeClass[issue.type]||'muted'}">${typeLabel[issue.type]||issue.type}</span>
+        <span class="alert-msg">${issue.msg}</span>
+        <span class="alert-arrow">›</span>
+      </li>`;
+    });
+
+    const autoFix = () => {
+      if (!confirm(`Corriger automatiquement ${issues.length} problème(s) ?\n\nLes références invalides (assignés, dépendances, lieu, machine) seront supprimées des tâches concernées. Cette action est irréversible (sauf Undo).`)) return;
+      const s = DB.state;
+      const personneIds = new Set(s.personnes.map(p => p.id));
+      const lieuIds     = new Set(s.lieux.map(l => l.id));
+      const machineIds  = new Set(s.machines.map(m => m.id));
+      const tacheIds    = new Set(s.taches.map(t => t.id));
+      s.taches.forEach(t => {
+        t.assignes    = (t.assignes||[]).filter(pid => personneIds.has(pid));
+        t.dependances = (t.dependances||[]).filter(did => tacheIds.has(did));
+        if (t.lieuId    && !lieuIds.has(t.lieuId))     t.lieuId    = null;
+        if (t.machineId && !machineIds.has(t.machineId)) t.machineId = null;
+      });
+      DB.save();
+      App.refresh();
+      App.toast('Références invalides supprimées','success');
+    };
+    // Expose the fix function so the inline button can call it
+    App.views.dashboard._autoFix = autoFix;
+
+    const summary = issues.filter(i => i.type === 'error').length + ' erreur(s), '
+      + issues.filter(i => i.type === 'warn').length + ' alerte(s), '
+      + issues.filter(i => i.type === 'info').length + ' info(s)';
+
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span class="small muted">${summary}</span>
+        <button class="btn-ghost" style="padding:2px 10px" onclick="App.views.dashboard._autoFix()">🔧 Corriger auto</button>
+      </div>
+      <ul class="list list-clickable">${rows.join('')}</ul>
+      ${issues.length > 12 ? `<p class="muted small">+${issues.length - 12} autre(s) — corrige pour voir la liste complète</p>` : ''}
+    `;
   },
 };

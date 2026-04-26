@@ -1,7 +1,24 @@
 App.views.gantt = {
+  _PERSIST_KEY: 'gantt_filters_v1',
+  _loadPersistedState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(this._PERSIST_KEY) || '{}');
+      if (saved.mode)        this.state.mode        = saved.mode;
+      if (saved.zoom)        this.state.zoom        = saved.zoom;
+      if (saved.projetFilter !== undefined) this.state.projetFilter = saved.projetFilter;
+      if (saved.rangeDays)   this.state.rangeDays   = saved.rangeDays;
+      if (saved.showDeps     !== undefined) this.state.showDeps     = saved.showDeps;
+      if (saved.showCritical !== undefined) this.state.showCritical = saved.showCritical;
+      if (saved.autoCascade  !== undefined) this.state.autoCascade  = saved.autoCascade;
+    } catch(e) {}
+  },
+  _savePersistedState() {
+    const st = this.state;
+    try { localStorage.setItem(this._PERSIST_KEY, JSON.stringify({ mode:st.mode, zoom:st.zoom, projetFilter:st.projetFilter, rangeDays:st.rangeDays, showDeps:st.showDeps, showCritical:st.showCritical, autoCascade:st.autoCascade })); } catch(e) {}
+  },
   state: {
     mode: 'projet',      // 'projet' | 'personne' | 'machine' | 'lieu'
-    zoom: 'jour',        // 'jour' | 'semaine'
+    zoom: 'jour',        // 'jour' | 'semaine' | 'mois'
     rangeStart: null,
     rangeDays: 56,
     projetFilter: '',
@@ -9,8 +26,292 @@ App.views.gantt = {
     showDeps: true,
     showCritical: true,
     autoCascade: true,
+    selectedIds: new Set(),
+    baselineId: null,
   },
   newItem() { this.openTacheForm(null); },
+
+  toggleSelection(tid) {
+    const sel = this.state.selectedIds;
+    if (sel.has(tid)) sel.delete(tid); else sel.add(tid);
+    const el = document.querySelector(`.gantt-bar[data-tid="${tid}"]`);
+    if (el) el.classList.toggle('selected', sel.has(tid));
+    this.renderSelectionBar();
+  },
+  clearSelection() {
+    this.state.selectedIds.clear();
+    document.querySelectorAll('.gantt-bar.selected').forEach(b => b.classList.remove('selected'));
+    this.renderSelectionBar();
+  },
+  renderSelectionBar() {
+    const existing = document.getElementById('gantt-selection-bar');
+    const n = this.state.selectedIds.size;
+    if (!n) { if (existing) existing.remove(); return; }
+    const s = DB.state;
+    const projOpts = '<option value="">Projet…</option>' + s.projets.map(p => `<option value="${p.id}">${p.code} — ${p.nom}</option>`).join('');
+    const html = `
+      <strong>${n} tâche(s) sélectionnée(s)</strong>
+      <span class="spacer"></span>
+      <label class="small">Décaler de</label>
+      <input type="number" id="sel-shift" value="1" style="width:60px">
+      <label class="small">j. ouvrés</label>
+      <button class="btn btn-secondary" id="sel-shift-btn" data-perm="edit">⏩ Appliquer</button>
+      <select id="sel-proj" data-perm="edit">${projOpts}</select>
+      <button class="btn btn-secondary" id="sel-proj-btn" data-perm="edit">Changer projet</button>
+      <button class="btn btn-danger" id="sel-del" data-perm="edit">🗑 Supprimer</button>
+      <button class="btn-ghost" id="sel-clear">✕ Désélectionner</button>
+    `;
+    if (existing) { existing.innerHTML = html; }
+    else {
+      const bar = document.createElement('div');
+      bar.id = 'gantt-selection-bar';
+      bar.className = 'selection-bar';
+      bar.innerHTML = html;
+      document.body.appendChild(bar);
+    }
+    document.getElementById('sel-clear').onclick = () => this.clearSelection();
+    document.getElementById('sel-shift-btn').onclick = () => this.bulkShift();
+    document.getElementById('sel-proj-btn').onclick = () => this.bulkChangeProject();
+    document.getElementById('sel-del').onclick = () => this.bulkDelete();
+    App.applyPerms();
+  },
+  bulkShift() {
+    if (!App.can('edit')) { App.toast('Lecture seule','error'); return; }
+    const n = +document.getElementById('sel-shift').value;
+    if (!n) return;
+    const ids = Array.from(this.state.selectedIds);
+    ids.forEach(id => {
+      const t = DB.tache(id); if (!t) return;
+      t.debut = D.addWorkdays(t.debut, n);
+      t.fin = D.addWorkdays(t.fin, n);
+    });
+    DB.save(); this.draw();
+    App.toast(`${ids.length} tâche(s) décalée(s) de ${n>0?'+':''}${n} j.`, 'success');
+  },
+  bulkChangeProject() {
+    if (!App.can('edit')) { App.toast('Lecture seule','error'); return; }
+    const pid = document.getElementById('sel-proj').value;
+    if (!pid) { App.toast('Choisir un projet','warn'); return; }
+    const ids = Array.from(this.state.selectedIds);
+    ids.forEach(id => { const t = DB.tache(id); if (t) t.projetId = pid; });
+    DB.save(); this.draw();
+    App.toast(`${ids.length} tâche(s) déplacée(s)`, 'success');
+  },
+  bulkDelete() {
+    if (!App.can('edit')) { App.toast('Lecture seule','error'); return; }
+    const ids = Array.from(this.state.selectedIds);
+    if (!confirm(`Supprimer ${ids.length} tâche(s) ? Cette action est annulable avec Ctrl+Z.`)) return;
+    DB.state.taches = DB.state.taches.filter(t => !ids.includes(t.id));
+    DB.state.taches.forEach(t => t.dependances = (t.dependances||[]).filter(d => !ids.includes(d)));
+    this.clearSelection();
+    DB.save(); this.draw();
+    App.toast(`${ids.length} tâche(s) supprimée(s)`, 'info');
+  },
+
+  exportICS() {
+    const s = DB.state;
+    const events = [];
+    s.taches.forEach(t => {
+      if (t.jalon) {
+        events.push({
+          uid: ICS.uid('jalon', t.id),
+          summary: '◆ ' + t.nom + (DB.projet(t.projetId) ? ' ['+DB.projet(t.projetId).code+']' : ''),
+          dtstart: t.debut,
+          dtend: D.addDays(t.debut, 1),
+          description: (t.notes||'') + (t.commentaires?.length ? `\n\n${t.commentaires.length} commentaire(s)` : ''),
+          location: DB.lieu(t.lieuId)?.nom || '',
+        });
+      } else {
+        const prj = DB.projet(t.projetId);
+        const assignes = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join(', ');
+        events.push({
+          uid: ICS.uid('tache', t.id),
+          summary: (prj?prj.code+' · ':'') + t.nom + (t.avancement?` (${t.avancement}%)`:''),
+          dtstart: t.debut,
+          dtend: D.addDays(t.fin, 1),
+          description: [assignes ? 'Assignés : '+assignes : '', t.notes||'', t.commentaires?.length ? `${t.commentaires.length} commentaire(s)`:''].filter(Boolean).join('\n'),
+          location: [DB.machine(t.machineId)?.nom, DB.lieu(t.lieuId)?.nom].filter(Boolean).join(' · '),
+        });
+      }
+    });
+    s.personnes.forEach(p => (p.absences||[]).forEach(a => {
+      events.push({
+        uid: ICS.uid('absence', a.id),
+        summary: `🏖 ${a.motif||'Absence'} — ${App.personneLabel(p)}`,
+        dtstart: a.debut,
+        dtend: D.addDays(a.fin, 1),
+        description: a.note||'',
+      });
+    }));
+    s.deplacements.forEach(d => {
+      const p = DB.personne(d.personneId);
+      events.push({
+        uid: ICS.uid('dep', d.id),
+        summary: `🚚 ${d.motif} — ${App.personneLabel(p)}`,
+        dtstart: d.date,
+        dtend: D.addDays(d.date, 1),
+        description: `${DB.lieu(d.origineId)?.nom||''} → ${DB.lieu(d.destinationId)?.nom||''} · ${d.duree||''}`,
+      });
+    });
+    if (!events.length) { App.toast('Aucun événement à exporter','warn'); return; }
+    ICS.download('planning-'+D.today()+'.ics', events);
+    App.toast(`${events.length} événement(s) exporté(s) en .ics`, 'success');
+  },
+
+  resourceLeveling() {
+    const s = DB.state;
+    const today = D.today();
+    const critical = this.criticalPath(s.taches);
+
+    // Calcule la charge hebdo d'une personne (en heures) sur une semaine donnée (start=lundi)
+    const weekLoad = (pid, wStart, wEnd, exclude = new Set()) =>
+      s.taches.filter(t => !exclude.has(t.id) && (t.assignes||[]).includes(pid) && t.fin >= wStart && t.debut <= wEnd)
+        .reduce((h, t) => h + D.weekdaysBetween(t.debut > wStart ? t.debut : wStart, t.fin < wEnd ? t.fin : wEnd) * 7, 0);
+
+    const proposals = [];
+    // Chercher les tâches déplaçables : non critique, non jalon, non terminées, début dans le futur
+    const movable = s.taches.filter(t =>
+      !t.jalon && !critical.has(t.id) && (t.avancement||0) < 100 && t.debut >= today &&
+      (t.assignes||[]).length > 0
+    );
+
+    movable.forEach(t => {
+      const durWD = Math.max(1, D.workdaysBetween(t.debut, t.fin));
+      (t.assignes||[]).forEach(pid => {
+        const p = DB.personne(pid);
+        if (!p) return;
+        const cap = p.capaciteHebdo || 35;
+        // Semaine actuelle de la tâche
+        const dt = D.parse(t.debut);
+        const dow = dt.getUTCDay() || 7;
+        const wStart = D.addDays(t.debut, -(dow - 1)); // lundi de la semaine
+        const wEnd = D.addDays(wStart, 4);            // vendredi
+        const load = weekLoad(pid, wStart, wEnd);
+        if (load <= cap) return; // pas de surcharge
+
+        // Chercher une semaine avec de la place (jusqu'à 8 semaines après)
+        for (let w = 1; w <= 8; w++) {
+          const nWStart = D.addDays(wStart, w * 7);
+          const nWEnd = D.addDays(nWStart, 4);
+          const nLoad = weekLoad(pid, nWStart, nWEnd, new Set([t.id]));
+          const taskH = durWD * 7;
+          if (nLoad + taskH <= cap * 1.1) { // tolérance 10%
+            const newDebut = D.nextWorkday(nWStart);
+            const newFin = D.addWorkdays(newDebut, durWD - 1);
+            proposals.push({ t, pid, p, wStart, load, cap, newDebut, newFin });
+            break;
+          }
+        }
+      });
+    });
+
+    if (!proposals.length) {
+      App.toast('Aucune surcharge de ressource détectée sur les tâches déplaçables.', 'success');
+      return;
+    }
+
+    // Afficher les propositions
+    const rows = proposals.slice(0, 20).map(pr => {
+      const prj = DB.projet(pr.t.projetId);
+      return `<tr class="level-row" data-tid="${pr.t.id}" data-debut="${pr.newDebut}" data-fin="${pr.newFin}">
+        <td><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="level-cb" checked> <span class="badge" style="background:${prj?.couleur||'#888'}22;color:${prj?.couleur||'#888'}">${prj?.code||'?'}</span> ${pr.t.nom}</label></td>
+        <td class="muted small">${App.personneLabel(pr.p)}</td>
+        <td><span class="badge bad">${pr.load}h / ${pr.cap}h</span></td>
+        <td class="muted small">${D.fmt(pr.t.debut)} → ${D.fmt(pr.t.fin)}</td>
+        <td>→ <strong>${D.fmt(pr.newDebut)} → ${D.fmt(pr.newFin)}</strong></td>
+      </tr>`;
+    }).join('');
+
+    const body = `
+      <p class="muted small" style="margin-bottom:8px">${proposals.length} proposition(s) de rééquilibrage · tâches non critiques uniquement · cocher pour appliquer</p>
+      <div style="overflow:auto;max-height:55vh">
+        <table class="data">
+          <thead><tr><th>Tâche</th><th>Personne</th><th>Surcharge</th><th>Dates actuelles</th><th>Dates proposées</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <p class="muted small" style="margin-top:8px">⚠ Seules les tâches <strong>non critiques</strong>, non terminées et à venir sont proposées. La cascade auto s'applique si activée.</p>
+    `;
+    const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button><span class="spacer" style="flex:1"></span><button class="btn" id="level-apply">⚖ Appliquer les sélectionnées</button>`;
+    App.openModal(`⚖ Équilibrage ressources — ${proposals.length} proposition(s)`, body, foot);
+    document.getElementById('level-apply').onclick = () => {
+      let n = 0;
+      document.querySelectorAll('.level-row').forEach(row => {
+        if (!row.querySelector('.level-cb').checked) return;
+        const tach = DB.tache(row.dataset.tid);
+        if (!tach) return;
+        tach.debut = row.dataset.debut;
+        tach.fin = row.dataset.fin;
+        if (this.state.autoCascade) this.cascadeShift(tach.id, 0);
+        n++;
+      });
+      DB.save(); App.closeModal();
+      App.toast(`${n} tâche(s) rééquilibrée(s)`, 'success');
+      this.draw();
+    };
+  },
+
+  saveBaseline() {
+    if (!App.can('edit')) { App.toast('Lecture seule','error'); return; }
+    const label = prompt('Nom de cette baseline :', 'Baseline ' + D.fmt(D.today()));
+    if (!label) return;
+    if (!DB.state.baselines) DB.state.baselines = [];
+    const snap = DB.state.taches.map(t => ({id:t.id, nom:t.nom, debut:t.debut, fin:t.fin, projetId:t.projetId, avancement:t.avancement}));
+    const bl = { id: DB.uid('BL'), date: D.today(), label, snap };
+    DB.state.baselines.push(bl);
+    DB.save();
+    this.state.baselineId = bl.id;
+    App.toast('Baseline « '+label+' » sauvegardée · activée','success');
+    this.render(document.getElementById('view-root'));
+  },
+
+  showRapportHebdo() {
+    const s = DB.state;
+    const today = D.today();
+    const dt = D.parse(today);
+    const dow = dt.getUTCDay() || 7;
+    const monday = D.addDays(today, 1 - dow);
+    const friday = D.addDays(monday, 4);
+    const body = `
+      <div class="row" style="gap:12px;align-items:flex-end;flex-wrap:wrap">
+        <div class="field" style="flex:0"><label>Du</label><input type="date" id="rp-from" value="${monday}"></div>
+        <div class="field" style="flex:0"><label>Au</label><input type="date" id="rp-to" value="${friday}"></div>
+        <button class="btn btn-secondary" id="rp-gen">Générer</button>
+      </div>
+      <div id="rp-content" style="margin-top:12px"></div>`;
+    App.openModal('📋 Rapport hebdomadaire', body, `<button class="btn btn-secondary" onclick="App.closeModal()">Fermer</button><button class="btn" id="rp-print">🖨 Imprimer</button>`);
+    const gen = () => {
+      const from = document.getElementById('rp-from').value;
+      const to   = document.getElementById('rp-to').value;
+      if (!from || !to) return;
+      const fromDt = D.parse(from);
+      const thu = new Date(Date.UTC(fromDt.getUTCFullYear(), fromDt.getUTCMonth(), fromDt.getUTCDate() + 4 - (fromDt.getUTCDay()||7)));
+      const wn = Math.ceil(((thu - new Date(Date.UTC(thu.getUTCFullYear(),0,1)))/864e5+1)/7);
+      const taches = s.taches.filter(t => !t.jalon && t.debut <= to && t.fin >= from);
+      const lieux = s.lieux.filter(l => l.type === 'production');
+      const absents = s.personnes.filter(p => (p.absences||[]).some(a => a.debut<=to && a.fin>=from));
+      let html = `<h3 style="margin:0 0 4px">Semaine ${wn} · ${D.fmt(from)} – ${D.fmt(to)}</h3><p class="muted small" style="margin:0 0 14px">Généré le ${D.fmt(today)} · ${taches.length} tâche(s)</p>`;
+      lieux.forEach(l => {
+        const lt = taches.filter(t => t.lieuId === l.id).sort((a,b)=>a.debut.localeCompare(b.debut));
+        if (!lt.length) return;
+        html += `<div style="margin-bottom:14px"><h4 style="margin:0 0 5px;padding:3px 8px;background:var(--surface-2);border-radius:4px">📍 ${l.nom}</h4><table class="data"><thead><tr><th>Tâche</th><th>Projet</th><th>Début</th><th>Fin</th><th>Assignés</th><th>Av.</th></tr></thead><tbody>
+          ${lt.map(t => { const prj=DB.projet(t.projetId); const pers=(t.assignes||[]).map(pid=>DB.personne(pid)).filter(Boolean).map(p=>App.personneLabel(p)).join(', ')||'—'; const av=t.avancement||0; return `<tr><td>${t.nom}${av===100?' ✓':''}</td><td><span class="badge" style="background:${prj?.couleur||'#888'}22;color:${prj?.couleur||'#888'}">${prj?.code||'?'}</span></td><td class="nowrap">${D.fmt(t.debut)}</td><td class="nowrap">${D.fmt(t.fin)}</td><td>${pers}</td><td><div class="bar-inline${av>=100?' good':av>=50?'':' warn'}" style="width:50px"><div class="fill" style="width:${av}%"></div></div> ${av}%</td></tr>`; }).join('')}
+          </tbody></table></div>`;
+      });
+      const autres = taches.filter(t => !lieux.find(l=>l.id===t.lieuId)).sort((a,b)=>a.debut.localeCompare(b.debut));
+      if (autres.length) html += `<div style="margin-bottom:14px"><h4 style="margin:0 0 5px;padding:3px 8px;background:var(--surface-2);border-radius:4px">📋 Autres tâches</h4><ul class="list">${autres.map(t=>{const prj=DB.projet(t.projetId);const pers=(t.assignes||[]).map(pid=>DB.personne(pid)).filter(Boolean).map(p=>App.personneLabel(p)).join(', ');return `<li><span class="badge" style="background:${prj?.couleur||'#888'}22;color:${prj?.couleur||'#888'}">${prj?.code||'?'}</span> <strong>${t.nom}</strong><span class="muted small"> · ${pers||'—'} · ${D.fmt(t.debut)}→${D.fmt(t.fin)} · ${t.avancement||0}%</span></li>`;}).join('')}</ul></div>`;
+      if (absents.length) html += `<div><h4 style="margin:0 0 5px;padding:3px 8px;background:#fff3cd;border-radius:4px">🏖 Absences</h4><ul class="list">${absents.map(p=>{return (p.absences||[]).filter(a=>a.debut<=to&&a.fin>=from).map(a=>`<li><strong>${App.personneLabel(p)}</strong><span class="muted small"> · ${a.motif||'Absence'} · ${D.fmt(a.debut)}→${D.fmt(a.fin)}</span></li>`).join('');}).join('')}</ul></div>`;
+      if (!taches.length && !absents.length) html += '<p class="muted">Aucune tâche ni absence sur cette période.</p>';
+      document.getElementById('rp-content').innerHTML = html;
+    };
+    document.getElementById('rp-gen').onclick = gen;
+    document.getElementById('rp-print').onclick = () => {
+      const w = window.open('', '_blank');
+      w.document.write(`<html><head><title>Rapport hebdomadaire</title><style>body{font-family:system-ui,sans-serif;margin:20px;font-size:12px}h3{font-size:15px;margin:0 0 4px}h4{font-size:13px;margin:0 0 5px;padding:3px 8px;background:#f0f0f0;border-radius:4px}table{width:100%;border-collapse:collapse;margin-bottom:12px}th,td{padding:4px 8px;border:1px solid #ddd;text-align:left;font-size:11px}th{background:#f5f5f5}ul{margin:0;padding:0;list-style:none}li{padding:3px 0;border-bottom:1px solid #eee}@media print{@page{size:A4 landscape;margin:10mm}}</style></head><body>${document.getElementById('rp-content').innerHTML}</body></html>`);
+      w.document.close(); w.print();
+    };
+    gen();
+  },
 
   criticalTasks(projetId) {
     const tasks = DB.state.taches.filter(t => t.projetId === projetId);
@@ -61,6 +362,7 @@ App.views.gantt = {
   render(root) {
     const st = this.state;
     if (!st.rangeStart) st.rangeStart = D.addDays(D.today(), -14);
+    this._loadPersistedState();
 
     root.innerHTML = `
       <div class="gantt-wrap">
@@ -85,17 +387,28 @@ App.views.gantt = {
             <option value="84">12 sem.</option>
             <option value="168">24 sem.</option>
           </select>
+          <select id="g-zoom" title="Niveau de zoom de la grille">
+            <option value="jour">Zoom : jour</option>
+            <option value="semaine">Zoom : semaine</option>
+            <option value="mois">Zoom : mois</option>
+          </select>
           <button class="btn-ghost" id="g-next">▶</button>
           <button class="btn-ghost" id="g-today">Aujourd'hui</button>
           <button class="btn-ghost" id="g-fit" title="Ajuster la plage pour afficher toutes les tâches visibles">Ajuster</button>
           <label class="small"><input type="checkbox" id="g-deps" ${st.showDeps?'checked':''}> Dépendances</label>
           <label class="small"><input type="checkbox" id="g-crit" ${st.showCritical?'checked':''}> Chemin critique</label>
           <label class="small"><input type="checkbox" id="g-casc" ${st.autoCascade?'checked':''}> Cascade auto</label>
+          <span class="muted small" title="Ctrl/Cmd + clic pour multi-sélection et actions en lot">💡 Ctrl+clic = sélection multiple</span>
           <span class="spacer"></span>
           <input type="file" id="g-import-file" accept=".csv,.json" hidden>
           <button class="btn-ghost" id="g-tpl" data-perm="edit">⬇ Modèle</button>
           <button class="btn-ghost" id="g-import" data-perm="edit">⬆ Importer</button>
           <button class="btn-ghost" id="g-csv">⤓ Exporter CSV</button>
+          <button class="btn-ghost" id="g-ics" title="Exporter vers Outlook / Google Agenda / Apple Calendar">📅 Export .ics</button>
+          <button class="btn-ghost" id="g-rapport" title="Rapport hebdomadaire imprimable par lieu">📋 Rapport</button>
+          <button class="btn-ghost" id="g-level" data-perm="edit" title="Détecter les surcharges et proposer un rééquilibrage automatique des ressources">⚖ Équilibrer</button>
+          <button class="btn-ghost" id="g-baseline" data-perm="edit" title="Sauvegarder l'état actuel du planning comme référence (baseline)">📸 Baseline</button>
+          <select id="g-bl-sel" title="Comparer avec une baseline sauvegardée"><option value="">— Comparer —</option></select>
           <button class="btn" id="g-add">+ Nouvelle tâche</button>
         </div>
         <div class="gantt-scroll"><div id="g-table"></div></div>
@@ -107,14 +420,17 @@ App.views.gantt = {
     document.getElementById('g-search').value = st.search;
     document.getElementById('g-start').value = st.rangeStart;
     document.getElementById('g-days').value = String(st.rangeDays);
+    document.getElementById('g-zoom').value = st.zoom || 'jour';
 
-    document.getElementById('g-mode').onchange = e => { st.mode = e.target.value; this.draw(); };
-    document.getElementById('g-proj').onchange = e => { st.projetFilter = e.target.value; this.draw(); };
+    document.getElementById('g-mode').onchange = e => { st.mode = e.target.value; this._savePersistedState(); this.draw(); };
+    document.getElementById('g-proj').onchange = e => { st.projetFilter = e.target.value; this._savePersistedState(); this.draw(); };
     document.getElementById('g-search').oninput = e => { st.search = e.target.value.toLowerCase(); this.draw(); };
     document.getElementById('g-start').onchange = e => { st.rangeStart = e.target.value; this.draw(); };
-    document.getElementById('g-days').onchange = e => { st.rangeDays = +e.target.value; this.draw(); };
-    document.getElementById('g-prev').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, -14); this.draw(); };
-    document.getElementById('g-next').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, 14); this.draw(); };
+    document.getElementById('g-days').onchange = e => { st.rangeDays = +e.target.value; this._savePersistedState(); this.draw(); };
+    document.getElementById('g-zoom').onchange = e => { st.zoom = e.target.value; this._savePersistedState(); this.draw(); };
+    const zoomStep = () => st.zoom === 'mois' ? 30 : st.zoom === 'semaine' ? 7 : 14;
+    document.getElementById('g-prev').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, -zoomStep()); this.draw(); };
+    document.getElementById('g-next').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, zoomStep()); this.draw(); };
     document.getElementById('g-today').onclick = () => { st.rangeStart = D.addDays(D.today(), -7); this.draw(); };
     document.getElementById('g-fit').onclick = () => {
       let ts = DB.state.taches;
@@ -129,28 +445,45 @@ App.views.gantt = {
       document.getElementById('g-days').value = String(st.rangeDays);
       this.draw();
     };
-    document.getElementById('g-deps').onchange = e => { st.showDeps = e.target.checked; this.draw(); };
-    document.getElementById('g-crit').onchange = e => { st.showCritical = e.target.checked; this.draw(); };
-    document.getElementById('g-casc').onchange = e => { st.autoCascade = e.target.checked; };
+    document.getElementById('g-deps').onchange = e => { st.showDeps = e.target.checked; this._savePersistedState(); this.draw(); };
+    document.getElementById('g-crit').onchange = e => { st.showCritical = e.target.checked; this._savePersistedState(); this.draw(); };
+    document.getElementById('g-casc').onchange = e => { st.autoCascade = e.target.checked; this._savePersistedState(); };
     document.getElementById('g-add').onclick = () => this.openTacheForm(null);
     document.getElementById('g-tpl').onclick = () => this.downloadTemplate();
     document.getElementById('g-import').onclick = () => document.getElementById('g-import-file').click();
     document.getElementById('g-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
     document.getElementById('g-csv').onclick = () => {
-      const head = ['Projet','Tâche','Début','Fin','Durée j. ouvrés','Lieu','Machine','Assignés','Avancement','Jalon'];
+      const head = ['Projet (code)','Nom','Début (YYYY-MM-DD)','Fin (YYYY-MM-DD)','Durée j. ouvrés','Lieu','Machine','Assignés (séparés /)','Avancement (%)','Jalon (OUI/NON)','Notes'];
       const rows = [head];
       DB.state.taches.slice().sort((a,b)=>a.projetId.localeCompare(b.projetId)||a.debut.localeCompare(b.debut)).forEach(t => {
         const prj = DB.projet(t.projetId);
         const lieu = DB.lieu(t.lieuId);
         const mach = DB.machine(t.machineId);
-        const pers = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join(', ');
-        rows.push([prj?prj.code:'', t.nom, t.debut, t.fin, D.workdaysBetween(t.debut,t.fin), lieu?lieu.nom:'', mach?mach.nom:'', pers, (t.avancement||0)+'%', t.jalon?'OUI':'']);
+        const pers = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join('/');
+        rows.push([prj?prj.code:'', t.nom, t.debut, t.fin, D.workdaysBetween(t.debut,t.fin), lieu?lieu.nom:'', mach?mach.nom:'', pers, t.avancement||0, t.jalon?'OUI':'NON', t.notes||'']);
       });
       CSV.download('planning-' + D.today() + '.csv', rows);
       App.toast('Export CSV téléchargé','success');
     };
+    document.getElementById('g-ics').onclick = () => this.exportICS();
+    document.getElementById('g-rapport').onclick = () => this.showRapportHebdo();
+    document.getElementById('g-level').onclick = () => this.resourceLeveling();
+    document.getElementById('g-baseline').onclick = () => this.saveBaseline();
+    const blSel = document.getElementById('g-bl-sel');
+    (DB.state.baselines||[]).forEach(b => { const o = document.createElement('option'); o.value = b.id; o.textContent = `📸 ${b.label}`; if (b.id === st.baselineId) o.selected = true; blSel.appendChild(o); });
+    blSel.onchange = e => { st.baselineId = e.target.value || null; this.draw(); };
 
     this.draw();
+    // Scroll to today on initial render
+    const scroll = document.querySelector('.gantt-scroll');
+    if (scroll) {
+      const zoom = st.zoom || 'jour';
+      const cellW = zoom === 'mois' ? 4 : zoom === 'semaine' ? 9 : 28;
+      const todayIdx = D.diffDays(st.rangeStart, D.today());
+      if (todayIdx >= 0 && todayIdx < st.rangeDays) {
+        scroll.scrollLeft = Math.max(0, 220 + todayIdx * cellW - scroll.clientWidth / 2);
+      }
+    }
   },
 
   draw() {
@@ -164,9 +497,11 @@ App.views.gantt = {
 
     // Build groups
     const groups = this.buildGroups();
-    const CELL_W = 28;  // largeur jour
+    const zoom = st.zoom || 'jour';
+    const CELL_W = zoom === 'mois' ? 4 : zoom === 'semaine' ? 9 : 28;
     const LABEL_W = 220;
     const dowLetters = ['D','L','M','M','J','V','S']; // dim=0, lun=1, …, sam=6
+    const isoWeekNum = iso => { const d = D.parse(iso); const thu = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 4 - (d.getUTCDay()||7))); return Math.ceil(((thu - new Date(Date.UTC(thu.getUTCFullYear(),0,1)))/864e5+1)/7); };
     const dayClasses = d => {
       const dt = D.parse(d);
       const dow = dt.getUTCDay();
@@ -178,7 +513,7 @@ App.views.gantt = {
       return cls.join(' ');
     };
 
-    // Header (une cellule par jour : numéro + lettre du jour)
+    // Header (une cellule par jour, contenu adapté au zoom)
     const headerCells = [];
     headerCells.push(`<div class="gantt-cell head label">Élément</div>`);
     for (let i=0; i<days; i++) {
@@ -189,11 +524,15 @@ App.views.gantt = {
       const firstOfMonth = dayNum === 1;
       const showMonth = firstOfMonth || i === 0;
       const monthName = showMonth ? dt.toLocaleDateString('fr-CH', { month: 'short', timeZone: 'UTC' }) : '';
-      headerCells.push(`<div class="gantt-cell head day-cell ${dayClasses(d)}">
-        ${showMonth ? `<div class="day-month-name">${monthName}</div>` : ''}
-        <div class="day-num">${showMonth ? '' : dayNum}</div>
-        <div class="day-dow">${dowLetters[dow]}</div>
-      </div>`);
+      let content = '';
+      if (zoom === 'jour') {
+        content = `${showMonth ? `<div class="day-month-name">${monthName}</div>` : ''}<div class="day-num">${showMonth ? '' : dayNum}</div><div class="day-dow">${dowLetters[dow]}</div>`;
+      } else if (zoom === 'semaine') {
+        content = dow === 1 ? `<div class="day-month-name" style="font-size:9px">S${isoWeekNum(d)}</div>` : (showMonth ? `<div class="day-month-name" style="font-size:8px">${monthName}</div>` : '');
+      } else { // mois
+        content = showMonth ? `<div class="day-month-name" style="font-size:8px;writing-mode:horizontal-tb">${monthName}${firstOfMonth?'':''}</div>` : '';
+      }
+      headerCells.push(`<div class="gantt-cell head day-cell ${dayClasses(d)}">${content}</div>`);
     }
 
     // Body rows
@@ -243,14 +582,34 @@ App.views.gantt = {
         const color = prj ? prj.couleur : '#888';
         const label = t.jalon ? '' : (t.nom + ' · ' + Math.round(t.avancement||0) + '%');
         barPos[t.id] = { left, right: left + width, top: top + 11, mid: top + 11 };
+        // Ghost bar baseline
+        if (st.baselineId && !t.jalon) {
+          const bl = (DB.state.baselines||[]).find(b => b.id === st.baselineId);
+          const snap = bl?.snap?.find(s => s.id === t.id);
+          if (snap) {
+            const snOff = Math.max(0, D.diffDays(start, snap.debut));
+            const snEnd = Math.min(days-1, D.diffDays(start, snap.fin));
+            if (snEnd >= 0 && snOff <= days-1) {
+              const snL = LABEL_W + snOff * CELL_W + 2;
+              const snW = Math.max(CELL_W-4, (snEnd-snOff+1)*CELL_W-4);
+              bars.push(`<div class="gantt-bar-ghost" style="left:${snL}px;width:${snW}px;top:${top+2}px;height:18px;background:${color}" title="Baseline : ${D.fmt(snap.debut)} → ${D.fmt(snap.fin)}"></div>`);
+            }
+          }
+        }
 
-        const cls = (isConflict?'conflict ':'') + (crit?'critical ':'');
+        const overdue = !t.jalon && t.fin < D.today() && (t.avancement||0) < 100;
+        const cls = (isConflict?'conflict ':'') + (crit?'critical ':'') + (overdue?'overdue ':'');
         const avPct = Math.min(100, Math.max(0, t.avancement||0));
         const progressW = Math.round(avPct/100*width);
         if (t.jalon) {
           bars.push(`<div class="gantt-bar milestone ${cls}" style="left:${left+width/2-7}px;top:${top+2}px;background:${color}" data-tid="${t.id}" title="${t.nom}"></div>`);
         } else {
-          bars.push(`<div class="gantt-bar ${cls}" style="left:${left}px;width:${width}px;top:${top}px;height:22px;background:${color}" data-tid="${t.id}" title="${t.nom} — ${D.fmt(t.debut)} → ${D.fmt(t.fin)}${crit?' [critique]':''}"><div class="gantt-bar-progress" style="width:${progressW}px"></div><span class="gantt-bar-label">${label}</span></div>`);
+          const nComments = (t.commentaires||[]).length;
+          const badge = nComments ? `<span class="gantt-bar-comment" title="${nComments} commentaire(s)">💬</span>` : '';
+          const overdueBadge = overdue ? '<span class="gantt-bar-overdue" title="En retard !">⚠</span>' : '';
+          const clTotal = (t.checklist||[]).length, clDone = (t.checklist||[]).filter(i=>i.done).length;
+          const clBadge = clTotal ? `<span class="gantt-bar-cl" title="${clDone}/${clTotal} sous-tâche(s)">${clDone===clTotal?'☑':'☐'}${clDone}/${clTotal}</span>` : '';
+          bars.push(`<div class="gantt-bar ${cls}" style="left:${left}px;width:${width}px;top:${top}px;height:22px;background:${color}" data-tid="${t.id}" title="${t.nom} — ${D.fmt(t.debut)} → ${D.fmt(t.fin)}${crit?' [critique]':''}${overdue?' ⚠ En retard':''}${nComments?' · '+nComments+' commentaire(s)':''}"><div class="gantt-bar-progress" style="width:${progressW}px"></div>${overdueBadge}<span class="gantt-bar-label">${label}</span>${clBadge}${badge}</div>`);
           if (App.can('edit')) {
             bars.push(`<div class="gantt-resize-handle" data-tid="${t.id}" style="left:${left+width-5}px;top:${top}px;height:22px" title="Glisser pour modifier la durée"></div>`);
           }
@@ -276,9 +635,18 @@ App.views.gantt = {
           if (!p1 || !p2) return;
           const crit = isCritical(t) && isCritical(DB.tache(depId));
           const x1 = p1.right, y1 = p1.mid;
-          const x2 = p2.left, y2 = p2.mid;
-          const midX = x2 - 8;
-          const d = `M ${x1} ${y1} L ${x1+6} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
+          const x2 = p2.left,  y2 = p2.mid;
+          const EXIT = 8;
+          const midX = x2 - EXIT;
+          let d;
+          if (midX > x1 + EXIT) {
+            // Espace suffisant : sortie droite → vertical → entrée gauche
+            d = `M ${x1} ${y1} H ${x1+EXIT} V ${y2} H ${x2}`;
+          } else {
+            // Barres adjacentes ou chevauchantes : contournement en U
+            const ySwing = Math.max(y1, y2) + 13;
+            d = `M ${x1} ${y1} H ${x1+EXIT} V ${ySwing} H ${midX} V ${y2} H ${x2}`;
+          }
           paths.push(`<path d="${d}" class="${crit?'critical':''}" marker-end="url(#arrow)"/>`);
         });
       });
@@ -294,16 +662,116 @@ App.views.gantt = {
     overlay.style.position = 'absolute'; overlay.style.inset = '0'; overlay.style.pointerEvents = 'none';
     overlay.innerHTML = depsSvg + bars.join('');
     table.appendChild(overlay);
+
+    if (!bars.length) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'position:absolute;inset:30px 0 0;display:flex;align-items:center;justify-content:center;pointer-events:auto;z-index:2';
+      empty.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px"><div style="font-size:36px;margin-bottom:8px">📋</div><strong style="font-size:15px;color:var(--text)">Aucune tâche visible</strong><p class="small" style="margin:6px 0 16px">Modifie le filtre projet&nbsp;/ la recherche, élargis la plage de dates,<br>ou crée ta première tâche.</p><button class="btn" onclick="App.views.gantt.newItem()">+ Nouvelle tâche</button></div>';
+      table.appendChild(empty);
+    }
+
+    // Tooltip singleton
+    const tip = document.getElementById('gantt-tip') || (() => {
+      const el = document.createElement('div'); el.id = 'gantt-tip'; el.className = 'gantt-tooltip';
+      document.body.appendChild(el); return el;
+    })();
+    let tipTimer;
+
     overlay.querySelectorAll('.gantt-bar').forEach(el => {
       el.style.pointerEvents = 'auto';
-      el.addEventListener('click', () => this.openTacheForm(el.dataset.tid));
+      if (this.state.selectedIds.has(el.dataset.tid)) el.classList.add('selected');
+      el.addEventListener('click', e => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) { e.preventDefault(); this.toggleSelection(el.dataset.tid); return; }
+        if (this.state.selectedIds.size) { this.clearSelection(); }
+        this.openTacheForm(el.dataset.tid);
+      });
       el.addEventListener('contextmenu', e => { e.preventDefault(); this.showContextMenu(e, el.dataset.tid); });
+      el.addEventListener('mouseenter', () => {
+        clearTimeout(tipTimer);
+        tipTimer = setTimeout(() => {
+          if (el.classList.contains('dragging')) return;
+          const t = DB.tache(el.dataset.tid); if (!t) return;
+          const prj = DB.projet(t.projetId);
+          const assignes = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join(', ');
+          const machine = DB.machine(t.machineId)?.nom;
+          const lieu = DB.lieu(t.lieuId)?.nom;
+          const dur = D.workdaysBetween(t.debut, t.fin);
+          const av = t.avancement || 0;
+          const nComm = (t.commentaires||[]).length;
+          tip.innerHTML = [
+            `<div class="gantt-tooltip-title" style="color:${prj?.couleur||'inherit'}">${prj?`<span style="opacity:.7;font-weight:400">[${prj.code}]</span> `:''}${t.nom}</div>`,
+            `<div class="gantt-tooltip-row"><span class="tt-label">📅</span> ${D.fmt(t.debut)} → ${D.fmt(t.fin)} &nbsp;·&nbsp; <strong>${dur} j.o.</strong></div>`,
+            av > 0 ? `<div class="gantt-tooltip-row"><span class="tt-label">⚡</span> <strong>${av}%</strong> avancé</div>` : '',
+            assignes ? `<div class="gantt-tooltip-row"><span class="tt-label">👤</span> ${assignes}</div>` : '',
+            machine ? `<div class="gantt-tooltip-row"><span class="tt-label">⚙</span> ${machine}</div>` : '',
+            lieu ? `<div class="gantt-tooltip-row"><span class="tt-label">📍</span> ${lieu}</div>` : '',
+            nComm ? `<div class="gantt-tooltip-row"><span class="tt-label">💬</span> ${nComm} commentaire(s)</div>` : '',
+            t.notes ? `<div class="gantt-tooltip-row" style="margin-top:4px;font-size:11px;color:var(--text-muted);display:block">${t.notes.substring(0,100)}${t.notes.length>100?'…':''}</div>` : '',
+          ].filter(Boolean).join('');
+          // Position: measure off-screen first
+          tip.style.left = '-9999px'; tip.style.top = '0';
+          const rect = el.getBoundingClientRect();
+          const tw = tip.offsetWidth, th = tip.offsetHeight;
+          let l = rect.left, tt2 = rect.bottom + 8;
+          if (l + tw > window.innerWidth - 12) l = window.innerWidth - tw - 12;
+          if (tt2 + th > window.innerHeight - 12) tt2 = rect.top - th - 8;
+          tip.style.left = l + 'px'; tip.style.top = tt2 + 'px';
+          tip.classList.add('visible');
+        }, 200);
+      });
+      el.addEventListener('mouseleave', () => { clearTimeout(tipTimer); tip.classList.remove('visible'); });
       this.makeDraggable(el, CELL_W);
     });
+    this.renderSelectionBar();
     overlay.querySelectorAll('.gantt-resize-handle').forEach(el => {
       el.style.pointerEvents = 'auto';
       this.makeResizable(el, CELL_W);
     });
+
+    // Drag-to-create : clic maintenu sur la grille vide → nouvelle tâche
+    if (App.can('edit')) {
+      const scrollWrap = document.querySelector('.gantt-scroll');
+      let dragStart = null, dragGhost = null;
+      table.addEventListener('mousedown', e => {
+        if (e.target.closest('.gantt-bar,.gantt-resize-handle,.gantt-cell.label,.gantt-cell.head')) return;
+        if (e.button !== 0) return;
+        const rect = table.getBoundingClientRect();
+        const scrollLeft = scrollWrap ? scrollWrap.scrollLeft : 0;
+        const x = e.clientX - rect.left + scrollLeft;
+        if (x < LABEL_W) return;
+        dragStart = { x, y: e.clientY };
+        dragGhost = document.createElement('div');
+        dragGhost.id = 'drag-ghost';
+        dragGhost.style.cssText = `position:fixed;background:var(--primary);opacity:.25;border-radius:3px;pointer-events:none;z-index:800;height:20px`;
+        document.body.appendChild(dragGhost);
+        e.preventDefault();
+      });
+      document.addEventListener('mousemove', e => {
+        if (!dragStart || !dragGhost) return;
+        const rect = table.getBoundingClientRect();
+        const scrollLeft = scrollWrap ? scrollWrap.scrollLeft : 0;
+        const x = e.clientX - rect.left + scrollLeft;
+        const x1 = Math.min(dragStart.x, x), x2 = Math.max(dragStart.x, x);
+        dragGhost.style.left = (rect.left + x1 - scrollLeft) + 'px';
+        dragGhost.style.top = (dragStart.y - 10) + 'px';
+        dragGhost.style.width = Math.max(CELL_W, x2 - x1) + 'px';
+      });
+      document.addEventListener('mouseup', e => {
+        if (!dragStart || !dragGhost) return;
+        const rect = table.getBoundingClientRect();
+        const scrollLeft = scrollWrap ? scrollWrap.scrollLeft : 0;
+        const x = e.clientX - rect.left + scrollLeft;
+        const x1 = Math.min(dragStart.x, x) - LABEL_W;
+        const x2 = Math.max(dragStart.x, x) - LABEL_W;
+        dragGhost.remove(); dragGhost = null; dragStart = null;
+        const dayStart = Math.max(0, Math.floor(x1 / CELL_W));
+        const dayEnd = Math.max(dayStart, Math.floor(x2 / CELL_W));
+        if (dayEnd - dayStart < 0) return;
+        const debut = D.nextWorkday(D.addDays(start, dayStart));
+        const fin = D.addWorkdays(debut, Math.max(0, dayEnd - dayStart));
+        this.openTacheForm(null, { debut, fin });
+      });
+    }
   },
 
   downloadTemplate() {
@@ -321,6 +789,15 @@ App.views.gantt = {
         if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
         const sep = text.includes(';') ? ';' : ',';
         const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+        // Convertit DD.MM.YYYY / DD/MM/YYYY / MM-DD-YYYY vers ISO YYYY-MM-DD
+        const toISO = raw => {
+          if (!raw) return '';
+          const s = raw.trim().replace(/["']/g,'');
+          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+          const eu = s.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{4})$/);
+          if (eu) return `${eu[3]}-${eu[2].padStart(2,'0')}-${eu[1].padStart(2,'0')}`;
+          return s;
+        };
         const lines = text.split(/\r?\n/).filter(l => l.trim());
         const hdrs = lines[0].split(sep).map(h => norm(h.replace(/^"|"$/g,'')));
         const rows = lines.slice(1).map(l => {
@@ -332,8 +809,8 @@ App.views.gantt = {
           const pCode = norm(r['projet (code)'] || r['projet'] || r['project'] || '');
           const prj = s.projets.find(p => norm(p.code) === pCode || norm(p.nom) === pCode);
           const nom = r['nom'] || r['name'] || r['tâche'] || '';
-          const debut = r['début (yyyy-mm-dd)'] || r['debut'] || r['début'] || r['start'] || '';
-          const fin = r['fin (yyyy-mm-dd)'] || r['fin'] || r['end'] || '';
+          const debut = toISO(r['début (yyyy-mm-dd)'] || r['debut'] || r['début'] || r['start'] || '');
+          const fin   = toISO(r['fin (yyyy-mm-dd)']   || r['fin']   || r['end']   || '');
           const lieuNom = norm(r['lieu'] || '');
           const machNom = norm(r['machine'] || '');
           const lieu = lieuNom ? s.lieux.find(l => norm(l.nom) === lieuNom) : null;
@@ -409,9 +886,12 @@ App.views.gantt = {
     menu.style.top = e.clientY + 'px';
     const items = [
       { label:'✎ Éditer', perm:true, act:() => this.openTacheForm(tid) },
-      { label:'✓ Marquer terminée (100%)', perm:canEdit, act:() => { t.avancement = 100; DB.save(); this.draw(); App.toast('Tâche terminée','success'); } },
-      { label:'◐ Avancement 50%', perm:canEdit, act:() => { t.avancement = 50; DB.save(); this.draw(); } },
-      { label:'○ Avancement 0%', perm:canEdit, act:() => { t.avancement = 0; DB.save(); this.draw(); } },
+      { sep:true },
+      { label:'● 100% — Terminée', perm:canEdit, act:() => { t.avancement=100; DB.save(); this.draw(); App.toast('Terminée ✓','success'); } },
+      { label:'◕ 75%', perm:canEdit, act:() => { t.avancement=75; DB.save(); this.draw(); } },
+      { label:'◑ 50%', perm:canEdit, act:() => { t.avancement=50; DB.save(); this.draw(); } },
+      { label:'◔ 25%', perm:canEdit, act:() => { t.avancement=25; DB.save(); this.draw(); } },
+      { label:'○ 0% — À démarrer', perm:canEdit, act:() => { t.avancement=0; DB.save(); this.draw(); } },
       { sep:true },
       { label:'⎘ Dupliquer', perm:canEdit, act:() => {
         const copy = JSON.parse(JSON.stringify(t));
@@ -597,12 +1077,13 @@ App.views.gantt = {
     });
   },
 
-  openTacheForm(tid) {
+  openTacheForm(tid, prefill = {}) {
     const isNew = !tid;
     const s = DB.state;
     if (isNew && !s.projets.length) { App.toast("Créer d'abord un projet",'error'); App.navigate('projets'); return; }
     const t = tid ? DB.tache(tid) : {
-      id: DB.uid('T'), projetId: s.projets[0].id, nom:'', debut: D.today(), fin: D.addDays(D.today(),2),
+      id: DB.uid('T'), projetId: s.projets[0].id, nom:'',
+      debut: prefill.debut || D.today(), fin: prefill.fin || D.addDays(D.today(), 4),
       assignes:[], machineId:null, lieuId:null, type:'prod', avancement:0, jalon:false, dependances:[],
     };
     const body = `
@@ -619,8 +1100,11 @@ App.views.gantt = {
       </div>
       <div class="row">
         <div class="field"><label>Début</label><input type="date" id="f-debut" value="${t.debut}"></div>
+        <div class="field" style="flex:0;align-self:flex-end;padding-bottom:2px"><span class="dur-badge" id="f-dur">${Math.max(0,D.workdaysBetween(t.debut,t.fin))} j.o.</span></div>
         <div class="field"><label>Fin</label><input type="date" id="f-fin" value="${t.fin}"></div>
-        <div class="field"><label>Avancement (%)</label><input type="number" id="f-avancement" min="0" max="100" value="${t.avancement||0}"></div>
+      </div>
+      <div class="field"><label>Avancement &nbsp;<span class="av-display" id="f-av-val">${t.avancement||0}%</span></label>
+        <input type="range" id="f-avancement" min="0" max="100" value="${Math.min(100,Math.max(0,t.avancement||0))}" class="av-slider">
       </div>
       <div class="row">
         <div class="field"><label>Machine</label>
@@ -654,10 +1138,51 @@ App.views.gantt = {
       <div class="field"><label>📝 Notes / consignes</label>
         <textarea id="f-notes" rows="3" placeholder="Instructions d'exécution, références, points d'attention…">${t.notes||''}</textarea>
       </div>
+      <div class="field"><label>✅ Sous-tâches <span class="muted small" id="f-cl-count">${(t.checklist||[]).length ? (t.checklist||[]).filter(i=>i.done).length+'/'+(t.checklist||[]).length : ''}</span></label>
+        <div id="f-cl-list" class="cl-list">
+          ${(t.checklist||[]).length ? (t.checklist||[]).map(item => `<div class="cl-item"><label class="cl-row${item.done?' cl-done':''}"><input type="checkbox" class="cl-cb" data-id="${item.id}" ${item.done?'checked':''}><span class="cl-text">${item.texte.replace(/</g,'&lt;')}</span></label><button class="btn-ghost cl-del" data-id="${item.id}" style="padding:0 6px;flex-shrink:0">×</button></div>`).join('') : '<p class="muted small" style="margin:4px 0">Aucune sous-tâche. Ajoute des étapes à cocher ci-dessous.</p>'}
+        </div>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <input id="f-cl-new" type="text" placeholder="Nouvelle sous-tâche (Entrée pour ajouter)…" style="flex:1">
+          <button class="btn btn-secondary" id="f-cl-add" style="padding:4px 10px;flex-shrink:0">+</button>
+        </div>
+      </div>
+      <div class="field"><label>💬 Commentaires (${(t.commentaires||[]).length})</label>
+        <div id="f-comments-list" class="comments-list">
+          ${(t.commentaires||[]).length ? (t.commentaires||[]).slice().reverse().map(c => `
+            <div class="comment-item" data-cid="${c.id}">
+              <div class="comment-head"><strong>${c.userName}</strong> <span class="muted small">· ${new Date(c.date).toLocaleString('fr-CH',{dateStyle:'short',timeStyle:'short'})}</span>
+              ${c.userId === App.currentUser().id ? `<button class="btn-ghost comment-del" data-cid="${c.id}" style="padding:0 6px;margin-left:auto" title="Supprimer">🗑</button>` : ''}</div>
+              <div class="comment-text">${c.texte.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>
+            </div>
+          `).join('') : '<p class="muted small" style="margin:4px 0">Aucun commentaire. Partage une info, un blocage, une décision…</p>'}
+        </div>
+        <div class="comment-add">
+          <textarea id="f-comment-new" rows="2" placeholder="Ajouter un commentaire (Ctrl+Entrée pour poster)…"></textarea>
+          <button class="btn btn-secondary" id="f-comment-post" style="margin-top:4px">💬 Poster</button>
+        </div>
+      </div>
       <label class="small"><input type="checkbox" id="f-jalon" ${t.jalon?'checked':''}> Jalon</label>
+
+      ${!isNew ? `<div class="field" style="margin-top:10px">
+        <label>⏱ Temps réel <span class="muted small" id="f-temps-total"></span></label>
+        <div id="f-temps-list" class="cl-list" style="max-height:140px"></div>
+        <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+          <input type="date" id="f-temps-date" value="${D.today()}" style="flex:1;min-width:120px">
+          <select id="f-temps-qui" style="flex:2;min-width:120px">
+            ${(t.assignes||[]).length
+              ? (t.assignes||[]).map(pid => { const p = DB.personne(pid); return p ? `<option value="${pid}">${App.personneLabel(p)}</option>` : ''; }).join('')
+              : s.personnes.map(p => `<option value="${p.id}">${App.personneLabel(p)}</option>`).join('')}
+          </select>
+          <input type="number" id="f-temps-h" min="0.5" max="24" step="0.5" value="7" style="width:65px" title="Heures">
+          <button class="btn btn-secondary" id="f-temps-add" type="button">+ Log</button>
+        </div>
+        <div class="muted small" style="margin-top:3px">Enregistre les heures réelles travaillées sur cette tâche.</div>
+      </div>` : ''}
     `;
     const foot = `
       ${!isNew ? '<button class="btn btn-danger" id="f-del">Supprimer</button>' : ''}
+      ${!isNew ? '<button class="btn btn-secondary" id="f-dup" title="Duplique cette tâche dans le même projet">⎘ Dupliquer</button>' : ''}
       <span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="f-cancel">Annuler</button>
       <button class="btn" id="f-save">${isNew?'Créer':'Enregistrer'}</button>
@@ -676,6 +1201,26 @@ App.views.gantt = {
     };
     renderSugg();
     ['f-debut','f-fin','f-machine','f-lieu','f-type'].forEach(id => { const el = document.getElementById(id); if (el) el.onchange = renderSugg; });
+    const updateDur = () => { const el = document.getElementById('f-dur'); if (el) el.textContent = Math.max(0, D.workdaysBetween(document.getElementById('f-debut').value, document.getElementById('f-fin').value)) + ' j.o.'; };
+    ['f-debut','f-fin'].forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('change', updateDur); });
+    const avEl = document.getElementById('f-avancement'); if (avEl) avEl.oninput = e => { const d = document.getElementById('f-av-val'); if (d) d.textContent = e.target.value + '%'; };
+    // Checklist sous-tâches
+    const localCL = JSON.parse(JSON.stringify(t.checklist || []));
+    const refreshCL = () => {
+      const total = localCL.length, done = localCL.filter(i=>i.done).length;
+      const cnt = document.getElementById('f-cl-count'); if (cnt) cnt.textContent = total ? `${done}/${total}` : '';
+      if (total) { const pct = Math.round(done/total*100); const sl = document.getElementById('f-avancement'), vl = document.getElementById('f-av-val'); if (sl) sl.value = pct; if (vl) vl.textContent = pct + '%'; }
+      const listEl = document.getElementById('f-cl-list'); if (!listEl) return;
+      listEl.innerHTML = localCL.length
+        ? localCL.map(item => `<div class="cl-item"><label class="cl-row${item.done?' cl-done':''}"><input type="checkbox" class="cl-cb" data-id="${item.id}" ${item.done?'checked':''}><span class="cl-text">${item.texte.replace(/</g,'&lt;')}</span></label><button class="btn-ghost cl-del" data-id="${item.id}" style="padding:0 6px;flex-shrink:0">×</button></div>`).join('')
+        : '<p class="muted small" style="margin:4px 0">Aucune sous-tâche.</p>';
+      listEl.querySelectorAll('.cl-cb').forEach(cb => cb.onchange = () => { const i = localCL.find(x=>x.id===cb.dataset.id); if (i) i.done = cb.checked; refreshCL(); });
+      listEl.querySelectorAll('.cl-del').forEach(btn => btn.onclick = () => { const idx = localCL.findIndex(x=>x.id===btn.dataset.id); if (idx>=0) localCL.splice(idx,1); refreshCL(); });
+    };
+    const addCLItem = () => { const inp = document.getElementById('f-cl-new'); if (!inp) return; const txt = inp.value.trim(); if (!txt) return; localCL.push({id:DB.uid('CL'),texte:txt,done:false}); inp.value=''; refreshCL(); };
+    const clAddBtn = document.getElementById('f-cl-add'); if (clAddBtn) clAddBtn.onclick = addCLItem;
+    const clNewInp = document.getElementById('f-cl-new'); if (clNewInp) clNewInp.onkeydown = e => { if (e.key==='Enter') { e.preventDefault(); addCLItem(); } };
+    refreshCL();
     const assignesWrap = document.getElementById('f-assignes-wrap');
     if (assignesWrap) assignesWrap.addEventListener('change', e => {
       if (e.target.classList.contains('assignes-cb')) e.target.closest('.assignes-row').classList.toggle('is-checked', e.target.checked);
@@ -791,6 +1336,62 @@ App.views.gantt = {
       };
     };
 
+    // Commentaires
+    const refreshComments = () => { App.closeModal(); this.openTacheForm(t.id); };
+    document.getElementById('f-comment-post').onclick = () => {
+      const ta = document.getElementById('f-comment-new');
+      const txt = ta.value.trim();
+      if (!txt) { App.toast('Commentaire vide', 'warn'); return; }
+      const u = App.currentUser();
+      if (!t.commentaires) t.commentaires = [];
+      t.commentaires.push({ id: DB.uid('CM'), userId: u.id, userName: u.nom, texte: txt, date: new Date().toISOString() });
+      if (isNew) { DB.state.taches.push(t); DB.logAudit('create','tache',t.id,t.nom); DB.save(); App.closeModal(); App.toast('Tâche créée avec commentaire','success'); App.refresh(); return; }
+      DB.save(); App.toast('Commentaire ajouté','success'); refreshComments();
+    };
+    document.getElementById('f-comment-new').onkeydown = e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); document.getElementById('f-comment-post').click(); }
+    };
+    document.querySelectorAll('.comment-del').forEach(b => b.onclick = () => {
+      if (!confirm('Supprimer ce commentaire ?')) return;
+      t.commentaires = (t.commentaires||[]).filter(c => c.id !== b.dataset.cid);
+      DB.save(); refreshComments();
+    });
+
+    // Temps réel
+    if (!isNew) {
+      const tempsLog = t.tempsLog || [];
+      const refreshTemps = () => {
+        const total = tempsLog.reduce((s, e) => s + (e.h || 0), 0);
+        const estim = Math.max(1, D.workdaysBetween(t.debut, t.fin)) * 7;
+        const tEl = document.getElementById('f-temps-total');
+        if (tEl) tEl.textContent = `${total}h réelles / ~${estim}h estimées`;
+        const listEl = document.getElementById('f-temps-list');
+        if (!listEl) return;
+        listEl.innerHTML = tempsLog.length
+          ? [...tempsLog].reverse().map(e => {
+              const p = DB.personne(e.pid); const pNom = p ? App.personneLabel(p) : '—';
+              return `<div class="cl-item"><span class="cl-row" style="gap:6px"><span class="muted small">${D.fmt(e.date)}</span><strong style="font-size:12px">${pNom}</strong><span class="muted small">${e.h}h</span>${e.note?`<span class="muted small">· ${e.note}</span>`:''}</span><button class="btn-ghost cl-del" data-eid="${e.id}" style="padding:0 4px;flex-shrink:0">×</button></div>`;
+            }).join('')
+          : '<p class="muted small" style="margin:4px 0">Aucune saisie de temps.</p>';
+        listEl.querySelectorAll('.cl-del').forEach(btn => btn.onclick = () => {
+          const idx = tempsLog.findIndex(x => x.id === btn.dataset.eid);
+          if (idx >= 0) tempsLog.splice(idx, 1);
+          t.tempsLog = tempsLog; DB.save(); refreshTemps();
+        });
+      };
+      refreshTemps();
+      const addBtn = document.getElementById('f-temps-add');
+      if (addBtn) addBtn.onclick = () => {
+        const date = document.getElementById('f-temps-date').value;
+        const pid = document.getElementById('f-temps-qui').value;
+        const h = parseFloat(document.getElementById('f-temps-h').value) || 0;
+        if (!date || !pid || h <= 0) { App.toast('Date, personne et heures requis', 'warn'); return; }
+        tempsLog.push({ id: DB.uid('TL'), date, pid, h });
+        t.tempsLog = tempsLog; DB.save(); refreshTemps();
+        App.toast(`${h}h enregistrées`, 'success');
+      };
+    }
+
     document.getElementById('f-cancel').onclick = () => App.closeModal();
     document.getElementById('f-save').onclick = () => {
       t.nom = document.getElementById('f-nom').value.trim();
@@ -805,7 +1406,31 @@ App.views.gantt = {
       t.jalon = document.getElementById('f-jalon').checked;
       t.dependances = Array.from(document.getElementById('f-deps').selectedOptions).map(o => o.value);
       t.notes = document.getElementById('f-notes').value;
+      t.checklist = localCL;
       if (!t.nom) { App.toast('Nom requis','error'); return; }
+
+      // Séquencement strict : vérifier que debut > fin de chaque prédécesseur
+      if (!t.jalon && t.dependances.length) {
+        const prj = DB.projet(t.projetId);
+        if (prj?.sequencementStrict) {
+          const depTaches = t.dependances.map(id => DB.state.taches.find(x => x.id === id)).filter(Boolean);
+          const violations = depTaches.filter(d => t.debut <= d.fin);
+          if (violations.length) {
+            const maxFin = violations.reduce((m, d) => d.fin > m ? d.fin : m, '');
+            const sugDebut = D.nextWorkday(D.addDays(maxFin, 1));
+            const durWD = Math.max(1, D.workdaysBetween(t.debut, t.fin));
+            const sugFin = D.addWorkdays(sugDebut, durWD - 1);
+            const names = violations.map(d => `"${d.nom}" (fin ${D.fmt(d.fin)})`).join(', ');
+            const msg = `⛓ Séquencement strict\n\n« ${t.nom} » commence avant la fin de :\n${names}\n\nAuto-corriger → ${D.fmt(sugDebut)} → ${D.fmt(sugFin)} (${durWD} j.o.) ?`;
+            if (!confirm(msg)) return;
+            t.debut = sugDebut;
+            t.fin = sugFin;
+            document.getElementById('f-debut').value = sugDebut;
+            document.getElementById('f-fin').value = sugFin;
+          }
+        }
+      }
+
       if (isNew) { DB.state.taches.push(t); DB.logAudit('create','tache',t.id,t.nom); }
       else DB.logAudit('update','tache',t.id,t.nom);
       DB.save(); App.closeModal(); App.toast('Enregistré','success'); App.refresh();
@@ -816,6 +1441,14 @@ App.views.gantt = {
         DB.state.taches = DB.state.taches.filter(x => x.id !== t.id);
         DB.logAudit('delete','tache',t.id,t.nom);
         DB.save(); App.closeModal(); App.toast('Tâche supprimée','info'); App.refresh();
+      };
+      document.getElementById('f-dup').onclick = () => {
+        const copy = JSON.parse(JSON.stringify(t));
+        copy.id = DB.uid('T'); copy.nom = t.nom + ' (copie)';
+        copy.avancement = 0; copy.dependances = []; copy.commentaires = [];
+        DB.state.taches.push(copy);
+        DB.logAudit('create','tache',copy.id,copy.nom);
+        DB.save(); App.closeModal(); App.toast('Tâche dupliquée','success'); this.draw();
       };
     }
   },

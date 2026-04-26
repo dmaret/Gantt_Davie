@@ -78,12 +78,22 @@ body {
   background: transparent; border: 1px solid transparent;
   padding: 6px 12px; border-radius: 6px; color: var(--text-muted);
   cursor: pointer; font-size: 13px; font-family: inherit;
+  position: relative;
 }
 .nav-btn:hover { background: var(--surface-2); color: var(--text); }
 .nav-btn.active {
   background: var(--primary-weak); color: var(--primary); border-color: transparent;
   font-weight: 600;
 }
+.nav-badge {
+  position: absolute; top: -4px; right: -2px;
+  background: var(--warning); color: #fff;
+  font-size: 9px; font-weight: 700;
+  min-width: 14px; height: 14px; padding: 0 3px;
+  border-radius: 7px; line-height: 14px; text-align: center;
+  box-shadow: 0 0 0 2px var(--surface); pointer-events: none;
+}
+.nav-badge.bad { background: var(--danger); }
 .actions { display: flex; gap: 6px; align-items: center; }
 .btn-ghost {
   background: transparent; border: 1px solid var(--border);
@@ -162,6 +172,41 @@ body {
 .gs-label { font-weight: 500; }
 .gs-meta { margin-left: auto; }
 .gs-hint { padding: 8px 14px; border-top: 1px solid var(--border); background: var(--surface-2); text-align: center; }
+
+/* Vue Aide & Flux */
+.flux-flow { display: flex; align-items: flex-start; gap: 0; flex-wrap: wrap; margin-bottom: 8px; }
+.flux-step {
+  background: var(--surface-2); border: 1.5px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; min-width: 110px; max-width: 150px; text-align: center;
+  cursor: pointer; transition: border-color .15s, box-shadow .15s; flex-shrink: 0;
+}
+.flux-step:hover { border-color: var(--primary); box-shadow: 0 3px 10px rgba(44,95,179,.15); }
+.flux-num {
+  width: 22px; height: 22px; border-radius: 50%; background: var(--primary);
+  color: #fff; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 6px;
+}
+.flux-icon { font-size: 20px; margin-bottom: 5px; }
+.flux-title { font-weight: 600; font-size: 12px; margin-bottom: 3px; }
+.flux-desc { font-size: 10px; color: var(--text-muted); line-height: 1.3; }
+.flux-arrow {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0 8px; color: var(--text-muted); font-size: 18px; margin-top: 18px;
+  flex-shrink: 0; gap: 2px;
+}
+.flux-arrow-label { font-size: 9px; color: var(--text-muted); white-space: nowrap; }
+.flux-tip {
+  margin-top: 12px; padding: 8px 12px;
+  background: var(--primary-weak); border-radius: 6px;
+  font-size: 12px; color: var(--text-muted);
+}
+.aide-kbd {
+  display: inline-block; padding: 2px 7px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 4px; font-family: ui-monospace, monospace;
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
 
 /* Menu contextuel (clic-droit Gantt) */
 .ctx-menu {
@@ -262,6 +307,29 @@ body {
 
 /* Vue Équipes */
 /* Assignees checkbox list */
+.gantt-bar-comment { position: absolute; right: 2px; top: 1px; font-size: 11px; line-height: 1; filter: drop-shadow(0 0 1px rgba(255,255,255,.8)); pointer-events: none; }
+.gantt-bar.selected { outline: 3px solid #2563eb; outline-offset: 1px; z-index: 5; }
+
+/* Floating selection action bar */
+.selection-bar {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  padding: 10px 16px; display: flex; align-items: center; gap: 10px;
+  z-index: 1000; max-width: 95vw; flex-wrap: wrap;
+}
+.selection-bar select, .selection-bar input { padding: 4px 8px; }
+.selection-bar .spacer { flex: 1; min-width: 10px; }
+
+/* Comments list in task form */
+.comments-list { max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; margin-bottom: 6px; background: var(--surface-2); }
+.comment-item { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.comment-item:last-child { border-bottom: none; }
+.comment-head { display: flex; align-items: center; gap: 4px; margin-bottom: 2px; }
+.comment-text { white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.35; }
+.comment-add { display: flex; flex-direction: column; }
+.comment-add textarea { resize: vertical; }
+
 .assignes-list { max-height: 168px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 2px 0; }
 .assignes-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: pointer; user-select: none; border-radius: 0; transition: background .1s; }
 .assignes-row:hover { background: var(--surface-2); }
@@ -754,6 +822,54 @@ body.tablette table.data { font-size: 16px; }
 @media (max-width: 480px) {
   .brand-owner { display: none; }
   .actions #btn-export, .actions #btn-import, .actions #btn-reset, .actions #btn-tablette { display: none; }
+}
+
+/* Checklist sous-tâches */
+.cl-list { max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; margin-bottom: 4px; background: var(--surface-2); }
+.cl-item { display: flex; align-items: center; gap: 4px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+.cl-item:last-child { border-bottom: none; }
+.cl-row { display: flex; align-items: center; gap: 6px; flex: 1; cursor: pointer; font-size: 13px; }
+.cl-row.cl-done .cl-text { text-decoration: line-through; color: var(--text-muted); }
+.gantt-bar-cl { position: absolute; right: 18px; top: 1px; font-size: 10px; line-height: 1; pointer-events: none; filter: drop-shadow(0 0 1px rgba(255,255,255,.8)); }
+
+/* Ghost bars baseline */
+.gantt-bar-ghost { position: absolute; border-radius: 3px; opacity: 0.28; border: 2px dashed rgba(0,0,0,.45); pointer-events: none; z-index: 0; }
+
+/* Gantt hover tooltip */
+.gantt-tooltip {
+  position: fixed; z-index: 9999;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px; box-shadow: var(--shadow);
+  font-size: 12px; max-width: 300px; min-width: 190px;
+  pointer-events: none; line-height: 1.55;
+  opacity: 0; transition: opacity .12s ease;
+}
+.gantt-tooltip.visible { opacity: 1; }
+.gantt-tooltip-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gantt-tooltip-row { display: flex; gap: 6px; align-items: baseline; margin: 1px 0; }
+.gantt-tooltip-row .tt-label { color: var(--text-muted); flex-shrink: 0; font-size: 11px; }
+
+/* Overdue bars (fin < today et avancement < 100 %) */
+.gantt-bar.overdue::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+  background: repeating-linear-gradient(135deg, transparent 0 4px, rgba(0,0,0,.18) 4px 5px);
+  pointer-events: none;
+}
+.gantt-bar-overdue {
+  position: absolute; left: 3px; top: 1px;
+  font-size: 10px; line-height: 1; pointer-events: none;
+  filter: drop-shadow(0 0 1px rgba(0,0,0,.5));
+}
+
+/* Avancement range slider */
+.av-slider { width: 100%; accent-color: var(--primary); cursor: pointer; display: block; margin-top: 4px; }
+.av-display { font-weight: 700; min-width: 36px; display: inline-block; font-variant-numeric: tabular-nums; }
+
+/* Durée j.o. dans le formulaire */
+.dur-badge {
+  display: inline-block; padding: 2px 10px; border-radius: 10px;
+  background: var(--primary-weak); color: var(--primary);
+  font-size: 12px; font-weight: 600; white-space: nowrap;
 }
 
 /* Impression */

@@ -26,12 +26,12 @@ App.views.stock = {
     document.getElementById('st-import').onclick = () => document.getElementById('st-import-file').click();
     document.getElementById('st-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
     document.getElementById('st-csv').onclick = () => {
-      const head = ['Référence','Article','Stockage','Quantité','Unité','Seuil alerte','Sous seuil','Projets liés'];
+      const head = ['Référence','Nom','Unité','Quantité','Seuil alerte','Lieu de stockage','Sous seuil','Projets liés'];
       const rows = [head];
       DB.state.stock.forEach(x => {
         const lieu = DB.lieu(x.lieuId);
         const projs = (x.projetsLies||[]).map(pid => (DB.projet(pid)||{}).code || '').join(', ');
-        rows.push([x.ref, x.nom, lieu?lieu.nom:'', x.quantite, x.unite, x.seuilAlerte, x.quantite<x.seuilAlerte?'OUI':'', projs]);
+        rows.push([x.ref, x.nom, x.unite, x.quantite, x.seuilAlerte, lieu?lieu.nom:'', x.quantite<x.seuilAlerte?'OUI':'', projs]);
       });
       CSV.download('stock-' + D.today() + '.csv', rows);
       App.toast('Export CSV téléchargé','success');
