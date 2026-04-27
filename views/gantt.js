@@ -841,12 +841,12 @@ App.views.gantt = {
       <div class="gantt-minimap-hint">Planning — clic pour naviguer</div>`;
 
     mm.onclick = e => {
-      const svgRect = mm.querySelector('svg').getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (e.clientX - svgRect.left) / MM_W));
-      st.rangeStart = D.addDays(minDate, Math.round(ratio * totalDays - st.rangeDays / 4));
+      const rect = mm.querySelector('svg').getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      st.rangeStart = D.addDays(minDate, Math.round(ratio * totalDays - st.rangeDays / 2));
       const startEl = document.getElementById('g-start');
       if (startEl) startEl.value = st.rangeStart;
-      this.draw();
+      if (document.getElementById('g-table')) this.draw();
     };
   },
 
