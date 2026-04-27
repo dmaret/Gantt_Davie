@@ -1,11 +1,23 @@
 // Vue Flux atelier — schéma visuel machines connectées par dépendances de tâches
 App.views.flux = {
-  state: { projet: '', lieu: '', editMode: false },
+  state: { projet: '', lieu: '', editMode: false, viewMode: 'canvas' },
 
   render(root) {
     const s = DB.state;
     if (!s.fluxLayout) s.fluxLayout = {};
     const machines = this._filtered();
+
+    const viewBtns = [['canvas','🗺 Canvas'],['swimlanes','🏊 Swim lanes'],['statuts','📊 Statuts']].map(([v, l]) =>
+      `<button class="btn-ghost fx-view-btn${this.state.viewMode === v ? ' fx-view-active' : ''}" data-fxview="${v}">${l}</button>`
+    ).join('');
+
+    const canvasControls = this.state.viewMode === 'canvas' ? `
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;user-select:none">
+        <input type="checkbox" id="fx-edit" ${this.state.editMode ? 'checked' : ''}> Déplacer
+      </label>
+      <button class="btn-ghost" id="fx-auto" title="Réorganiser en grille automatique">⚡ Auto</button>
+      ${App.can('edit') ? `<button class="btn-ghost" id="fx-save">💾 Sauver</button>` : ''}
+    ` : '';
 
     root.innerHTML = `
       <div class="flux-wrap">
@@ -20,39 +32,169 @@ App.views.flux = {
             ${(s.lieux||[]).map(l => `<option value="${l.id}" ${this.state.lieu===l.id?'selected':''}>${l.nom}</option>`).join('')}
           </select>
           <span class="spacer"></span>
-          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;user-select:none">
-            <input type="checkbox" id="fx-edit" ${this.state.editMode?'checked':''}> Déplacer blocs
-          </label>
-          <button class="btn-ghost" id="fx-auto" title="Réorganiser en grille automatique">⚡ Auto</button>
-          ${App.can('edit') ? `<button class="btn-ghost" id="fx-save">💾 Sauver</button>` : ''}
+          <div style="display:flex;gap:2px;">${viewBtns}</div>
+          ${canvasControls}
         </div>
         <div class="flux-body">
           <div class="flux-sidebar" id="fx-sidebar">${this._sidebar(machines)}</div>
           <div class="flux-canvas" id="fx-canvas">
-            <svg id="fx-svg" style="position:absolute;top:0;left:0;width:2400px;height:1600px;pointer-events:none;z-index:2" viewBox="0 0 2400 1600"></svg>
-            <div id="fx-blocks" style="position:absolute;top:0;left:0;width:2400px;height:1600px;z-index:3">
-              ${this._blocks(machines)}
-            </div>
+            ${this._renderBody(machines)}
           </div>
         </div>
       </div>
     `;
 
+    root.querySelectorAll('[data-fxview]').forEach(b => {
+      b.onclick = () => { this.state.viewMode = b.dataset.fxview; this.state.editMode = false; this.render(root); };
+    });
+
     document.getElementById('fx-proj').onchange = e => { this.state.projet = e.target.value; this.render(root); };
     document.getElementById('fx-lieu').onchange = e => { this.state.lieu = e.target.value; this.render(root); };
-    document.getElementById('fx-edit').onchange = e => { this.state.editMode = e.target.checked; this.render(root); };
-    document.getElementById('fx-auto').onclick = () => { this._autoLayout(machines); this.render(root); };
-    const sv = document.getElementById('fx-save');
-    if (sv) sv.onclick = () => { DB.save(); App.toast('Disposition sauvegardée', 'success'); };
 
-    if (!this.state.editMode) {
-      root.querySelectorAll('.fx-block').forEach(el => {
+    if (this.state.viewMode === 'canvas') {
+      const editEl = document.getElementById('fx-edit');
+      if (editEl) editEl.onchange = e => { this.state.editMode = e.target.checked; this.render(root); };
+      const autoEl = document.getElementById('fx-auto');
+      if (autoEl) autoEl.onclick = () => { this._autoLayout(machines); this.render(root); };
+      const sv = document.getElementById('fx-save');
+      if (sv) sv.onclick = () => { DB.save(); App.toast('Disposition sauvegardée', 'success'); };
+
+      if (!this.state.editMode) {
+        root.querySelectorAll('.fx-block').forEach(el => {
+          el.onclick = () => this._openPanel(el.dataset.mid);
+        });
+      }
+      this._drawArrows();
+      if (this.state.editMode) this._setupDrag(root);
+    } else {
+      root.querySelectorAll('.fx-machine-card').forEach(el => {
         el.onclick = () => this._openPanel(el.dataset.mid);
       });
     }
+  },
 
-    this._drawArrows();
-    if (this.state.editMode) this._setupDrag(root);
+  _renderBody(machines) {
+    if (this.state.viewMode === 'swimlanes') return this._renderSwimlanes(machines);
+    if (this.state.viewMode === 'statuts')   return this._renderStatuts(machines);
+    // canvas — init positions if missing
+    const layout = DB.state.fluxLayout;
+    const cols = Math.max(1, Math.ceil(Math.sqrt(machines.length || 1)));
+    machines.forEach((m, i) => {
+      if (!layout[m.id]) layout[m.id] = { x: 40 + (i % cols) * 230, y: 40 + Math.floor(i / cols) * 180 };
+    });
+    return `
+      <svg id="fx-svg" style="position:absolute;top:0;left:0;width:2400px;height:1600px;pointer-events:none;z-index:2" viewBox="0 0 2400 1600"></svg>
+      <div id="fx-blocks" style="position:absolute;top:0;left:0;width:2400px;height:1600px;z-index:3">
+        ${this._blocks(machines)}
+      </div>
+    `;
+  },
+
+  _renderSwimlanes(machines) {
+    const lieux = DB.state.lieux || [];
+    const grouped = {};
+    const noLieu = [];
+    machines.forEach(m => {
+      if (m.lieuId) { if (!grouped[m.lieuId]) grouped[m.lieuId] = []; grouped[m.lieuId].push(m); }
+      else noLieu.push(m);
+    });
+
+    const lanes = lieux.filter(l => grouped[l.id]?.length).map(l => ({ lieu: l, ms: grouped[l.id] }));
+    if (noLieu.length) lanes.push({ lieu: null, ms: noLieu });
+
+    if (!lanes.length) return '<div style="padding:40px;text-align:center;color:var(--text-muted);">Aucune machine à afficher.</div>';
+
+    return `
+      <div style="padding:16px;overflow:auto;width:100%;height:100%;box-sizing:border-box;">
+        ${lanes.map(({ lieu, ms }) => `
+          <div style="margin-bottom:14px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+            <div style="padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border);font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px;">
+              <span>${lieu ? lieu.nom : 'Sans lieu'}</span>
+              <span class="badge muted" style="font-size:11px;">${ms.length} machine${ms.length > 1 ? 's' : ''}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;padding:12px 14px;overflow-x:auto;background:var(--bg);">
+              ${ms.map((m, i) => {
+                const st = this._status(m.id);
+                const task = st.tasks[0];
+                const queue = this._queue(m.id);
+                return `
+                  ${i > 0 ? `<div style="flex-shrink:0;color:var(--primary);opacity:.45;font-size:20px;padding:0 4px;">→</div>` : ''}
+                  <div class="fx-machine-card" data-mid="${m.id}"
+                    style="cursor:pointer;flex:0 0 auto;padding:10px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);border-top:3px solid ${st.color};min-width:150px;max-width:190px;transition:box-shadow .15s;"
+                    onmouseenter="this.style.boxShadow='0 4px 16px rgba(0,0,0,.10)'" onmouseleave="this.style.boxShadow=''">
+                    <div style="font-weight:600;font-size:13px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.nom}</div>
+                    <div style="color:${st.color};font-size:12px;margin-bottom:${task ? '6px' : '0'};">● ${st.label}${st.code === 'surcharge' ? ' (' + st.tasks.length + ')' : ''}</div>
+                    ${task ? `
+                      <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;" title="${task.nom}">${task.nom}</div>
+                      <div style="height:4px;border-radius:2px;background:var(--border);overflow:hidden;">
+                        <div style="height:100%;width:${task.avancement||0}%;background:${st.color};border-radius:2px;"></div>
+                      </div>
+                      <div style="font-size:10px;color:var(--text-muted);text-align:right;margin-top:2px;">${task.avancement||0}%</div>
+                    ` : ''}
+                    ${queue > 0 ? `<div style="margin-top:5px;font-size:10px;color:var(--text-muted);">📋 ${queue} en file</div>` : ''}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  },
+
+  _renderStatuts(machines) {
+    const cols = [
+      { code: 'libre',     label: 'Libre',      color: '#059669', bg: '#f0fdf4' },
+      { code: 'actif',     label: 'En cours',   color: '#2c5fb3', bg: '#eff6ff' },
+      { code: 'retard',    label: 'En retard',  color: '#f59e0b', bg: '#fffbeb' },
+      { code: 'surcharge', label: 'Surchargé',  color: '#dc2626', bg: '#fef2f2' },
+    ];
+    const byStatus = {};
+    cols.forEach(c => { byStatus[c.code] = []; });
+    machines.forEach(m => {
+      const st = this._status(m.id);
+      if (byStatus[st.code]) byStatus[st.code].push({ m, st });
+    });
+
+    return `
+      <div style="display:flex;flex-direction:row;gap:14px;padding:16px;overflow-x:auto;height:100%;box-sizing:border-box;align-items:flex-start;">
+        ${cols.map(col => {
+          const items = byStatus[col.code];
+          return `
+            <div style="flex:0 0 220px;min-width:200px;background:${col.bg};border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;max-height:calc(100vh - 160px);">
+              <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0;">
+                <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${col.color};"></span>
+                <span style="font-weight:600;font-size:13px;color:${col.color};">${col.label}</span>
+                <span class="badge" style="margin-left:auto;background:${col.color}22;color:${col.color};font-size:11px;">${items.length}</span>
+              </div>
+              <div style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:8px;min-height:60px;">
+                ${items.length ? items.map(({ m, st }) => {
+                  const task = st.tasks[0];
+                  const queue = this._queue(m.id);
+                  const lieu = (DB.state.lieux||[]).find(l => l.id === m.lieuId);
+                  return `
+                    <div class="fx-machine-card" data-mid="${m.id}"
+                      style="cursor:pointer;padding:10px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${col.color};transition:box-shadow .15s;"
+                      onmouseenter="this.style.boxShadow='0 4px 16px rgba(0,0,0,.10)'" onmouseleave="this.style.boxShadow=''">
+                      <div style="font-weight:600;font-size:13px;margin-bottom:2px;">${m.nom}</div>
+                      ${lieu ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:${task ? '6px' : '2px'};">${lieu.nom}</div>` : ''}
+                      ${task ? `
+                        <div style="font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;" title="${task.nom}">${task.nom}</div>
+                        <div style="height:4px;border-radius:2px;background:var(--border);overflow:hidden;">
+                          <div style="height:100%;width:${task.avancement||0}%;background:${col.color};border-radius:2px;"></div>
+                        </div>
+                        <div style="font-size:10px;color:var(--text-muted);text-align:right;margin-top:2px;">${task.avancement||0}%</div>
+                      ` : ''}
+                      ${queue > 0 ? `<div style="margin-top:4px;font-size:10px;color:var(--text-muted);">📋 ${queue} en file</div>` : ''}
+                    </div>
+                  `;
+                }).join('') : `<p class="muted small" style="text-align:center;padding:12px 0;">Aucune</p>`}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
   },
 
   _filtered() {
@@ -66,21 +208,23 @@ App.views.flux = {
     );
     const running = taches.filter(t => t.debut <= today && t.fin >= today && t.avancement < 100);
     const late    = taches.filter(t => t.fin < today && t.avancement < 100);
-    if (running.length > 1) return { code:'surcharge', label:'Surchargé',  color:'#dc2626', tasks: running };
-    if (late.length)         return { code:'retard',    label:'En retard',  color:'#f59e0b', tasks: late    };
-    if (running.length)      return { code:'actif',     label:'En cours',   color:'#2c5fb3', tasks: running };
-    return                          { code:'libre',     label:'Libre',      color:'#059669', tasks: []      };
+    if (running.length > 1) return { code: 'surcharge', label: 'Surchargé',  color: '#dc2626', tasks: running };
+    if (late.length)         return { code: 'retard',    label: 'En retard',  color: '#f59e0b', tasks: late    };
+    if (running.length)      return { code: 'actif',     label: 'En cours',   color: '#2c5fb3', tasks: running };
+    return                          { code: 'libre',     label: 'Libre',      color: '#059669', tasks: []      };
+  },
+
+  _queue(machineId) {
+    const today = D.today();
+    return (DB.state.taches || []).filter(t =>
+      t.machineId === machineId &&
+      (!this.state.projet || t.projetId === this.state.projet) &&
+      t.debut > today && t.avancement < 100
+    ).length;
   },
 
   _blocks(machines) {
     const layout = DB.state.fluxLayout;
-    const cols = Math.max(1, Math.ceil(Math.sqrt(machines.length || 1)));
-    machines.forEach((m, i) => {
-      if (!layout[m.id]) {
-        layout[m.id] = { x: 40 + (i % cols) * 230, y: 40 + Math.floor(i / cols) * 180 };
-      }
-    });
-
     return machines.map(m => {
       const pos = layout[m.id];
       const st  = this._status(m.id);
@@ -90,7 +234,7 @@ App.views.flux = {
           style="left:${pos.x}px;top:${pos.y}px;border-top:3px solid ${st.color}">
         <div class="fx-block-name">${m.nom}</div>
         ${lieu ? `<div class="fx-block-lieu">${lieu.nom}</div>` : ''}
-        <div class="fx-block-status" style="color:${st.color}">● ${st.label}${st.code==='surcharge'?' ('+st.tasks.length+')':''}</div>
+        <div class="fx-block-status" style="color:${st.color}">● ${st.label}${st.code === 'surcharge' ? ' (' + st.tasks.length + ')' : ''}</div>
         ${task ? `
           <div class="fx-block-task" title="${task.nom}">${task.nom}</div>
           <div class="fx-bar"><div style="width:${task.avancement||0}%;background:${st.color}"></div></div>
