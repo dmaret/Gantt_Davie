@@ -83,6 +83,16 @@ App.views.kanban = {
       },
     ];
 
+    if (!DB.state.taches.length) {
+      board.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--text-muted);width:100%">
+        <div style="font-size:48px;margin-bottom:12px">📋</div>
+        <strong style="font-size:16px;color:var(--text);display:block;margin-bottom:6px">Aucune tâche</strong>
+        <p style="margin:0 0 20px;font-size:13px">Crée une tâche depuis le Gantt pour la voir apparaître ici.</p>
+        <button class="btn" onclick="App.views.gantt.newItem();App.navigate('gantt')">+ Créer une tâche</button>
+      </div>`;
+      return;
+    }
+
     board.innerHTML = cols.map(col => {
       const items = taches.filter(col.filter);
       const cards = items.map(t => this._card(t, today)).join('');

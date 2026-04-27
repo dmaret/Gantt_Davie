@@ -806,7 +806,20 @@ body.dark .h-cell[data-lvl="1"] { background: #254a77; color: #cfe4ff; }
 .gantt-bar.critical { box-shadow: 0 0 0 2px var(--danger) inset; }
 
 /* Ligne "Aujourd'hui" dans le SVG Gantt */
-.today-line { stroke: #ef4444; stroke-width: 1.5; opacity: .65; stroke-dasharray: 5 3; pointer-events: none; }
+.today-line { stroke: #ef4444; stroke-width: 2; opacity: .9; pointer-events: none; }
+.today-label { font-size: 10px; fill: #fff; font-weight: 700; pointer-events: none; font-family: inherit; }
+
+/* Minimap Gantt */
+.gantt-minimap {
+  position: fixed; bottom: 16px; right: 16px;
+  width: 200px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: var(--shadow);
+  overflow: hidden; cursor: pointer; z-index: 500;
+  opacity: .85; transition: opacity .15s, box-shadow .15s;
+}
+.gantt-minimap:hover { opacity: 1; box-shadow: 0 4px 20px rgba(0,0,0,.15); }
+.gantt-minimap-hint { padding: 2px 6px; font-size: 9px; color: var(--text-muted); background: var(--surface); border-top: 1px solid var(--border); text-align: center; }
 
 /* Barre de progression à l'intérieur des barres Gantt */
 .gantt-bar-progress {
