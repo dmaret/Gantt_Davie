@@ -281,40 +281,64 @@ App.views.aide = {
         '💡 L\'overlay indique pour chaque tâche : les alternatives disponibles (compétences compatibles, charge < 85%) et l\'impact en jours si on décale.'
       )}
       ${this._section(
-        '🔗 Vue Flux atelier',
-        'Schéma visuel des machines connectées par dépendances de tâches — comme un synoptique de ligne.',
-        this._step(1,'🔗','Ouvrir','Onglet "Flux" ou touche U','flux',C1) +
-        this._arrow() +
-        this._step(2,'🎨','Lire les couleurs','Vert=libre · Bleu=en cours · Orange=retard · Rouge=surcharge','flux',C1) +
-        this._arrow() +
-        this._step(3,'👆','Clic sur bloc','Panneau détail : tâches actives + avancement','flux',C1) +
-        this._arrow() +
-        this._step(4,'⚡','Disposition','Mode "Déplacer blocs" → drag-and-drop + 💾 Sauver','flux',C1),
-        '💡 Filtre par projet pour ne voir que les machines impliquées dans ce chantier. Bouton 🔗 Flux disponible directement depuis le Gantt et les fiches projet.'
+        '🔗 Flux atelier — 3 vues + zoom',
+        'Canvas libre, mini-Gantt par atelier (Swim lanes) et tableau Kanban machines (Statuts).',
+        this._step(1,'🗺','Canvas','Vue libre positionnée — blocs machines connectés par flèches','flux',C1) +
+        this._arrow('ou') +
+        this._step(2,'🏊','Swim lanes','Mini-Gantt par atelier : une ligne = une machine, blocs colorés sur la timeline','flux',C1) +
+        this._arrow('ou') +
+        this._step(3,'📊','Statuts','4 colonnes Libre / En cours / En retard / Surchargé — style kanban','flux',C1) +
+        this._arrow('zoom') +
+        this._step(4,'📏','10 j / 20 j / 30 j','Zoom timeline en Swim lanes — ajuste densité et horizon','flux',C1),
+        '💡 En Swim lanes, clique sur un bloc de tâche pour ouvrir directement le formulaire dans le Gantt. La ligne rouge = aujourd\'hui. Clic droit sur la colonne machine → panneau détail.'
       )}
       ${this._section(
-        '🗂 Modèles de projet',
-        'Séquences d\'étapes réutilisables avec gestes du catalogue atelier — instanciation en 1 clic.',
-        this._step(1,'🗂','Ouvrir','Onglet "Modèles projet"','modelesprojets',C2) +
+        '🗺 Minimap Gantt & indicateur Aujourd\'hui',
+        'Navigation rapide dans le Gantt grâce à la minimap flottante et au bandeau rouge "Aujourd\'hui".',
+        this._step(1,'📍','Minimap','Vignette fixée en bas à droite — rectangle bleu = fenêtre visible','gantt',C2) +
         this._arrow() +
-        this._step(2,'✎','Créer','Définir étapes, durées, dépendances, gestes et groupe','modelesprojets',C2) +
-        this._arrow('‹ › gestes') +
-        this._step(3,'▶','Instancier','Choisir projet + date + quantité → aperçu des dates','modelesprojets',C2) +
+        this._step(2,'👆','Clic minimap','Saute directement à la zone cliquée dans le Gantt','gantt',C2) +
         this._arrow() +
-        this._step(4,'📅','Résultat','Toutes les tâches créées avec dépendances dans le Gantt','gantt',C2),
-        '💡 42 gestes disponibles (Réception, Contrôle, Étiquetage, Assemblage, Stockage, Préparation, Expédition). Associe un groupe au modèle pour l\'activer depuis la fiche projet.'
+        this._step(3,'🔴','Aujourd\'hui','Ligne rouge épaisse + label "Aujourd\'hui" dans le Gantt','gantt',C2) +
+        this._arrow() +
+        this._step(4,'🏷','Badge J-X','Sur les cartes projet : J-5 (dans 5 j.o.) ou J+2 (dépassé)','projets',C2),
+        '💡 La minimap disparaît en quittant le Gantt. Le badge J-X est vert > 20 j, orange ≤ 5 j, rouge si dépassé.'
       )}
       ${this._section(
-        '✨ Autres améliorations',
+        '📊 Dashboard — Vue globale & alertes cliquables',
+        'Donut d\'avancement global + charge par personne, et toutes les alertes/conflits sont maintenant cliquables.',
+        this._step(1,'🎯','Vue globale','Carte "Vue globale" : donut avancement + barres charge','dashboard',C3) +
+        this._arrow() +
+        this._step(2,'🔔','Alertes cliquables','Clic sur une alerte → ouvre directement la vue et l\'élément concerné','dashboard',C3) +
+        this._arrow() +
+        this._step(3,'⚠','Conflits cliquables','Conflits Machines/Stock/Commandes/Personnes → navigation directe','dashboard',C3) +
+        this._arrow() +
+        this._step(4,'🔴','Bannière machine','Formulaire tâche : bandeau rouge + bordure si conflit machine détecté','gantt',C3),
+        '💡 Le donut affiche 3 arcs : terminé (vert), en cours (bleu), restant (gris). Clic sur un conflit machine → ouvre la tâche et indique quelle machine est en double réservation.'
+      )}
+      ${this._section(
+        '🔐 Accès aux modules par groupe',
+        'L\'admin contrôle quels modules sont visibles dans la navigation pour chaque groupe d\'utilisateurs.',
+        this._step(1,'⚙','Administration','Onglet "Administration" — section "Accès aux modules"','admin',C6) +
+        this._arrow() +
+        this._step(2,'☑','Modules','25 modules en 4 catégories (Navigation / Organisation / Production / Suivi)','admin',C6) +
+        this._arrow() +
+        this._step(3,'👥','Par groupe','Coche/décoche par groupe Utilisateur et MSP — Admin toujours tout','admin',C6) +
+        this._arrow() +
+        this._step(4,'🔒','Effet immédiat','Les boutons de navigation disparaissent/réapparaissent sans reload','dashboard',C6),
+        '💡 Par défaut, le groupe Utilisateur n\'a pas accès à Lieux, Machines, Flux, Stock, BOM, Commandes, Plan, What-if et Historique. Tout est modifiable par l\'admin.'
+      )}
+      ${this._section(
+        '✨ Autres améliorations v3.9',
         '',
-        this._step(1,'‹ ›','Historique nav','Boutons ‹ › près du thème — retour/avance entre vues','dashboard',C3) +
+        this._step(1,'📁','Groupes projets','Cartes groupées par famille (PRJ-Log, PRJ-Emb…) + modèles liés','projets',C4) +
         this._arrow() +
-        this._step(2,'📌','Headers fixes','Tous les tableaux larges : en-têtes sticky + 1re colonne figée','personnes',C3) +
+        this._step(2,'👥','Planning équipe','Grille personnes × jours 20 j.o. — mode équipe + impression A3','majourney',C4) +
         this._arrow() +
-        this._step(3,'⌨','Ctrl+P','Palette de commandes — navigation rapide vers toutes les vues','dashboard',C3) +
+        this._step(3,'⚖','Résolveur surcharge','Réassigner ou décaler avec impact calculé projet','personnes',C4) +
         this._arrow() +
-        this._step(4,'🔔','Badges nav','Alertes numériques sur les onglets concernés','dashboard',C3),
-        '💡 Alt+← / Alt+→ pour naviguer dans l\'historique de vues. Séparateurs visuels entre groupes de modules dans la navigation.'
+        this._step(4,'🗂','Modèles projet','42 gestes, dépendances, instanciation en 1 clic','modelesprojets',C4),
+        '💡 Alt+← / Alt+→ pour naviguer dans l\'historique de vues. Badges numériques sur les onglets avec alertes.'
       )}
     `;
   },
@@ -349,11 +373,14 @@ App.views.aide = {
       ['Select Comparer',             'Superposer une baseline passée sur le Gantt'],
     ];
     const flux = [
-      ['Mode "Déplacer blocs"', 'Drag-and-drop des machines sur le canvas'],
+      ['🗺 Canvas',             'Vue libre positionnée — blocs machines + flèches SVG'],
+      ['🏊 Swim lanes',         'Mini-Gantt par atelier — blocs de tâches sur timeline'],
+      ['📊 Statuts',            'Kanban machines : Libre / En cours / En retard / Surchargé'],
+      ['10 j / 20 j / 30 j',   'Zoom timeline en Swim lanes (visible en mode Swim lanes)'],
+      ['Mode "Déplacer blocs"', 'Drag-and-drop des machines sur le canvas (mode Canvas)'],
       ['💾 Sauver',             'Persiste les positions des blocs en localStorage'],
       ['⚡ Auto',               'Réorganise les blocs en grille automatique'],
-      ['Filtre projet',         'Affiche uniquement les connexions du projet sélectionné'],
-      ['Clic sur un bloc',      'Panneau détail : tâches actives, prochaines, avancement'],
+      ['Clic bloc tâche',       'En Swim lanes : ouvre le formulaire de la tâche dans le Gantt'],
     ];
     return `
       <div class="grid grid-2" style="gap:16px">
