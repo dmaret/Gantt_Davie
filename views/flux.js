@@ -1,11 +1,10 @@
 // Vue Flux atelier — schéma visuel machines connectées par dépendances de tâches
 App.views.flux = {
-  state: { projet: '', lieu: '', editMode: false, viewMode: 'canvas', zoom: '3w' },
+  state: { projet: '', lieu: '', editMode: false, viewMode: 'canvas', zoom: '20j' },
   _ZOOM_PRESETS: {
-    '3w':  { label: '3 sem',  pxDay: 40, BACK: 3,  FWD: 18  },
-    '6w':  { label: '6 sem',  pxDay: 26, BACK: 5,  FWD: 37  },
-    '12w': { label: '12 sem', pxDay: 14, BACK: 7,  FWD: 78  },
-    '6m':  { label: '6 mois', pxDay:  7, BACK: 7,  FWD: 133 },
+    '10j': { label: '10 j', pxDay: 55, BACK: 2, FWD:  8 },
+    '20j': { label: '20 j', pxDay: 40, BACK: 3, FWD: 17 },
+    '30j': { label: '30 j', pxDay: 28, BACK: 3, FWD: 27 },
   },
 
   render(root) {
