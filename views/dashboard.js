@@ -130,7 +130,10 @@ App.views.dashboard = {
   renderProactive() {
     const alerts = App.proactiveAlerts();
     if (!alerts.length) return `<p class="muted">Tout est bon. ✔</p>`;
-    return `<ul class="list">${alerts.slice(0, 10).map(a => `<li><span class="badge ${a.niveau}">${a.kind}</span> <span>${a.msg}</span></li>`).join('')}</ul>${alerts.length > 10 ? `<p class="muted small">+${alerts.length-10} autre(s)</p>` : ''}`;
+    return `<ul class="list list-clickable">${alerts.slice(0, 10).map(a => {
+      const nav = a.target ? `onclick="App.navigateToTarget(${JSON.stringify(a.target)})" role="button" tabindex="0"` : '';
+      return `<li class="alert-row" ${nav}><span class="badge ${a.niveau}">${a.kind}</span> <span class="alert-msg">${a.msg}</span>${a.target ? '<span class="alert-arrow">›</span>' : ''}</li>`;
+    }).join('')}</ul>${alerts.length > 10 ? `<p class="muted small">+${alerts.length-10} autre(s)</p>` : ''}`;
   },
 
   renderPredictions(s) {
@@ -159,7 +162,7 @@ App.views.dashboard = {
     if (total === 0) return `<p class="muted">Aucun conflit détecté. ✔</p>`;
     const row = (badge, kind, text, view) => `<li class="alert-row" onclick="App.navigateToTarget({view:'${view}'})" role="button" tabindex="0"><span class="badge ${badge}">${kind}</span> <span class="alert-msg">${text}</span> <span class="alert-arrow">›</span></li>`;
     const rows = [];
-    if (c.personnes.length) rows.push(row('bad','Personnes',`${c.personnes.length} chevauchement(s) d'affectation`, 'gantt'));
+    if (c.personnes.length) rows.push(row('bad','Personnes',`${c.personnes.length} chevauchement(s) d'affectation`, 'personnes'));
     if (c.machines.length)  rows.push(row('bad','Machines', `${c.machines.length} conflit(s) d'utilisation`, 'machines'));
     if (c.stock.length)     rows.push(row('warn','Stock',   `${c.stock.length} article(s) sous seuil`, 'stock'));
     if (c.commandes.length) rows.push(row('warn','Commandes',`${c.commandes.length} en attente de validations 4A`, 'commandes'));
