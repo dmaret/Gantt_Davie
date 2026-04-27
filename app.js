@@ -397,7 +397,10 @@ const App = {
             this.views.gantt.state.rangeStart = D.addDays(t.debut, -3);
             this.views.gantt.draw && this.views.gantt.draw();
           }
-          this.views.gantt.openTacheForm(target.tacheId);
+          const prefill = target.machineId
+            ? { machineConflict: { machineId: target.machineId, conflictTacheId: target.conflictTacheId } }
+            : {};
+          this.views.gantt.openTacheForm(target.tacheId, prefill);
         } else if (target.view === 'stock' && target.articleId && this.views.stock?.openForm) {
           this.views.stock.openForm(target.articleId);
         } else if (target.view === 'machines' && target.machineId && this.views.machines?.openForm) {
@@ -934,7 +937,7 @@ const App = {
         alerts.push({
           kind:'machine-conflit', niveau:'warn',
           msg:`Conflit ${m?.nom} : ${lbl(t1,p1)} ↔ ${lbl(t2,p2)}`,
-          target: { view: 'gantt', tacheId: c.t1, machineId: c.machineId },
+          target: { view: 'gantt', tacheId: c.t1, machineId: c.machineId, conflictTacheId: c.t2 },
         });
       }
     });

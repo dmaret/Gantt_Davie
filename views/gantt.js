@@ -1164,6 +1164,14 @@ App.views.gantt = {
       assignes:[], machineId:null, lieuId:null, type:'prod', avancement:0, jalon:false, dependances:[], gestes:[],
     };
     if (!t.gestes) t.gestes = [];
+    const machConflict = prefill.machineConflict || null;
+    let machConflictHtml = '';
+    if (machConflict) {
+      const cm  = DB.machine(machConflict.machineId);
+      const ct2 = DB.tache(machConflict.conflictTacheId);
+      const cp2 = ct2 ? DB.projet(ct2.projetId) : null;
+      machConflictHtml = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:5px 9px;font-size:11px;color:#dc2626;margin-bottom:5px;">⚠ <strong>${cm?.nom||'—'}</strong> aussi utilisée par ${cp2?`<strong>${cp2.code}</strong> · `:''}${ct2?.nom||'—'} (${D.fmt(ct2?.debut)}→${D.fmt(ct2?.fin)})</div>`;
+    }
     const gestesParCat = (DB.CATALOGUE_GESTES || []).reduce((acc, g) => {
       if (!acc[g.categorie]) acc[g.categorie] = [];
       acc[g.categorie].push(g);
@@ -1218,7 +1226,8 @@ App.views.gantt = {
       </div>
       <div class="row">
         <div class="field"><label>Machine</label>
-          <select id="f-machine"><option value="">—</option>${s.machines.map(m => `<option value="${m.id}" ${m.id===t.machineId?'selected':''}>${m.nom}</option>`).join('')}</select>
+          ${machConflictHtml}
+          <select id="f-machine" style="${machConflict?'border:2px solid #dc2626;':''}" ><option value="">—</option>${s.machines.map(m => `<option value="${m.id}" ${m.id===t.machineId?'selected':''}>${m.nom}</option>`).join('')}</select>
         </div>
         <div class="field"><label>Lieu</label>
           <select id="f-lieu"><option value="">—</option>${s.lieux.map(l => `<option value="${l.id}" ${l.id===t.lieuId?'selected':''}>${l.nom}</option>`).join('')}</select>
