@@ -15,30 +15,36 @@ Copier `index.html`, `styles.css`, `app.js`, `data.js` et le dossier `views/` su
 **Option 3 — GitHub Pages**
 Cette app est déployée automatiquement depuis la branche `main`.
 
-## Modules (19 vues + Admin)
+## Modules (25 vues + Admin)
 
 | Raccourci | Onglet | Contenu |
 |:-:|---|---|
-| `D` | Tableau de bord | KPI enrichi (absents, retards), conflits, alertes proactives, prédiction fin de projet, respect des délais, top articles BOM, prochaines tâches, charge par lieu — **cartes réorganisables par drag & drop pour les admins** |
-| `G` | Gantt | Vue chronologique, regroupement par projet / personne / machine / lieu, glisser-déposer, dépendances SVG, chemin critique, cascade automatique, menu contextuel clic-droit, **notes/consignes** par tâche |
-| `C` | Calendrier | Vues mois / semaine, événements colorés par projet, modale détaillée au clic |
-| `P` | Personnes | Annuaire, compétences, **profil horaires hebdo cliquable**, charge glissante 4 semaines, Ma semaine, **export CSV planning hebdomadaire** |
+| `D` | Tableau de bord | KPI (absents, retards), conflits & alertes **cliquables** → navigation directe, donut avancement global, charge par personne, prédiction fin de projet, cartes réorganisables (admin) |
+| `G` | Gantt | Vue chronologique, dépendances SVG, glisser-déposer, chemin critique, cascade auto, **minimap flottante**, **indicateur "Aujourd'hui" renforcé**, menu clic-droit, bannière conflit machine |
+| `K` | Kanban | Colonnes À démarrer / En cours / En retard / Terminé, drag & drop d'avancement |
+| `C` | Calendrier | Vues mois / semaine, événements colorés par projet |
+| `P` | Personnes | Annuaire, charge 4 semaines, horaires hebdo cliquables, résolveur de surcharge |
 | `L` | Lieux | Production + stockages arborescents par étage |
-| `M` | Machines | 10 machines, charge 7 jours, conflits, CRUD, export CSV |
-| `J` | Projets | Cartes projet, avancement, priorité, retard, rapport PDF, **édition visuelle des ressources** (chips + auto-affectation équipe) |
-| `S` | Stock | Articles, seuils d'alerte, stockage, projets liés, édition inline |
-| `B` | BOM | Bill of Materials : besoin projet ↔ solde stock, ruptures prévues, édition inline |
+| `M` | Machines | Charge 7 jours, conflits, CRUD, export CSV |
+| `U` | Flux atelier | **3 vues** : 🗺 Canvas libre · 🏊 Swim lanes (mini-Gantt par atelier, zoom 10 j/20 j/30 j) · 📊 Statuts kanban machines |
+| `J` | Projets | Cartes avec **badge J-X** (jours restants/dépassés), avancement, rapport PDF, édition ressources |
+| `S` | Stock | Articles, seuils d'alerte, édition inline |
+| `B` | BOM | Bill of Materials : besoin projet ↔ solde stock, ruptures prévues |
 | `V` | Déplacements | Mouvements entre sites, personnes, motifs |
 | `O` | Commandes | Workflow 4A, TVA suisse, historique signé et horodaté |
 | `X` | Capacité | Heatmap capacité sur 8 / 12 / 24 semaines (par lieu, machine ou personne) |
-| `R` | Ressources | Matrice personnes × jours × demi-journées (dispo / occupé·e / off / **absent**) |
-| `E` | Équipes | Définition d'équipes de production avec slots de compétences, auto-affectation tenant compte des absences |
-| `A` | Plan atelier | Vue bird's eye SVG 2D : lieux positionnés par étage, coloration charge, dots personnes temps réel, drag admin |
-| `F` | **Absences** | Saisie congés/maladies/formations, impact automatique sur dispos et auto-affectation |
-| `T` | **Modèles** | Templates de tâches récurrentes (préparation, réception…) instanciables en 1 clic |
-| `H` | **Historique** | Journal d'audit 500 dernières actions : qui a créé/modifié/supprimé quoi et quand |
+| `R` | Ressources | Matrice personnes × jours × demi-journées |
+| `E` | Équipes | Slots de compétences, auto-affectation avec gestion des absences |
+| `A` | Plan atelier | Vue bird's eye SVG 2D, coloration charge, dots personnes temps réel, drag admin |
+| `F` | Absences | Saisie congés/maladies/formations, impact automatique sur dispos |
+| `T` | Modèles | Templates de tâches instanciables en 1 clic |
+| `H` | Historique | Journal d'audit 500 dernières actions |
 | `W` | What-if | Snapshot, modifications, diff, commit ou rollback |
-| ⚙ | Admin | Gestion utilisateurs, groupes d'accès, permissions, mots de passe |
+| `Y` | Ma journée | Planning personnel + **grille équipe 20 j.o.** imprimable A3 |
+| | Timeline | Vue chronologique multi-projets |
+| | Modèles projet | Séquences d'étapes réutilisables avec gestes catalogue |
+| `I` | Guide | Mode d'emploi interactif avec parcours cliquables |
+| ⚙ | Admin | Utilisateurs, groupes, permissions fonctionnelles + **accès aux 25 modules par groupe** |
 
 ## Fonctionnalités clés
 
@@ -75,7 +81,7 @@ Login au démarrage avec SHA-256 (Web Crypto API). Un utilisateur sans mot de pa
 > ⚠ **Limitation** : app statique sans backend. Les hashes sont stockés en `localStorage`, donc un utilisateur avec devtools peut contourner. Verrou visuel efficace contre l'usage non-technique, mais pas une vraie sécurité.
 
 ### Utilisateurs & groupes d'accès
-3 groupes avec **permissions paramétrables** (vue Admin ⚙) :
+3 groupes avec **permissions fonctionnelles + accès aux modules paramétrables** (vue Admin ⚙) :
 
 | Groupe | Lecture | Édition | Signer 4A | Engager | What-if | Reset | Admin |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
@@ -84,6 +90,8 @@ Login au démarrage avec SHA-256 (Web Crypto API). Un utilisateur sans mot de pa
 | **admin** | ✓ | ✓ | ✓ (tous axes) | ✓ | ✓ | ✓ | ✓ |
 
 Les boutons marqués `data-perm` se masquent automatiquement selon le groupe. L'historique 4A enregistre le nom du signataire et l'horodatage ISO.
+
+**Accès aux modules** : 25 modules organisés en 4 catégories (Navigation, Organisation, Production, Suivi). L'admin coche/décoche chaque module par groupe dans la section "Accès aux modules" de la vue Admin. L'Admin a toujours tout accès. Les boutons de navigation disparaissent instantanément sans rechargement.
 
 Utilisateurs par défaut (éditables dans la vue Admin) :
 
@@ -303,7 +311,7 @@ views/
 | **Email** | [davie.maret@epi.ge.ch](mailto:davie.maret@epi.ge.ch) |
 | **Téléphone** | 022 |
 | **Contexte** | Planification d'atelier de production multi-sites |
-| **Version** | 3.0 |
+| **Version** | 3.9 |
 | **Date** | Avril 2026 |
 
 Pour toute question relative à l'utilisation de cette application, contacter **Davie MARET** (MSP, Atelier Conditionnement & Logistique — EPI Genève) : [davie.maret@epi.ge.ch](mailto:davie.maret@epi.ge.ch)
