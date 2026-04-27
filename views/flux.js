@@ -91,55 +91,108 @@ App.views.flux = {
   },
 
   _renderSwimlanes(machines) {
-    const lieux = DB.state.lieux || [];
+    const s = DB.state;
+    const today = D.today();
+    const BACK = 3, FWD = 18;
+    const pxDay = 40;
+    const labelW = 134;
+
+    const rangeStart = D.addWorkdays(today, -BACK);
+    const nDays = BACK + 1 + FWD;
+    const dates = Array.from({ length: nDays }, (_, i) => D.addWorkdays(rangeStart, i));
+    const todayCol = BACK;
+    const timelineW = nDays * pxDay;
+
+    // Group by lieu
+    const lieux = s.lieux || [];
     const grouped = {};
     const noLieu = [];
     machines.forEach(m => {
       if (m.lieuId) { if (!grouped[m.lieuId]) grouped[m.lieuId] = []; grouped[m.lieuId].push(m); }
       else noLieu.push(m);
     });
-
     const lanes = lieux.filter(l => grouped[l.id]?.length).map(l => ({ lieu: l, ms: grouped[l.id] }));
     if (noLieu.length) lanes.push({ lieu: null, ms: noLieu });
-
     if (!lanes.length) return '<div style="padding:40px;text-align:center;color:var(--text-muted);">Aucune machine à afficher.</div>';
+
+    const headerHtml = dates.map((d, i) => {
+      const isToday = d === today;
+      return `<div style="flex:0 0 ${pxDay}px;text-align:center;font-size:9px;padding:3px 1px;
+        color:${isToday ? '#ef4444' : 'var(--text-muted)'};font-weight:${isToday ? '700' : '400'};
+        border-right:1px solid var(--border);box-sizing:border-box;
+        background:${isToday ? '#fef2f2' : 'transparent'};">${D.fmt(d).slice(0, 5)}</div>`;
+    }).join('');
+
+    const colGrid = dates.map((d, i) =>
+      `<div style="position:absolute;left:${i * pxDay}px;top:0;width:${pxDay}px;height:100%;
+        ${d === today ? 'background:rgba(239,68,68,.05);' : ''}
+        border-right:1px solid var(--border);box-sizing:border-box;pointer-events:none;"></div>`
+    ).join('');
+
+    const renderMachineRow = m => {
+      const st = this._status(m.id);
+      const tasks = s.taches.filter(t =>
+        t.machineId === m.id && t.avancement < 100 &&
+        t.fin >= rangeStart && t.debut <= D.addWorkdays(today, FWD)
+      );
+      const blocks = tasks.map(t => {
+        const proj = DB.projet(t.projetId);
+        const color = proj?.couleur || '#6b7280';
+        const isRetard = t.fin < today;
+        const bc = isRetard ? '#dc2626' : color;
+        const startWd = Math.max(0, D.workdaysBetween(rangeStart, t.debut));
+        const endWd   = Math.min(nDays, D.workdaysBetween(rangeStart, t.fin) + 1);
+        const x = startWd * pxDay + 2;
+        const w = Math.max(10, (endWd - startWd) * pxDay - 4);
+        const pct = t.avancement || 0;
+        return `
+          <div style="position:absolute;left:${x}px;top:4px;width:${w}px;height:calc(100% - 8px);
+            background:${bc}20;border:1.5px solid ${bc}99;border-radius:5px;overflow:hidden;
+            cursor:pointer;box-sizing:border-box;display:flex;align-items:center;"
+            onclick="if(App.views.gantt)App.views.gantt.openTacheForm('${t.id}');App.navigate('gantt');"
+            title="${t.nom}${proj?' · '+proj.code:''} (${D.fmt(t.debut)}→${D.fmt(t.fin)}) — ${pct}%">
+            <div style="position:absolute;bottom:0;left:0;height:3px;width:${pct}%;background:${bc};"></div>
+            <div style="padding:0 5px;font-size:10px;font-weight:600;color:${bc};
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;">
+              ${proj ? `<span style="opacity:.65;font-size:9px;">${proj.code}</span> ` : ''}${t.nom}
+            </div>
+          </div>`;
+      }).join('');
+
+      return `
+        <div style="display:flex;align-items:stretch;border-bottom:1px solid var(--border);min-height:46px;">
+          <div style="flex:0 0 ${labelW}px;padding:6px 10px;background:var(--surface);
+            border-right:1px solid var(--border);position:sticky;left:0;z-index:2;
+            display:flex;align-items:center;gap:6px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${st.color};flex-shrink:0;"></span>
+            <span style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.nom}</span>
+          </div>
+          <div style="flex:1;position:relative;min-width:${timelineW}px;background:var(--bg);">
+            ${colGrid}
+            <div style="position:absolute;left:${todayCol * pxDay}px;top:0;width:2px;height:100%;
+              background:#ef4444;opacity:.55;z-index:4;pointer-events:none;"></div>
+            <div style="position:absolute;inset:0;z-index:3;">${blocks}</div>
+          </div>
+        </div>`;
+    };
 
     return `
       <div style="padding:16px;overflow:auto;width:100%;height:100%;box-sizing:border-box;">
         ${lanes.map(({ lieu, ms }) => `
-          <div style="margin-bottom:14px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
-            <div style="padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border);font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px;">
-              <span>${lieu ? lieu.nom : 'Sans lieu'}</span>
+          <div style="margin-bottom:18px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+            <div style="padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border);
+              font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px;position:sticky;left:0;">
+              🏭 ${lieu ? lieu.nom : 'Sans lieu'}
               <span class="badge muted" style="font-size:11px;">${ms.length} machine${ms.length > 1 ? 's' : ''}</span>
             </div>
-            <div style="display:flex;align-items:center;gap:4px;padding:12px 14px;overflow-x:auto;background:var(--bg);">
-              ${ms.map((m, i) => {
-                const st = this._status(m.id);
-                const task = st.tasks[0];
-                const queue = this._queue(m.id);
-                return `
-                  ${i > 0 ? `<div style="flex-shrink:0;color:var(--primary);opacity:.45;font-size:20px;padding:0 4px;">→</div>` : ''}
-                  <div class="fx-machine-card" data-mid="${m.id}"
-                    style="cursor:pointer;flex:0 0 auto;padding:10px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);border-top:3px solid ${st.color};min-width:150px;max-width:190px;transition:box-shadow .15s;"
-                    onmouseenter="this.style.boxShadow='0 4px 16px rgba(0,0,0,.10)'" onmouseleave="this.style.boxShadow=''">
-                    <div style="font-weight:600;font-size:13px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.nom}</div>
-                    <div style="color:${st.color};font-size:12px;margin-bottom:${task ? '6px' : '0'};">● ${st.label}${st.code === 'surcharge' ? ' (' + st.tasks.length + ')' : ''}</div>
-                    ${task ? `
-                      <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;" title="${task.nom}">${task.nom}</div>
-                      <div style="height:4px;border-radius:2px;background:var(--border);overflow:hidden;">
-                        <div style="height:100%;width:${task.avancement||0}%;background:${st.color};border-radius:2px;"></div>
-                      </div>
-                      <div style="font-size:10px;color:var(--text-muted);text-align:right;margin-top:2px;">${task.avancement||0}%</div>
-                    ` : ''}
-                    ${queue > 0 ? `<div style="margin-top:5px;font-size:10px;color:var(--text-muted);">📋 ${queue} en file</div>` : ''}
-                  </div>
-                `;
-              }).join('')}
+            <div style="display:flex;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5;background:var(--surface);">
+              <div style="flex:0 0 ${labelW}px;border-right:1px solid var(--border);position:sticky;left:0;z-index:6;background:var(--surface);"></div>
+              <div style="display:flex;min-width:${timelineW}px;">${headerHtml}</div>
             </div>
+            ${ms.map(renderMachineRow).join('')}
           </div>
         `).join('')}
-      </div>
-    `;
+      </div>`;
   },
 
   _renderStatuts(machines) {
