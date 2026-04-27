@@ -16,6 +16,7 @@ App.views.dashboard = {
     'avancement-projets': { title:'📊 Avancement par projet',              size:1, render(s) { return App.views.dashboard.renderAvancementProjets(s); } },
     'sante-donnees':      { title:'🩺 Santé des données',                   size:1, render() { return App.views.dashboard.renderIntegrity(); } },
     'flux-machines':      { title:'🔗 Flux machines — état en temps réel',   size:1, render(s, today) { return App.views.dashboard.renderFluxMachines(s, today); } },
+    'vue-globale':        { title:'🎯 Vue globale',                           size:1, render(s, today) { return App.views.dashboard.renderVueGlobale(s, today); } },
   },
 
   render(root) {
@@ -411,6 +412,75 @@ App.views.dashboard = {
       </div>
       <ul class="list list-clickable">${rows.join('')}</ul>
       ${issues.length > 12 ? `<p class="muted small">+${issues.length - 12} autre(s) — corrige pour voir la liste complète</p>` : ''}
+    `;
+  },
+
+  renderVueGlobale(s, today) {
+    const taches = s.taches.filter(t => !t.jalon);
+    const total  = taches.length;
+    if (!total) return `<div style="text-align:center;padding:20px">
+      <p class="muted">Aucune tâche planifiée.</p>
+      <button class="btn" onclick="App.navigate('gantt')" style="margin-top:8px">+ Créer une tâche</button>
+    </div>`;
+
+    const done   = taches.filter(t => t.avancement === 100).length;
+    const inProg = taches.filter(t => t.avancement > 0 && t.avancement < 100).length;
+    const late   = taches.filter(t => t.fin < today && t.avancement < 100).length;
+    const pct    = Math.round(done / total * 100);
+    const circ   = 2 * Math.PI * 38;
+    const dashDone   = (done   / total * circ).toFixed(1);
+    const dashInProg = (inProg / total * circ).toFixed(1);
+    const doneCls    = pct >= 75 ? '#16a34a' : pct >= 40 ? '#2c5fb3' : '#f59e0b';
+
+    const chargeMap = {};
+    taches.filter(t => t.debut <= today && t.fin >= today && t.avancement < 100).forEach(t => {
+      (t.assignes || []).forEach(pid => { chargeMap[pid] = (chargeMap[pid] || 0) + 1; });
+    });
+    const chargeList = Object.entries(chargeMap)
+      .map(([pid, n]) => ({ p: DB.personne(pid), n }))
+      .filter(x => x.p)
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 6);
+    const maxCharge = chargeList[0]?.n || 1;
+
+    return `
+      <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+        <div style="text-align:center;flex-shrink:0">
+          <svg width="100" height="100" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="38" fill="none" stroke="var(--border)" stroke-width="11"/>
+            <circle cx="50" cy="50" r="38" fill="none" stroke="${doneCls}" stroke-width="11"
+              stroke-dasharray="${dashDone} ${circ.toFixed(1)}" stroke-linecap="butt"
+              transform="rotate(-90 50 50)" opacity=".9"/>
+            <circle cx="50" cy="50" r="38" fill="none" stroke="${doneCls}" stroke-width="11"
+              stroke-dasharray="${dashInProg} ${circ.toFixed(1)}" stroke-linecap="butt"
+              stroke-dashoffset="-${dashDone}"
+              transform="rotate(-90 50 50)" opacity=".3"/>
+            <text x="50" y="47" text-anchor="middle" font-size="18" font-weight="700" fill="var(--text)">${pct}%</text>
+            <text x="50" y="61" text-anchor="middle" font-size="9" fill="var(--text-muted)">terminé</text>
+          </svg>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.6">
+            <span style="color:#16a34a">■</span> ${done} term.&nbsp;
+            <span style="color:var(--primary)">■</span> ${inProg} en cours<br>
+            ${late ? `<span style="color:#dc2626">■</span> ${late} en retard` : '✔ Aucun retard'}
+          </div>
+        </div>
+        <div style="flex:1;min-width:120px">
+          <div class="muted small" style="font-weight:600;margin-bottom:8px">Charge actuelle / personne</div>
+          ${chargeList.length ? chargeList.map(({ p, n }) => {
+            const pct2 = Math.round(n / maxCharge * 100);
+            const barColor = n > 3 ? '#dc2626' : n > 1 ? '#f59e0b' : '#059669';
+            return `<div style="margin-bottom:6px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px">${App.personneLabel(p)}</span>
+                <span style="font-weight:600;color:${barColor};flex-shrink:0">${n} tâche${n > 1 ? 's' : ''}</span>
+              </div>
+              <div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${pct2}%;background:${barColor};border-radius:3px;"></div>
+              </div>
+            </div>`;
+          }).join('') : '<p class="muted small">Personne n\'a de tâche active aujourd\'hui.</p>'}
+        </div>
+      </div>
     `;
   },
 

@@ -16,6 +16,14 @@ App.views.projets = {
       const header = g ? `<div class="prj-group-header"><span class="badge" style="background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb);font-size:12px;padding:3px 10px">${g}</span></div>` : '';
       return header + `<div class="grid grid-3">${grouped[g].map(p => this.renderProjectCard(p)).join('')}</div>`;
     }).join('');
+    const emptyState = s.projets.length === 0 ? `
+      <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
+        <div style="font-size:48px;margin-bottom:12px">📁</div>
+        <strong style="font-size:16px;color:var(--text);display:block;margin-bottom:6px">Aucun projet</strong>
+        <p style="margin:0 0 20px;font-size:13px">Crée ton premier projet pour commencer à planifier.</p>
+        <button class="btn" id="prj-empty-add">+ Créer un projet</button>
+      </div>` : '';
+
     root.innerHTML = `
       <div class="toolbar">
         <strong>Projets</strong>
@@ -26,8 +34,10 @@ App.views.projets = {
         <button class="btn-ghost" id="prj-csv">⤓ Exporter CSV</button>
         <button class="btn" id="prj-add">+ Nouveau projet</button>
       </div>
-      ${cardsHtml}
+      ${emptyState || cardsHtml}
     `;
+    const emptyBtn = document.getElementById('prj-empty-add');
+    if (emptyBtn) emptyBtn.onclick = () => this.openForm(null);
     document.getElementById('prj-add').onclick = () => this.openForm(null);
     document.getElementById('prj-tpl').onclick = () => this.downloadTemplate();
     document.getElementById('prj-import').onclick = () => document.getElementById('prj-import-file').click();
@@ -44,33 +54,47 @@ App.views.projets = {
   },
   renderProjectCard(p) {
     const taches = DB.tachesDuProjet(p.id);
-    const done = taches.filter(t => t.avancement === 100).length;
-    const total = taches.length;
-    const pct = total ? Math.round(done / total * 100) : 0;
-    const jalons = taches.filter(t => t.jalon);
-    const today = D.today();
-    const retard = taches.some(t => t.fin < today && t.avancement < 100);
+    const done   = taches.filter(t => t.avancement === 100).length;
+    const inProg = taches.filter(t => t.avancement > 0 && t.avancement < 100).length;
+    const total  = taches.length;
+    const pct      = total ? Math.round(done / total * 100) : 0;
+    const blendPct = total ? Math.round((done + inProg * 0.5) / total * 100) : 0;
+    const jalons   = taches.filter(t => t.jalon);
+    const today    = D.today();
+    const retard   = taches.some(t => t.fin < today && t.avancement < 100);
+    const daysLeft = p.fin ? D.workdaysBetween(today, p.fin) : null;
+    const overdue  = daysLeft !== null && daysLeft < 0;
+    const daysLabel = daysLeft === null ? null : overdue ? `J+${Math.abs(daysLeft)}` : `J-${daysLeft}`;
+    const daysCls   = overdue ? 'bad' : daysLeft <= 5 ? 'warn' : daysLeft <= 20 ? '' : 'good';
     return `
       <div class="card prj-card" data-id="${p.id}" style="cursor:pointer;border-left:4px solid ${p.couleur}">
-        <div style="display:flex;justify-content:space-between;align-items:start">
-          <div>
-            <h3 style="margin:0">${p.code} · ${p.nom}</h3>
+        <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;">
+          <div style="min-width:0;flex:1">
+            <h3 style="margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.code} · ${p.nom}</h3>
             <div class="muted small">${p.client} · étage ${p.etage}</div>
           </div>
-          <span class="badge ${p.priorite==='haute'?'bad':p.priorite==='moyenne'?'warn':'muted'}">${p.priorite}</span>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+            <span class="badge ${p.priorite==='haute'?'bad':p.priorite==='moyenne'?'warn':'muted'}">${p.priorite}</span>
+            ${daysLabel ? `<span class="badge ${daysCls}" style="font-size:11px;font-weight:700">${daysLabel}</span>` : ''}
+          </div>
         </div>
         <div class="small muted" style="margin-top:6px">${D.fmt(p.debut)} → ${D.fmt(p.fin)} · ${D.diffDays(p.debut,p.fin)} j</div>
-        <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
-          <div class="bar-inline" style="flex:1;width:auto"><div class="fill" style="width:${pct}%;background:${p.couleur}"></div></div>
-          <span class="small mono">${pct}%</span>
+        <div style="margin-top:8px">
+          <div style="position:relative;height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden;">
+            <div style="position:absolute;left:0;top:0;bottom:0;width:${blendPct}%;background:${p.couleur};opacity:.3;border-radius:4px;"></div>
+            <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:${p.couleur};border-radius:4px;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:3px">
+            <span class="small muted">${done}/${total} terminées${inProg ? ` · ${inProg} en cours` : ''}</span>
+            <span class="small mono" style="font-weight:700;color:${p.couleur}">${pct}%</span>
+          </div>
         </div>
         <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <span class="badge muted">${total} tâches</span>
           <span class="badge muted">${jalons.length} jalons</span>
           <span class="badge ${p.statut==='en-cours'?'good':'muted'}">${p.statut}</span>
           ${retard ? '<span class="badge bad">retard</span>' : ''}
           ${p.groupe ? `<span class="badge muted" style="font-size:10px">${p.groupe}</span>` : ''}
-          ${p.sequencementStrict ? '<span class="badge" title="Séquencement strict activé : les dates des tâches sont validées par rapport aux dépendances" style="background:#7c3aed22;color:#7c3aed;border:1px solid #7c3aed44">⛓ strict</span>' : ''}
+          ${p.sequencementStrict ? '<span class="badge" title="Séquencement strict activé" style="background:#7c3aed22;color:#7c3aed;border:1px solid #7c3aed44">⛓ strict</span>' : ''}
           <span style="flex:1"></span>
           <button class="btn-ghost prj-report" data-id="${p.id}" title="Rapport PDF">⎙ Rapport</button>
         </div>

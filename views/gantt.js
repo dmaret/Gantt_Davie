@@ -363,6 +363,8 @@ App.views.gantt = {
     const st = this.state;
     if (!st.rangeStart) st.rangeStart = D.addDays(D.today(), -14);
     this._loadPersistedState();
+    const oldMm = document.getElementById('gantt-minimap');
+    if (oldMm) oldMm.remove();
 
     root.innerHTML = `
       <div class="gantt-wrap">
@@ -630,7 +632,11 @@ App.views.gantt = {
     const todayOffset = D.diffDays(start, D.today());
     if (todayOffset >= 0 && todayOffset < days) {
       const todayX = LABEL_W + todayOffset * CELL_W + Math.floor(CELL_W / 2);
-      paths.push(`<line x1="${todayX}" y1="30" x2="${todayX}" y2="${totalH}" class="today-line"/>`);
+      paths.push(`<line x1="${todayX}" y1="0" x2="${todayX}" y2="${totalH}" class="today-line"/>`);
+      const lblW = 64, lblH = 17;
+      const lblX = todayX + lblW + 4 < totalW ? todayX + 2 : todayX - lblW - 2;
+      paths.push(`<rect x="${lblX}" y="4" width="${lblW}" height="${lblH}" rx="4" fill="#ef4444" opacity=".92"/>`);
+      paths.push(`<text x="${lblX + lblW / 2}" y="16" text-anchor="middle" class="today-label">Aujourd'hui</text>`);
     }
     if (st.showDeps) {
       DB.state.taches.forEach(t => {
@@ -727,6 +733,7 @@ App.views.gantt = {
       this.makeDraggable(el, CELL_W);
     });
     this.renderSelectionBar();
+    this._drawMinimap();
     overlay.querySelectorAll('.gantt-resize-handle').forEach(el => {
       el.style.pointerEvents = 'auto';
       this.makeResizable(el, CELL_W);
@@ -776,6 +783,71 @@ App.views.gantt = {
         this.openTacheForm(null, { debut, fin });
       });
     }
+  },
+
+  _drawMinimap() {
+    const st = this.state;
+    let mm = document.getElementById('gantt-minimap');
+    if (!mm) {
+      mm = document.createElement('div');
+      mm.id = 'gantt-minimap';
+      mm.className = 'gantt-minimap';
+      document.body.appendChild(mm);
+    }
+
+    const tasks = DB.state.taches.filter(t => {
+      if (st.projetFilter && t.projetId !== st.projetFilter) return false;
+      if (st.search && !t.nom.toLowerCase().includes(st.search)) return false;
+      return !t.jalon;
+    });
+
+    if (!tasks.length) { mm.style.display = 'none'; return; }
+    mm.style.display = '';
+
+    const MM_W = 200, MM_H = 64;
+    const minDate = tasks.reduce((m, t) => t.debut < m ? t.debut : m, tasks[0].debut);
+    const maxDate = tasks.reduce((m, t) => t.fin > m ? t.fin : m, tasks[0].fin);
+    const totalDays = Math.max(1, D.diffDays(minDate, maxDate));
+    const scaleX = MM_W / totalDays;
+
+    const projetIds = [...new Set(tasks.map(t => t.projetId))];
+    const rowH = Math.max(2, Math.min(10, Math.floor(MM_H / projetIds.length)));
+
+    const bars = projetIds.map((pid, i) => {
+      const prj = DB.projet(pid);
+      const color = prj ? prj.couleur : '#6b7280';
+      const y = i * rowH;
+      return tasks.filter(t => t.projetId === pid).map(t => {
+        const x = Math.max(0, Math.round(D.diffDays(minDate, t.debut) * scaleX));
+        const w = Math.max(1, Math.round(D.diffDays(minDate, t.fin) * scaleX));
+        return `<rect x="${x}" y="${y}" width="${w}" height="${rowH - 1}" fill="${color}" opacity=".75" rx="1"/>`;
+      }).join('');
+    }).join('');
+
+    const todayOff = D.diffDays(minDate, D.today());
+    const todayLine = todayOff >= 0 && todayOff <= totalDays
+      ? `<line x1="${Math.round(todayOff * scaleX)}" y1="0" x2="${Math.round(todayOff * scaleX)}" y2="${MM_H}" stroke="#ef4444" stroke-width="1.5" opacity=".9"/>`
+      : '';
+
+    const vpStart = Math.round(D.diffDays(minDate, st.rangeStart) * scaleX);
+    const vpW = Math.max(4, Math.round(st.rangeDays * scaleX));
+    const vpX = Math.max(0, Math.min(MM_W - vpW, vpStart));
+    const viewport = `
+      <rect x="${vpX}" y="0" width="${vpW}" height="${MM_H}" fill="var(--primary)" opacity=".12" rx="2"/>
+      <rect x="${vpX}" y="0" width="${vpW}" height="${MM_H}" fill="none" stroke="var(--primary)" stroke-width="1.5" rx="2" opacity=".7"/>`;
+
+    mm.innerHTML = `
+      <svg width="${MM_W}" height="${MM_H}" viewBox="0 0 ${MM_W} ${MM_H}" style="display:block">${bars}${todayLine}${viewport}</svg>
+      <div class="gantt-minimap-hint">Planning — clic pour naviguer</div>`;
+
+    mm.onclick = e => {
+      const svgRect = mm.querySelector('svg').getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - svgRect.left) / MM_W));
+      st.rangeStart = D.addDays(minDate, Math.round(ratio * totalDays - st.rangeDays / 4));
+      const startEl = document.getElementById('g-start');
+      if (startEl) startEl.value = st.rangeStart;
+      this.draw();
+    };
   },
 
   downloadTemplate() {
