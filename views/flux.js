@@ -1,6 +1,12 @@
 // Vue Flux atelier — schéma visuel machines connectées par dépendances de tâches
 App.views.flux = {
-  state: { projet: '', lieu: '', editMode: false, viewMode: 'canvas' },
+  state: { projet: '', lieu: '', editMode: false, viewMode: 'canvas', zoom: '3w' },
+  _ZOOM_PRESETS: {
+    '3w':  { label: '3 sem',  pxDay: 40, BACK: 3,  FWD: 18  },
+    '6w':  { label: '6 sem',  pxDay: 26, BACK: 5,  FWD: 37  },
+    '12w': { label: '12 sem', pxDay: 14, BACK: 7,  FWD: 78  },
+    '6m':  { label: '6 mois', pxDay:  7, BACK: 7,  FWD: 133 },
+  },
 
   render(root) {
     const s = DB.state;
@@ -19,6 +25,14 @@ App.views.flux = {
       ${App.can('edit') ? `<button class="btn-ghost" id="fx-save">💾 Sauver</button>` : ''}
     ` : '';
 
+    const swimZoom = this.state.viewMode === 'swimlanes' ? `
+      <div style="display:flex;gap:2px;margin-left:6px;border-left:1px solid var(--border);padding-left:8px;">
+        ${Object.entries(this._ZOOM_PRESETS).map(([k, p]) =>
+          `<button class="btn-ghost fx-view-btn${this.state.zoom === k ? ' fx-view-active' : ''}" data-fxzoom="${k}" style="font-size:11px;padding:3px 8px;">${p.label}</button>`
+        ).join('')}
+      </div>
+    ` : '';
+
     root.innerHTML = `
       <div class="flux-wrap">
         <div class="toolbar">
@@ -33,7 +47,7 @@ App.views.flux = {
           </select>
           <span class="spacer"></span>
           <div style="display:flex;gap:2px;">${viewBtns}</div>
-          ${canvasControls}
+          ${canvasControls}${swimZoom}
         </div>
         <div class="flux-body">
           <div class="flux-sidebar" id="fx-sidebar">${this._sidebar(machines)}</div>
@@ -46,6 +60,9 @@ App.views.flux = {
 
     root.querySelectorAll('[data-fxview]').forEach(b => {
       b.onclick = () => { this.state.viewMode = b.dataset.fxview; this.state.editMode = false; this.render(root); };
+    });
+    root.querySelectorAll('[data-fxzoom]').forEach(b => {
+      b.onclick = () => { this.state.zoom = b.dataset.fxzoom; this.render(root); };
     });
 
     document.getElementById('fx-proj').onchange = e => { this.state.projet = e.target.value; this.render(root); };
@@ -93,8 +110,7 @@ App.views.flux = {
   _renderSwimlanes(machines) {
     const s = DB.state;
     const today = D.today();
-    const BACK = 3, FWD = 18;
-    const pxDay = 40;
+    const { pxDay, BACK, FWD } = this._ZOOM_PRESETS[this.state.zoom] || this._ZOOM_PRESETS['3w'];
     const labelW = 134;
 
     const rangeStart = D.addWorkdays(today, -BACK);
@@ -145,6 +161,7 @@ App.views.flux = {
         const x = startWd * pxDay + 2;
         const w = Math.max(10, (endWd - startWd) * pxDay - 4);
         const pct = t.avancement || 0;
+        const showLabel = pxDay >= 14;
         return `
           <div style="position:absolute;left:${x}px;top:4px;width:${w}px;height:calc(100% - 8px);
             background:${bc}20;border:1.5px solid ${bc}99;border-radius:5px;overflow:hidden;
@@ -152,10 +169,10 @@ App.views.flux = {
             onclick="if(App.views.gantt)App.views.gantt.openTacheForm('${t.id}');App.navigate('gantt');"
             title="${t.nom}${proj?' · '+proj.code:''} (${D.fmt(t.debut)}→${D.fmt(t.fin)}) — ${pct}%">
             <div style="position:absolute;bottom:0;left:0;height:3px;width:${pct}%;background:${bc};"></div>
-            <div style="padding:0 5px;font-size:10px;font-weight:600;color:${bc};
+            ${showLabel ? `<div style="padding:0 5px;font-size:10px;font-weight:600;color:${bc};
               white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;">
               ${proj ? `<span style="opacity:.65;font-size:9px;">${proj.code}</span> ` : ''}${t.nom}
-            </div>
+            </div>` : ''}
           </div>`;
       }).join('');
 
