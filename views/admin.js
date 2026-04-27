@@ -20,6 +20,12 @@ App.views.admin = {
         <div id="adm-groupes"></div>
       </div>
 
+      <div class="card" style="margin-bottom:14px">
+        <h2>Accès aux modules</h2>
+        <p class="muted small">Contrôle quels modules sont visibles dans la navigation pour chaque groupe. L'Admin a toujours accès à tout.</p>
+        <div id="adm-modules"></div>
+      </div>
+
       <div class="card">
         <h2>Utilisateurs (${s.utilisateurs.length})</h2>
         <div id="adm-users"></div>
@@ -27,6 +33,7 @@ App.views.admin = {
     `;
     document.getElementById('adm-add-user').onclick = () => this.openUserForm(null);
     this.drawGroupes();
+    this.drawModules();
     this.drawUsers();
   },
 
@@ -57,6 +64,47 @@ App.views.admin = {
           App.applyPerms();
         };
       });
+    });
+  },
+
+  drawModules() {
+    const g = DB.state.groupes;
+    const groups = Object.keys(g).filter(k => k !== 'admin');
+    const cats = [...new Set(MODULES_ACCESS.map(m => m.cat))];
+
+    const headerCols = groups.map(k => `<th style="text-align:center;min-width:90px">${g[k].libelle}</th>`).join('') +
+      `<th style="text-align:center;min-width:90px;color:var(--text-muted)">Admin</th>`;
+
+    const rows = cats.map(cat => {
+      const mods = MODULES_ACCESS.filter(m => m.cat === cat);
+      const catRow = `<tr><td colspan="${groups.length + 2}" style="padding:6px 10px 2px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;background:var(--surface-2,var(--bg));">${cat}</td></tr>`;
+      const modRows = mods.map(m => `
+        <tr data-mod="${m.id}">
+          <td style="padding:5px 10px;font-size:13px;">${m.label}</td>
+          ${groups.map(k => {
+            const checked = g[k].moduleAccess?.[m.id] !== false;
+            return `<td style="text-align:center"><input type="checkbox" data-gkey="${k}" data-mid="${m.id}" ${checked ? 'checked' : ''}></td>`;
+          }).join('')}
+          <td style="text-align:center"><input type="checkbox" checked disabled title="L'Admin a toujours accès à tous les modules"></td>
+        </tr>`).join('');
+      return catRow + modRows;
+    }).join('');
+
+    document.getElementById('adm-modules').innerHTML = `
+      <table class="data">
+        <thead><tr><th>Module</th>${headerCols}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+
+    document.querySelectorAll('#adm-modules input[data-gkey]').forEach(cb => {
+      cb.onchange = () => {
+        const k = cb.dataset.gkey, mid = cb.dataset.mid;
+        if (!DB.state.groupes[k].moduleAccess) DB.state.groupes[k].moduleAccess = {};
+        DB.state.groupes[k].moduleAccess[mid] = cb.checked;
+        DB.save();
+        App.applyPerms();
+        App.toast('Accès module mis à jour', 'success');
+      };
     });
   },
 
