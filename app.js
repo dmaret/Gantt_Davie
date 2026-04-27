@@ -222,11 +222,23 @@ const App = {
     const g = (DB.state.groupes || {})[u.groupe] || { perms:{} };
     return !!g.perms[action];
   },
+  canView(viewName) {
+    if (!viewName) return true;
+    const u = this.currentUser();
+    const g = (DB.state.groupes || {})[u.groupe] || {};
+    if (g.perms?.admin) return true;
+    const ma = g.moduleAccess;
+    if (!ma) return true;
+    return ma[viewName] !== false;
+  },
   // Applique les permissions aux éléments marqués data-perm dans le DOM
   applyPerms() {
     document.querySelectorAll('[data-perm]').forEach(el => {
       const ok = this.can(el.dataset.perm);
       el.style.display = ok ? '' : 'none';
+    });
+    document.querySelectorAll('.nav-btn[data-view]').forEach(btn => {
+      btn.style.display = this.canView(btn.dataset.view) ? '' : 'none';
     });
   },
 
@@ -653,6 +665,7 @@ const App = {
 
   navigate(name, { addToHistory = true } = {}) {
     if (!this.views[name]) { console.warn('vue inconnue', name); name = 'dashboard'; }
+    if (!this.canView(name) && name !== 'dashboard') { name = 'dashboard'; }
     if (addToHistory && this.view && this.view !== name) {
       this._navHistory.push(this.view);
       if (this._navHistory.length > 30) this._navHistory.shift();
