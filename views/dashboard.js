@@ -131,7 +131,7 @@ App.views.dashboard = {
     const alerts = App.proactiveAlerts();
     if (!alerts.length) return `<p class="muted">Tout est bon. ✔</p>`;
     return `<ul class="list list-clickable">${alerts.slice(0, 10).map(a => {
-      const nav = a.target ? `onclick="App.navigateToTarget(${JSON.stringify(a.target)})" role="button" tabindex="0"` : '';
+      const nav = a.target ? `onclick="App.navigateToTarget(${JSON.stringify(a.target).replace(/"/g,"'")})" role="button" tabindex="0"` : '';
       return `<li class="alert-row" ${nav}><span class="badge ${a.niveau}">${a.kind}</span> <span class="alert-msg">${a.msg}</span>${a.target ? '<span class="alert-arrow">›</span>' : ''}</li>`;
     }).join('')}</ul>${alerts.length > 10 ? `<p class="muted small">+${alerts.length-10} autre(s)</p>` : ''}`;
   },
