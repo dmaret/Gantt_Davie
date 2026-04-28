@@ -8,16 +8,11 @@ App.views.kanban = {
 
   render(root) {
     const s = DB.state;
-    const projOpts = s.projets.map(p =>
-      `<option value="${p.id}">${p.code} — ${p.nom}</option>`
-    ).join('');
-
     root.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;padding:14px 20px 10px;flex-wrap:wrap;border-bottom:1px solid var(--border);background:var(--surface);">
         <strong style="font-size:15px;margin-right:4px;">Kanban</strong>
         <select id="kb-proj-filter" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;">
-          <option value="">Tous les projets</option>
-          ${projOpts}
+          ${App.projetsOptions(this.state.projetFilter||'', 'Tous les projets')}
         </select>
         <input id="kb-search" type="search" placeholder="Rechercher une tâche…"
           style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;min-width:180px;"
@@ -87,6 +82,16 @@ App.views.kanban = {
         drop: 'termine',
       },
     ];
+
+    if (!DB.state.taches.length) {
+      board.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--text-muted);width:100%">
+        <div style="font-size:48px;margin-bottom:12px">📋</div>
+        <strong style="font-size:16px;color:var(--text);display:block;margin-bottom:6px">Aucune tâche</strong>
+        <p style="margin:0 0 20px;font-size:13px">Crée une tâche depuis le Gantt pour la voir apparaître ici.</p>
+        <button class="btn" onclick="App.views.gantt.newItem();App.navigate('gantt')">+ Créer une tâche</button>
+      </div>`;
+      return;
+    }
 
     board.innerHTML = cols.map(col => {
       const items = taches.filter(col.filter);

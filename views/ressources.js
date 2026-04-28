@@ -24,7 +24,9 @@ App.views.ressources = {
     document.getElementById('r-comp').onchange = e => { this.state.compFilter = e.target.value; this.draw(); };
     document.getElementById('r-dispo').onchange = e => { this.state.onlyDispo = e.target.checked; this.draw(); };
     document.querySelectorAll('.etage-pills .pill[data-weeks]').forEach(b => b.onclick = () => {
-      this.state.weeks = +b.dataset.weeks; this.draw();
+      this.state.weeks = +b.dataset.weeks;
+      document.querySelectorAll('.etage-pills .pill[data-weeks]').forEach(p => p.classList.toggle('on', +p.dataset.weeks === this.state.weeks));
+      this.draw();
     });
     this.draw();
   },

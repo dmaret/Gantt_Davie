@@ -82,8 +82,8 @@ App.views.personnes = {
         const cls = (on) => `h-slot ${on?'on':''} ${canEdit?'clickable':''}`;
         return `<div class="h-day"><div class="h-label">${JOURS_COURT[i]}</div><div class="${cls(h[j]?.matin)}" ${atts('matin')} title="${j} matin"></div><div class="${cls(h[j]?.aprem)}" ${atts('aprem')} title="${j} après-midi"></div></div>`;
       }).join('')}</div>`;
-      return `<tr data-id="${p.id}">
-        <td><strong class="p-name" style="cursor:pointer">${App.personneLabel(p)}</strong></td>
+      return `<tr data-id="${p.id}"${p.pendingValidation ? ' style="background:#fff8ed;"' : ''}>
+        <td><strong class="p-name" style="cursor:pointer">${App.personneLabel(p)}</strong>${p.pendingValidation ? ' <span class="badge warn" title="Importé automatiquement — à valider">⚠ À valider</span>' : ''}</td>
         <td>${p.role}</td>
         <td><span class="muted">${DB.lieu(p.lieuPrincipalId)?.nom || '—'}</span></td>
         <td>${(p.competences||[]).map(c => `<span class="chip">${c}</span>`).join('')}</td>
@@ -97,10 +97,10 @@ App.views.personnes = {
 
     this._weeks = weeks;
     document.getElementById('p-table').innerHTML = `
-      <table class="data">
+      <div class="tbl-wrap"><table class="data col-freeze-1">
         <thead><tr><th>Personne</th><th>Rôle</th><th>Lieu principal</th><th>Compétences</th><th title="Profil hebdo (L M M J V S D × matin/aprem)">Horaires</th><th>Tâches 7j</th><th title="Charge par semaine · Rouge = ≥96% de la capacité hebdo (surcharge) · Orange = ≥81% · Cliquer sur une semaine pour voir les tâches">Charge · ${weeks.map(w=>'S'+w.num).join(' · ')}</th><th class="right">Moy.</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>
+      </table></div>
       <p class="muted small" style="margin-top:10px">${list.length} personne(s) · carrés pleins = dispo · 📅 = planning personnel · cliquer sur une semaine pour voir le détail</p>
     `;
     document.querySelectorAll('#p-table tbody .p-name').forEach(el => el.onclick = () => this.openForm(el.closest('tr').dataset.id));
@@ -178,14 +178,177 @@ App.views.personnes = {
       </table>
       <p class="muted small" style="margin-top:8px">Cliquer sur une ligne pour aller sur le Gantt · Semaine du ${D.fmt(w.start)} au ${D.fmt(w.end)}</p>
     `;
-    const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Fermer</button>`;
+    const surcharge = pct > 95;
+    const foot = `
+      <button class="btn btn-secondary" onclick="App.closeModal()">Fermer</button>
+      ${surcharge ? `<button class="btn" id="wd-resolve" style="background:var(--danger)">🔧 Résoudre la surcharge</button>` : ''}
+    `;
     App.openModal(`S${w.num} — ${App.personneLabel(p)}`, body, foot);
     document.querySelectorAll('.wd-task-row').forEach(el => {
       el.onclick = () => { App.closeModal(); App.navigateToTarget({ view: 'gantt', tacheId: el.dataset.tid }); };
       el.onmouseenter = () => el.style.background = 'var(--surface-2)';
       el.onmouseleave = () => el.style.background = '';
     });
+    if (surcharge) {
+      const btn = document.getElementById('wd-resolve');
+      if (btn) btn.onclick = () => this.openSurchargeResolver(pid, wi);
+    }
   },
+
+  openSurchargeResolver(pid, wi) {
+    const p = DB.personne(pid);
+    const w = (this._weeks||[])[wi];
+    if (!p || !w) return;
+    const s = DB.state;
+
+    // Tâches en surcharge cette semaine
+    const ts = s.taches.filter(t =>
+      (t.assignes||[]).includes(p.id) && t.fin >= w.start && t.debut <= w.end && !t.jalon
+    ).sort((a,b) => a.debut.localeCompare(b.debut));
+
+    // Pour chaque tâche : chercher des personnes alternatives disponibles
+    const _weekLoad = (altId) => {
+      const h = s.taches
+        .filter(t => (t.assignes||[]).includes(altId) && t.fin >= w.start && t.debut <= w.end)
+        .reduce((n,t) => {
+          const a = t.debut > w.start ? t.debut : w.start;
+          const b = t.fin < w.end ? t.fin : w.end;
+          return n + D.weekdaysBetween(a,b) * 7;
+        }, 0);
+      const alt = DB.personne(altId);
+      return alt ? Math.round(h / (alt.capaciteHebdo||35) * 100) : 100;
+    };
+
+    const altsForTask = (t) => s.personnes
+      .filter(alt => {
+        if (alt.id === p.id || alt.id === t.projetId) return false;
+        // Compétences compatibles (si la personne en surcharge en a)
+        const pComps = p.competences || [];
+        const aComps = alt.competences || [];
+        const compOk = !pComps.length || pComps.some(c => aComps.includes(c));
+        return compOk && _weekLoad(alt.id) < 85;
+      })
+      .sort((a,b) => _weekLoad(a.id) - _weekLoad(b.id))
+      .slice(0, 3);
+
+    // Impact projet si décalage à la semaine suivante
+    const _shiftImpact = (t) => {
+      const nextStart = D.addWorkdays(w.end, 1);
+      const dur = Math.max(1, D.workdaysBetween(t.debut, t.fin));
+      const newEnd = D.addWorkdays(nextStart, dur - 1);
+      const prj = DB.projet(t.projetId);
+      const delta = prj && newEnd > prj.fin ? D.weekdaysBetween(prj.fin, newEnd) : 0;
+      return { nextStart, newEnd, prj, delta };
+    };
+
+    // HTML pour chaque tâche
+    const taskCards = ts.map((t, idx) => {
+      const prj = DB.projet(t.projetId);
+      const col = prj?.couleur || '#888';
+      const alts = altsForTask(t);
+      const { nextStart, newEnd, delta } = _shiftImpact(t);
+      const altOptions = alts.length
+        ? alts.map(alt => {
+            const load = _weekLoad(alt.id);
+            return `<button type="button" class="btn btn-secondary sr-reassign" data-tid="${t.id}" data-altid="${alt.id}" style="font-size:11px;padding:3px 8px">
+              👤 ${App.personneLabel(alt)} <span class="badge ${load<60?'good':'warn'}" style="font-size:9px">${load}%</span>
+            </button>`;
+          }).join('')
+        : `<span class="muted small">Aucune personne disponible avec compétences compatibles</span>`;
+
+      const riskHtml = delta > 0
+        ? `<div style="margin-top:6px;padding:6px 8px;border-radius:6px;background:#fff3cd;border:1px solid #f0ad4e;font-size:11px">
+            ⚠ Décaler impacte <strong>${prj?.nom||'le projet'}</strong> : fin repoussée de <strong>+${delta}j</strong> (${D.fmt(prj.fin)} → ${D.fmt(newEnd)})
+          </div>`
+        : `<div class="muted small" style="margin-top:4px">✓ Décaler n'impacte pas la fin du projet</div>`;
+
+      return `<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span class="badge" style="background:${col}22;color:${col};border:1px solid ${col}55">${prj?.code||'—'}</span>
+          <strong>${t.nom}</strong>
+          <span class="muted small">${D.fmt(t.debut)} → ${D.fmt(t.fin)}</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+          <span class="muted small" style="flex-shrink:0">🔄 Réassigner à :</span>
+          ${altOptions}
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span class="muted small" style="flex-shrink:0">📅 Décaler à :</span>
+          <button type="button" class="btn btn-secondary sr-shift" data-tid="${t.id}" style="font-size:11px;padding:3px 8px">
+            S${wi+2 <= 53 ? wi+2 : 1} · ${D.fmt(nextStart)} → ${D.fmt(newEnd)}
+          </button>
+          <button type="button" class="btn-ghost sr-gantt" data-tid="${t.id}" style="font-size:11px">→ Gantt</button>
+        </div>
+        ${riskHtml}
+      </div>`;
+    }).join('');
+
+    const noTask = !ts.length
+      ? `<p class="muted">Aucune tâche trouvée pour cette semaine.</p>`
+      : '';
+
+    const body = `
+      <div style="padding:8px 12px;border-radius:8px;background:#fff3cd;border:1px solid #f0ad4e;margin-bottom:14px;font-size:12px">
+        ⚠ <strong>${App.personneLabel(p)}</strong> est en surcharge sur la semaine S${w.num} (${D.fmt(w.start)} → ${D.fmt(w.end)}).
+        Choisis une action pour chaque tâche.
+      </div>
+      ${noTask}${taskCards}
+      <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+        <button type="button" class="btn-ghost" id="sr-majourney" style="font-size:12px">👥 Ouvrir Planning équipe</button>
+      </div>
+    `;
+    App.openOverlay(`🔧 Résoudre surcharge — ${App.personneLabel(p)} — S${w.num}`, body,
+      `<button class="btn btn-secondary" id="sr-close">Fermer</button>`);
+
+    document.getElementById('sr-close').onclick = () => App.closeOverlay();
+    document.getElementById('sr-majourney').onclick = () => {
+      App.closeOverlay(); App.closeModal();
+      App.views.majourney.state.mode = 'equipe';
+      App.navigate('majourney');
+    };
+
+    // Réassigner
+    document.querySelectorAll('.sr-reassign').forEach(btn => {
+      btn.onclick = () => {
+        const t = s.taches.find(x => x.id === btn.dataset.tid);
+        const altId = btn.dataset.altid;
+        if (!t || !altId) return;
+        t.assignes = (t.assignes||[]).filter(x => x !== p.id);
+        if (!t.assignes.includes(altId)) t.assignes.push(altId);
+        DB.logAudit('update','tache',t.id,'réassignation surcharge');
+        DB.save();
+        App.toast(`✓ Tâche réassignée à ${App.personneLabel(DB.personne(altId))}`, 'success');
+        App.closeOverlay(); App.closeModal(); App.refresh();
+      };
+    });
+
+    // Décaler
+    document.querySelectorAll('.sr-shift').forEach(btn => {
+      btn.onclick = () => {
+        const t = s.taches.find(x => x.id === btn.dataset.tid);
+        if (!t) return;
+        const dur = Math.max(1, D.workdaysBetween(t.debut, t.fin));
+        const nextStart = D.addWorkdays(w.end, 1);
+        const newEnd = D.addWorkdays(nextStart, dur - 1);
+        const { delta, prj } = _shiftImpact(t);
+        const msg = delta > 0
+          ? `Décaler "${t.nom}" du ${D.fmt(nextStart)} au ${D.fmt(newEnd)} ?\n\n⚠ Impact : fin de ${prj?.nom||'projet'} repoussée de +${delta}j (${D.fmt(prj.fin)} → ${D.fmt(newEnd)})`
+          : `Décaler "${t.nom}" du ${D.fmt(nextStart)} au ${D.fmt(newEnd)} ?`;
+        if (!confirm(msg)) return;
+        t.debut = nextStart; t.fin = newEnd;
+        DB.logAudit('update','tache',t.id,'décalage surcharge');
+        DB.save();
+        App.toast(`✓ Tâche déplacée au ${D.fmt(nextStart)}${delta > 0 ? ` · ⚠ ${prj?.code} fin +${delta}j` : ''}`, delta > 0 ? 'warn' : 'success');
+        App.closeOverlay(); App.closeModal(); App.refresh();
+      };
+    });
+
+    // Ouvrir dans Gantt
+    document.querySelectorAll('.sr-gantt').forEach(btn => {
+      btn.onclick = () => { App.closeOverlay(); App.closeModal(); App.navigateToTarget({ view:'gantt', tacheId: btn.dataset.tid }); };
+    });
+  },
+
 
   openSemaine(id) {
     const p = DB.personne(id);
@@ -268,6 +431,10 @@ App.views.personnes = {
       <div class="muted small" style="margin-top:4px">Cocher = travaille sur cette demi-journée. Total : <span id="pf-dj">${horairesDemiJournees(p.horaires)}</span> demi-journées/semaine.</div>
     `;
     const body = `
+      ${p.pendingValidation ? `<div style="background:#fff8ed;border:1px solid #f59e0b;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#92400e;">
+        ⚠ <strong>Personne importée automatiquement — en attente de validation.</strong><br>
+        <span class="muted">Complète les informations ci-dessous puis clique sur <strong>Valider</strong> pour confirmer, ou <strong>Refuser</strong> pour supprimer cette entrée.</span>
+      </div>` : ''}
       <div class="row">
         <div class="field"><label>Prénom</label><input id="pf-prenom" value="${p.prenom||''}"></div>
         <div class="field"><label>Nom</label><input id="pf-nom" value="${p.nom||''}"></div>
@@ -287,12 +454,13 @@ App.views.personnes = {
       <div class="field"><label>Profil de travail hebdomadaire</label>${horairesGrid}</div>
     `;
     const foot = `
-      ${!isNew?'<button class="btn btn-danger" id="pf-del">Supprimer</button>':''}
+      ${!isNew && !p.pendingValidation ? '<button class="btn btn-danger" id="pf-del">Supprimer</button>' : ''}
+      ${p.pendingValidation ? '<button class="btn btn-danger" id="pf-refuse">Refuser</button>' : ''}
       <span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="pf-cancel">Annuler</button>
-      <button class="btn" id="pf-save">${isNew?'Créer':'Enregistrer'}</button>
+      <button class="btn" id="pf-save">${p.pendingValidation ? '✓ Valider' : isNew ? 'Créer' : 'Enregistrer'}</button>
     `;
-    App.openModal(isNew?'Nouvelle personne':App.personneLabel(p), body, foot);
+    App.openModal(isNew ? 'Nouvelle personne' : (p.pendingValidation ? '⚠ À valider — ' : '') + App.personneLabel(p), body, foot);
     document.getElementById('pf-cancel').onclick = () => App.closeModal();
     // Live recount des demi-journées
     document.querySelectorAll('.horaires-editor input[data-jour]').forEach(cb => cb.onchange = () => {
@@ -313,10 +481,20 @@ App.views.personnes = {
       document.querySelectorAll('.horaires-editor input[data-jour]').forEach(cb => { if (cb.checked) horaires[cb.dataset.jour][cb.dataset.slot] = true; });
       p.horaires = horaires;
       if (!p.prenom || !p.nom) { App.toast('Prénom et nom requis','error'); return; }
+      const wasPending = p.pendingValidation;
+      delete p.pendingValidation;
       if (isNew) s.personnes.push(p);
-      DB.save(); App.closeModal(); App.toast('Enregistré','success'); App.refresh();
+      DB.save(); App.closeModal();
+      App.toast(wasPending ? `${p.prenom} ${p.nom} validé·e ✓` : 'Enregistré', 'success');
+      App.refresh();
     };
-    if (!isNew) {
+    const refuseBtn = document.getElementById('pf-refuse');
+    if (refuseBtn) refuseBtn.onclick = () => {
+      if (!confirm(`Refuser et supprimer ${p.prenom} ${p.nom} ? Ses absences importées seront aussi supprimées.`)) return;
+      s.personnes = s.personnes.filter(x => x.id !== p.id);
+      DB.save(); App.closeModal(); App.toast(`${p.prenom} ${p.nom} refusé·e et supprimé·e`, 'info'); App.refresh();
+    };
+    if (!isNew && !p.pendingValidation) {
       document.getElementById('pf-del').onclick = () => {
         if (!confirm('Supprimer cette personne ? Ses affectations de tâches seront retirées.')) return;
         s.personnes = s.personnes.filter(x => x.id !== p.id);
