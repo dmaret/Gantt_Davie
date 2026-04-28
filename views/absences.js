@@ -30,10 +30,10 @@ App.views.absences = {
         <select id="ab-m"><option value="">Tous motifs</option>${motifs.map(m => `<option ${st.filterMotif===m?'selected':''}>${m}</option>`).join('')}</select>
         <label class="small"><input type="checkbox" id="ab-past" ${st.showPast?'checked':''}> Inclure passées</label>
         <button class="btn-ghost" id="ab-csv">⤓ Exporter CSV</button>
-        ${canEdit ? `<input type="file" id="ab-import-file" accept=".csv,.json" hidden>
+        ${App.can('admin') ? `<input type="file" id="ab-import-file" accept=".csv,.json" hidden>
         <button class="btn-ghost" id="ab-tpl">⬇ Modèle</button>
-        <button class="btn-ghost" id="ab-import">⬆ Importer</button>
-        <button class="btn" id="ab-add">+ Nouvelle absence</button>` : ''}
+        <button class="btn-ghost" id="ab-import">⬆ Importer</button>` : ''}
+        ${canEdit ? `<button class="btn" id="ab-add">+ Nouvelle absence</button>` : ''}
       </div>
 
       <div class="grid grid-3" style="margin-bottom:14px">

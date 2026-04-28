@@ -461,8 +461,8 @@ App.views.gantt = {
           <span class="muted small" title="Ctrl/Cmd + clic pour multi-sélection et actions en lot">💡 Ctrl+clic = sélection multiple</span>
           <span class="spacer"></span>
           <input type="file" id="g-import-file" accept=".csv,.json" hidden>
-          <button class="btn-ghost" id="g-tpl" data-perm="edit">⬇ Modèle</button>
-          <button class="btn-ghost" id="g-import" data-perm="edit">⬆ Importer</button>
+          <button class="btn-ghost" id="g-tpl" data-perm="admin">⬇ Modèle</button>
+          <button class="btn-ghost" id="g-import" data-perm="admin">⬆ Importer</button>
           <button class="btn-ghost" id="g-csv">⤓ Exporter CSV</button>
           <button class="btn-ghost" id="g-ics" title="Exporter vers Outlook / Google Agenda / Apple Calendar">📅 Export .ics</button>
           <button class="btn-ghost" id="g-rapport" title="Rapport hebdomadaire imprimable par lieu">📋 Rapport</button>

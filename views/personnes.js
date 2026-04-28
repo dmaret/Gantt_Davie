@@ -9,7 +9,7 @@ App.views.personnes = {
         <select id="p-lieu"><option value="">Tous lieux</option>${s.lieux.filter(l=>l.type==='production').map(l=>`<option value="${l.id}">${l.nom}</option>`).join('')}</select>
         <span class="spacer"></span>
         <input type="file" id="p-import-file" accept=".csv,.json" hidden>
-        <button class="btn-ghost" id="p-import" data-perm="edit" title="Importer des personnes depuis un fichier CSV ou JSON">⬆ Importer</button>
+        <button class="btn-ghost" id="p-import" data-perm="admin" title="Importer des personnes depuis un fichier CSV ou JSON">⬆ Importer</button>
         <button class="btn-ghost" id="p-tpl" title="Télécharger un modèle CSV pour importer des personnes">⬇ Modèle</button>
         <button class="btn-ghost" id="p-csv" title="Exporter la liste des personnes en CSV">⤓ Exporter CSV</button>
         <button class="btn-ghost" id="p-export" title="Exporter le planning hebdomadaire en CSV (ouvrable dans Excel)">⬇ Planning CSV</button>

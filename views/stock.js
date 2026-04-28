@@ -10,8 +10,8 @@ App.views.stock = {
         <label class="small"><input type="checkbox" id="st-alert"> Seulement alertes</label>
         <span class="spacer"></span>
         <input type="file" id="st-import-file" accept=".csv,.json" hidden>
-        <button class="btn-ghost" id="st-tpl" data-perm="edit" title="Télécharger le modèle CSV">⬇ Modèle</button>
-        <button class="btn-ghost" id="st-import" data-perm="edit" title="Importer articles depuis CSV/JSON">⬆ Importer</button>
+        <button class="btn-ghost" id="st-tpl" data-perm="admin" title="Télécharger le modèle CSV">⬇ Modèle</button>
+        <button class="btn-ghost" id="st-import" data-perm="admin" title="Importer articles depuis CSV/JSON">⬆ Importer</button>
         <button class="btn-ghost" id="st-csv">⤓ Exporter CSV</button>
         <button class="btn" id="st-add">+ Ajouter un article</button>
       </div>
