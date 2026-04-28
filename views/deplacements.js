@@ -12,7 +12,7 @@ App.views.deplacements = {
         <button class="btn" id="d-add">+ Nouveau déplacement</button>
       </div>
       <div class="card">
-        <table class="data">
+        <div class="tbl-wrap"><table class="data col-freeze-1">
           <thead><tr><th>Date</th><th>Personne</th><th>Origine</th><th>Destination</th><th>Motif</th><th>Projet</th><th>Durée</th></tr></thead>
           <tbody>
           ${s.deplacements.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(d => {
@@ -29,7 +29,7 @@ App.views.deplacements = {
             </tr>`;
           }).join('')}
           </tbody>
-        </table>
+        </table></div>
       </div>
     `;
     document.getElementById('d-add').onclick = () => this.openForm(null);

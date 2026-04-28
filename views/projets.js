@@ -1,6 +1,29 @@
 App.views.projets = {
   render(root) {
     const s = DB.state;
+    // Group projects by groupe field
+    const grouped = {};
+    s.projets.forEach(p => {
+      const g = p.groupe || '';
+      if (!grouped[g]) grouped[g] = [];
+      grouped[g].push(p);
+    });
+    const groupKeys = Object.keys(grouped).sort((a,b) => {
+      if (!a) return 1; if (!b) return -1;
+      return a.localeCompare(b);
+    });
+    const cardsHtml = groupKeys.map(g => {
+      const header = g ? `<div class="prj-group-header"><span class="badge" style="background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb);font-size:12px;padding:3px 10px">${g}</span></div>` : '';
+      return header + `<div class="grid grid-3">${grouped[g].map(p => this.renderProjectCard(p)).join('')}</div>`;
+    }).join('');
+    const emptyState = s.projets.length === 0 ? `
+      <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
+        <div style="font-size:48px;margin-bottom:12px">📁</div>
+        <strong style="font-size:16px;color:var(--text);display:block;margin-bottom:6px">Aucun projet</strong>
+        <p style="margin:0 0 20px;font-size:13px">Crée ton premier projet pour commencer à planifier.</p>
+        <button class="btn" id="prj-empty-add">+ Créer un projet</button>
+      </div>` : '';
+
     root.innerHTML = `
       <div class="toolbar">
         <strong>Projets</strong>
@@ -11,52 +34,67 @@ App.views.projets = {
         <button class="btn-ghost" id="prj-csv">⤓ Exporter CSV</button>
         <button class="btn" id="prj-add">+ Nouveau projet</button>
       </div>
-      <div class="grid grid-3">
-        ${s.projets.map(p => this.renderProjectCard(p)).join('')}
-      </div>
+      ${emptyState || cardsHtml}
     `;
+    const emptyBtn = document.getElementById('prj-empty-add');
+    if (emptyBtn) emptyBtn.onclick = () => this.openForm(null);
     document.getElementById('prj-add').onclick = () => this.openForm(null);
     document.getElementById('prj-tpl').onclick = () => this.downloadTemplate();
     document.getElementById('prj-import').onclick = () => document.getElementById('prj-import-file').click();
     document.getElementById('prj-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
     document.getElementById('prj-csv').onclick = () => this.exportCSV();
-    document.querySelectorAll('.prj-card').forEach(c => c.onclick = e => {
+    root.querySelectorAll('.prj-card').forEach(c => c.onclick = e => {
       if (e.target.closest('.prj-report')) return;
       this.openForm(c.dataset.id);
     });
-    document.querySelectorAll('.prj-report').forEach(b => b.onclick = e => {
+    root.querySelectorAll('.prj-report').forEach(b => b.onclick = e => {
       e.stopPropagation();
       this.exportReport(b.dataset.id);
     });
   },
   renderProjectCard(p) {
     const taches = DB.tachesDuProjet(p.id);
-    const done = taches.filter(t => t.avancement === 100).length;
-    const total = taches.length;
-    const pct = total ? Math.round(done / total * 100) : 0;
-    const jalons = taches.filter(t => t.jalon);
-    const today = D.today();
-    const retard = taches.some(t => t.fin < today && t.avancement < 100);
+    const done   = taches.filter(t => t.avancement === 100).length;
+    const inProg = taches.filter(t => t.avancement > 0 && t.avancement < 100).length;
+    const total  = taches.length;
+    const pct      = total ? Math.round(done / total * 100) : 0;
+    const blendPct = total ? Math.round((done + inProg * 0.5) / total * 100) : 0;
+    const jalons   = taches.filter(t => t.jalon);
+    const today    = D.today();
+    const retard   = taches.some(t => t.fin < today && t.avancement < 100);
+    const daysLeft = p.fin ? D.workdaysBetween(today, p.fin) : null;
+    const overdue  = daysLeft !== null && daysLeft < 0;
+    const daysLabel = daysLeft === null ? null : overdue ? `J+${Math.abs(daysLeft)}` : `J-${daysLeft}`;
+    const daysCls   = overdue ? 'bad' : daysLeft <= 5 ? 'warn' : daysLeft <= 20 ? '' : 'good';
     return `
       <div class="card prj-card" data-id="${p.id}" style="cursor:pointer;border-left:4px solid ${p.couleur}">
-        <div style="display:flex;justify-content:space-between;align-items:start">
-          <div>
-            <h3 style="margin:0">${p.code} · ${p.nom}</h3>
+        <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;">
+          <div style="min-width:0;flex:1">
+            <h3 style="margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.code} · ${p.nom}</h3>
             <div class="muted small">${p.client} · étage ${p.etage}</div>
           </div>
-          <span class="badge ${p.priorite==='haute'?'bad':p.priorite==='moyenne'?'warn':'muted'}">${p.priorite}</span>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+            <span class="badge ${p.priorite==='haute'?'bad':p.priorite==='moyenne'?'warn':'muted'}">${p.priorite}</span>
+            ${daysLabel ? `<span class="badge ${daysCls}" style="font-size:11px;font-weight:700">${daysLabel}</span>` : ''}
+          </div>
         </div>
         <div class="small muted" style="margin-top:6px">${D.fmt(p.debut)} → ${D.fmt(p.fin)} · ${D.diffDays(p.debut,p.fin)} j</div>
-        <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
-          <div class="bar-inline" style="flex:1;width:auto"><div class="fill" style="width:${pct}%;background:${p.couleur}"></div></div>
-          <span class="small mono">${pct}%</span>
+        <div style="margin-top:8px">
+          <div style="position:relative;height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden;">
+            <div style="position:absolute;left:0;top:0;bottom:0;width:${blendPct}%;background:${p.couleur};opacity:.3;border-radius:4px;"></div>
+            <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:${p.couleur};border-radius:4px;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:3px">
+            <span class="small muted">${done}/${total} terminées${inProg ? ` · ${inProg} en cours` : ''}</span>
+            <span class="small mono" style="font-weight:700;color:${p.couleur}">${pct}%</span>
+          </div>
         </div>
         <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <span class="badge muted">${total} tâches</span>
           <span class="badge muted">${jalons.length} jalons</span>
           <span class="badge ${p.statut==='en-cours'?'good':'muted'}">${p.statut}</span>
           ${retard ? '<span class="badge bad">retard</span>' : ''}
-          ${p.sequencementStrict ? '<span class="badge" title="Séquencement strict activé : les dates des tâches sont validées par rapport aux dépendances" style="background:#7c3aed22;color:#7c3aed;border:1px solid #7c3aed44">⛓ strict</span>' : ''}
+          ${p.groupe ? `<span class="badge muted" style="font-size:10px">${p.groupe}</span>` : ''}
+          ${p.sequencementStrict ? '<span class="badge" title="Séquencement strict activé" style="background:#7c3aed22;color:#7c3aed;border:1px solid #7c3aed44">⛓ strict</span>' : ''}
           <span style="flex:1"></span>
           <button class="btn-ghost prj-report" data-id="${p.id}" title="Rapport PDF">⎙ Rapport</button>
         </div>
@@ -130,20 +168,20 @@ App.views.projets = {
 
     const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Rapport ${p.code}</title>
       <style>
-        body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color: #222; }
-        h1 { border-bottom: 3px solid ${p.couleur}; padding-bottom: 6px; margin: 0 0 8px 0; }
-        h2 { margin-top: 20px; color: ${p.couleur}; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
-        table.data { width: 100%; border-collapse: collapse; font-size: 12px; }
-        table.data th, table.data td { border-bottom: 1px solid #eee; padding: 4px 6px; text-align: left; }
+        body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 20px; color: #222; font-size: 12px; }
+        h1 { font-size: 18px; border-bottom: 3px solid ${p.couleur}; padding-bottom: 4px; margin: 0 0 6px 0; }
+        h2 { font-size: 13px; margin-top: 10px; margin-bottom: 2px; color: ${p.couleur}; border-bottom: 1px solid #ddd; padding-bottom: 3px; }
+        table.data { width: 100%; border-collapse: collapse; font-size: 11px; }
+        table.data th, table.data td { border-bottom: 1px solid #eee; padding: 3px 5px; text-align: left; }
         table.data th { background: #f6f6f6; }
         .right { text-align: right; }
-        .kpis { display: flex; gap: 14px; margin: 12px 0 4px 0; }
-        .kpi { flex: 1; background: #f6f6f6; padding: 10px; border-radius: 6px; border-left: 4px solid ${p.couleur}; }
-        .kpi .label { font-size: 10px; color: #777; text-transform: uppercase; }
-        .kpi .value { font-size: 22px; font-weight: 600; }
+        .kpis { display: flex; gap: 10px; margin: 8px 0 4px 0; }
+        .kpi { flex: 1; background: #f6f6f6; padding: 6px 8px; border-radius: 5px; border-left: 4px solid ${p.couleur}; }
+        .kpi .label { font-size: 9px; color: #777; text-transform: uppercase; }
+        .kpi .value { font-size: 16px; font-weight: 600; line-height: 1.2; }
         .small { font-size: 11px; color: #666; }
-        .footer { margin-top: 24px; color: #888; font-size: 10px; text-align: center; border-top: 1px solid #ddd; padding-top: 6px; }
-        @media print { @page { size: A4 landscape; margin: 12mm; } body { margin: 0; } }
+        .footer { margin-top: 12px; color: #888; font-size: 9px; text-align: center; border-top: 1px solid #ddd; padding-top: 4px; }
+        @media print { @page { size: A4 portrait; margin: 10mm; } body { margin: 0; font-size: 11px; } }
       </style></head><body>
       <h1>${p.code} — ${p.nom}</h1>
       <p class="small">Client : <strong>${p.client||'—'}</strong> · Étage ${p.etage} · Priorité ${p.priorite} · Statut ${p.statut}</p>
@@ -170,18 +208,39 @@ App.views.projets = {
   openForm(id) {
     const isNew = !id;
     const s = DB.state;
+    const existingGroups = [...new Set(s.projets.map(p => p.groupe||'').filter(Boolean))].sort();
     const p = id ? DB.projet(id) : {
       id: DB.uid('PRJ'), code:'PRJ-'+ (s.projets.length+1), nom:'', client:'', couleur:'#2c5fb3',
-      debut:D.today(), fin:D.addDays(D.today(),30), etage:'1er', priorite:'moyenne', statut:'planifié'
+      debut:D.today(), fin:D.addDays(D.today(),30), etage:'1er', priorite:'moyenne', statut:'planifié', groupe:''
     };
     const taches = id ? DB.tachesDuProjet(id) : [];
     const canEdit = App.can('edit');
+    const linkedModels = (!isNew && p.groupe) ? (s.modelesProjets||[]).filter(mp => mp.groupe === p.groupe) : [];
+    const linkedModelsHtml = linkedModels.length ? `
+      <div style="margin-top:14px;padding:10px 12px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:13px;font-weight:600">🗂 Modèles pour <span class="badge" style="background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb)">${p.groupe}</span></span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${linkedModels.map(mp => `
+            <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;border-left:3px solid ${mp.couleur||'#888'}">
+              <span style="font-size:12px;font-weight:500">${mp.nom}</span>
+              <span class="muted small">${(mp.etapes||[]).length} étapes · ${(mp.etapes||[]).reduce((n,e)=>n+(e.duree||0),0)} j.o.</span>
+              <button class="btn btn-secondary pf-use-modele" data-mpid="${mp.id}" style="padding:3px 10px;font-size:11px">▶ Appliquer</button>
+            </div>`).join('')}
+        </div>
+      </div>` : '';
     const body = `
       <div class="row">
         <div class="field"><label>Code</label><input id="pf-code" value="${p.code||''}"></div>
         <div class="field"><label>Couleur</label><input type="color" id="pf-color" value="${p.couleur}"></div>
       </div>
       <div class="field"><label>Nom</label><input id="pf-nom" value="${p.nom||''}"></div>
+      <div class="field">
+        <label>Groupe <span class="muted small">(ex: PRJ-Log, PRJ-Emb)</span></label>
+        <input id="pf-groupe" list="pf-groupe-list" value="${p.groupe||''}" placeholder="Laisser vide si sans groupe">
+        <datalist id="pf-groupe-list">${existingGroups.map(g=>`<option value="${g}">`).join('')}</datalist>
+      </div>
       <div class="row">
         <div class="field"><label>Client</label><input id="pf-client" value="${p.client||''}"></div>
         <div class="field"><label>Étage</label>
@@ -207,10 +266,12 @@ App.views.projets = {
         </label>
         <div class="muted small" style="margin-top:3px;padding-left:24px">Si activé : à l'enregistrement d'une tâche, les dates sont vérifiées par rapport à ses dépendances — avec proposition d'auto-correction.</div>
       </div>
+      ${linkedModelsHtml}
       ${!isNew ? `
         <div style="display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap">
           <h3 style="margin:0;flex:1">👥 Tâches & ressources (${taches.length})</h3>
           <button class="btn-ghost pf-open-gantt" data-pid="${p.id}" title="Ouvrir le Gantt filtré sur ce projet">📅 Gantt →</button>
+          <button class="btn-ghost pf-open-flux" data-pid="${p.id}" title="Voir le flux machines pour ce projet">🔗 Flux →</button>
           <button class="btn-ghost" id="pf-export-csv" title="Exporter les tâches de ce projet en CSV (ouvrable dans Excel)">⬇ CSV</button>
           ${canEdit && (s.equipes||[]).length ? `
             <select id="pf-equipe-sel" class="small">
@@ -239,12 +300,19 @@ App.views.projets = {
       p.priorite = document.getElementById('pf-prio').value;
       p.statut = document.getElementById('pf-statut').value;
       p.sequencementStrict = document.getElementById('pf-strict').checked;
+      p.groupe = document.getElementById('pf-groupe').value.trim();
       if (!p.nom || !p.code) { App.toast('Code et nom requis','error'); return; }
       if (isNew) { s.projets.push(p); DB.logAudit('create','projet',p.id,`${p.code} · ${p.nom}`); }
       else DB.logAudit('update','projet',p.id,`${p.code} · ${p.nom}`);
       DB.save(); App.closeModal(); App.refresh();
     };
     if (!isNew) {
+      document.querySelectorAll('.pf-use-modele').forEach(b => {
+        b.onclick = () => {
+          App.closeModal();
+          App.views.modelesprojets.instancier(b.dataset.mpid, p.id);
+        };
+      });
       document.getElementById('pf-del').onclick = () => {
         if (!confirm('Supprimer ce projet et toutes ses tâches ?')) return;
         s.projets = s.projets.filter(x => x.id !== p.id);
@@ -262,6 +330,13 @@ App.views.projets = {
           App.closeModal();
           App.views.gantt.state.projetFilter = btn.dataset.pid;
           App.navigate('gantt');
+        };
+      });
+      document.querySelectorAll('.pf-open-flux').forEach(btn => {
+        btn.onclick = () => {
+          App.closeModal();
+          App.views.flux.state.projet = btn.dataset.pid;
+          App.navigate('flux');
         };
       });
     }

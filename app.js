@@ -2,12 +2,14 @@
 const App = {
   view: 'dashboard',
   views: {},  // injectées par chaque views/*.js : { render(root) }
-  _navHistory: [],  // historique des vues pour le bouton retour
+  _navHistory: [],
+  _navFuture: [],
 
   init() {
     DB.load();
     this.applyTheme(localStorage.getItem('theme') || 'light');
     this.bindTopbar();
+    this.initSearchBar();
     this.populateUserSelect();
     this.updateBell();
     this.bellInterval = setInterval(() => this.updateBell(), 30000);
@@ -221,11 +223,23 @@ const App = {
     const g = (DB.state.groupes || {})[u.groupe] || { perms:{} };
     return !!g.perms[action];
   },
+  canView(viewName) {
+    if (!viewName) return true;
+    const u = this.currentUser();
+    const g = (DB.state.groupes || {})[u.groupe] || {};
+    if (g.perms?.admin) return true;
+    const ma = g.moduleAccess;
+    if (!ma) return true;
+    return ma[viewName] !== false;
+  },
   // Applique les permissions aux éléments marqués data-perm dans le DOM
   applyPerms() {
     document.querySelectorAll('[data-perm]').forEach(el => {
       const ok = this.can(el.dataset.perm);
       el.style.display = ok ? '' : 'none';
+    });
+    document.querySelectorAll('.nav-btn[data-view]').forEach(btn => {
+      btn.style.display = this.canView(btn.dataset.view) ? '' : 'none';
     });
   },
 
@@ -291,9 +305,10 @@ const App = {
       { view:'modelesprojets', label:'Modèles de projet', key:'' },
       { view:'audit', label:'Historique', key:'H' },
       { view:'whatif', label:'What-if', key:'W' },
-      { view:'majourney', label:'Ma journée', key:'' },
-      { view:'timeline', label:'Timeline', key:'' },
-      { view:'aide', label:'🎓 Guide & Flux de travail', key:'I' },
+      { view:'majourney',      label:'Ma journée',              key:'' },
+      { view:'timeline',       label:'Timeline',                key:'' },
+      { view:'flux',           label:'Flux atelier',            key:'' },
+      { view:'aide',           label:'🎓 Guide & Flux de travail', key:'I' },
     ];
     const ACTIONS = [
       { label:'+ Nouvelle tâche Gantt', meta:'action', action: () => { this.navigate('gantt'); setTimeout(() => this.views.gantt?.newItem?.(), 80); } },
@@ -387,28 +402,55 @@ const App = {
       try {
         if (target.view === 'projets' && target.projetId && this.views.projets?.openForm) {
           this.views.projets.openForm(target.projetId);
+          this._flashRow(target.projetId);
         } else if (target.view === 'personnes' && target.personneId && this.views.personnes?.openForm) {
           this.views.personnes.openForm(target.personneId);
+          this._flashRow(target.personneId);
         } else if (target.view === 'gantt' && target.tacheId && this.views.gantt?.openTacheForm) {
           const t = DB.tache(target.tacheId);
           if (t && this.views.gantt.state) {
             this.views.gantt.state.rangeStart = D.addDays(t.debut, -3);
             this.views.gantt.draw && this.views.gantt.draw();
           }
-          this.views.gantt.openTacheForm(target.tacheId);
+          const prefill = target.machineId
+            ? { machineConflict: { machineId: target.machineId, conflictTacheId: target.conflictTacheId } }
+            : {};
+          this.views.gantt.openTacheForm(target.tacheId, prefill);
         } else if (target.view === 'stock' && target.articleId && this.views.stock?.openForm) {
           this.views.stock.openForm(target.articleId);
+          this._flashRow(target.articleId);
         } else if (target.view === 'machines' && target.machineId && this.views.machines?.openForm) {
           this.views.machines.openForm(target.machineId);
+          this._flashRow(target.machineId);
         } else if (target.view === 'commandes' && target.commandeId && this.views.commandes?.openForm) {
           this.views.commandes.openForm(target.commandeId);
+          this._flashRow(target.commandeId);
         } else if (target.view === 'lieux' && target.lieuId && this.views.lieux?.openForm) {
           this.views.lieux.openForm(target.lieuId);
+          this._flashRow(target.lieuId);
+        } else if (target.view === 'bom' && target.projetId) {
+          // BOM view: just navigate and let it render
+          const bomV = this.views.bom;
+          if (bomV?.state) bomV.state.projet = target.projetId;
+          bomV?.render && bomV.render(document.getElementById('view-root'));
         }
+        // For views navigated without a specific entity (just filtering), flash nothing
       } catch (err) {
         console.warn('navigateToTarget:', err);
       }
     }, 60);
+  },
+
+  _flashRow(id) {
+    if (!id) return;
+    setTimeout(() => {
+      const el = document.querySelector(`[data-id="${CSS.escape(id)}"]`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('row-flash');
+      void el.offsetWidth; // reflow to restart animation
+      el.classList.add('row-flash');
+    }, 120);
   },
 
   bindTopbar() {
@@ -416,6 +458,7 @@ const App = {
       btn.addEventListener('click', () => this.navigate(btn.dataset.view));
     });
     document.getElementById('btn-back').addEventListener('click', () => this.navigateBack());
+    document.getElementById('btn-fwd').addEventListener('click', () => this.navigateForward());
     document.getElementById('btn-theme').addEventListener('click', () => {
       const next = document.body.classList.contains('dark') ? 'light' : 'dark';
       this.applyTheme(next);
@@ -462,6 +505,9 @@ const App = {
     if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'ArrowLeft') {
       e.preventDefault(); this.navigateBack(); return;
     }
+    if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'ArrowRight') {
+      e.preventDefault(); this.navigateForward(); return;
+    }
     // Recherche globale (Ctrl+K / Cmd+K) — fonctionne même depuis un input
     if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
       e.preventDefault(); this.showGlobalSearch(); return;
@@ -479,11 +525,11 @@ const App = {
     }
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const map = { d:'dashboard', g:'gantt', c:'calendrier', p:'personnes', l:'lieux', m:'machines', j:'projets', s:'stock', v:'deplacements', o:'commandes', b:'bom', x:'capacite', w:'whatif', r:'ressources', e:'equipes', a:'plan', f:'absences', h:'audit', t:'modeles', i:'aide' };
+    const map = { d:'dashboard', g:'gantt', c:'calendrier', p:'personnes', l:'lieux', m:'machines', j:'projets', s:'stock', v:'deplacements', o:'commandes', b:'bom', x:'capacite', w:'whatif', r:'ressources', e:'equipes', a:'plan', f:'absences', h:'audit', t:'modeles', i:'aide', u:'flux' };
     if (map[e.key]) { this.navigate(map[e.key]); e.preventDefault(); return; }
     if (e.key === '?') { this.showHelp(); e.preventDefault(); return; }
     if (e.key === 'n' && this.views[this.view].newItem) { this.views[this.view].newItem(); e.preventDefault(); return; }
-    if (e.key === '/') { const s = document.querySelector('input[type=search]'); if (s) { s.focus(); e.preventDefault(); } return; }
+    if (e.key === '/') { const sb = document.getElementById('searchbar-input'); if (sb) { sb.focus(); sb.select(); e.preventDefault(); } return; }
     if (e.key === 'Escape') { this.closeGlobalSearch(); this.closeModal(); }
   },
 
@@ -644,9 +690,11 @@ const App = {
 
   navigate(name, { addToHistory = true } = {}) {
     if (!this.views[name]) { console.warn('vue inconnue', name); name = 'dashboard'; }
+    if (!this.canView(name) && name !== 'dashboard') { name = 'dashboard'; }
     if (addToHistory && this.view && this.view !== name) {
       this._navHistory.push(this.view);
       if (this._navHistory.length > 30) this._navHistory.shift();
+      this._navFuture = []; // navigation normale efface le futur
     }
     if (this.view === 'gantt' && name !== 'gantt' && this.views.gantt.clearSelection) this.views.gantt.clearSelection();
     this.view = name;
@@ -658,17 +706,32 @@ const App = {
 
   navigateBack() {
     if (!this._navHistory.length) return;
+    this._navFuture.push(this.view);
     const prev = this._navHistory.pop();
     this.view = prev;
     location.hash = prev;
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === prev));
-    this.updateBackBtn();
+    this._updateNavBtns();
     this.refresh();
   },
 
-  updateBackBtn() {
-    const btn = document.getElementById('btn-back');
-    if (btn) btn.hidden = this._navHistory.length === 0;
+  navigateForward() {
+    if (!this._navFuture.length) return;
+    this._navHistory.push(this.view);
+    const next = this._navFuture.pop();
+    this.view = next;
+    location.hash = next;
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === next));
+    this._updateNavBtns();
+    this.refresh();
+  },
+
+  updateBackBtn() { this._updateNavBtns(); },
+  _updateNavBtns() {
+    const back = document.getElementById('btn-back');
+    const fwd  = document.getElementById('btn-fwd');
+    if (back) back.hidden = this._navHistory.length === 0;
+    if (fwd)  fwd.hidden  = this._navFuture.length === 0;
   },
 
   refresh() {
@@ -803,6 +866,20 @@ const App = {
   lieuLabel(l) { return l ? l.nom : '—'; },
   projetLabel(p) { return p ? p.code + ' — ' + p.nom : '—'; },
 
+  // Build <option>/<optgroup> HTML for project selects; selectedId = currently selected project id
+  projetsOptions(selectedId = '', emptyLabel = '— Aucun projet (tâche libre)') {
+    const projets = DB.state.projets;
+    const grouped = {};
+    projets.forEach(p => { const g = p.groupe||''; if (!grouped[g]) grouped[g]=[]; grouped[g].push(p); });
+    const keys = Object.keys(grouped).sort((a,b) => { if(!a) return 1; if(!b) return -1; return a.localeCompare(b); });
+    let html = `<option value="" ${!selectedId?'selected':''}>${emptyLabel}</option>`;
+    keys.forEach(g => {
+      const opts = grouped[g].map(p => `<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.code} — ${p.nom}</option>`).join('');
+      html += g ? `<optgroup label="${g}">${opts}</optgroup>` : opts;
+    });
+    return html;
+  },
+
   // Suggestions d'affectation basées sur compétence requise + charge actuelle
   suggestAssignees(task, n = 3) {
     const s = DB.state;
@@ -898,7 +975,7 @@ const App = {
         alerts.push({
           kind:'machine-conflit', niveau:'warn',
           msg:`Conflit ${m?.nom} : ${lbl(t1,p1)} ↔ ${lbl(t2,p2)}`,
-          target: { view: 'gantt', tacheId: c.t1, machineId: c.machineId },
+          target: { view: 'gantt', tacheId: c.t1, machineId: c.machineId, conflictTacheId: c.t2 },
         });
       }
     });
@@ -931,6 +1008,67 @@ const App = {
     });
 
     return alerts;
+  },
+
+  // ── Barre de recherche persistante ──────────────────────────────────────
+  initSearchBar() {
+    const input = document.getElementById('searchbar-input');
+    const results = document.getElementById('searchbar-results');
+    if (!input || !results) return;
+    let sbSelected = 0, sbResults = [];
+
+    const render = (q) => {
+      sbResults = q.trim() ? this.searchAll(q, 12) : [];
+      sbSelected = 0;
+      if (!sbResults.length) {
+        results.innerHTML = q.trim() ? `<div class="sb-empty">Aucun résultat pour « ${q} »</div>` : '';
+        results.classList.toggle('hidden', !q.trim());
+        return;
+      }
+      results.innerHTML = sbResults.map((r, i) =>
+        `<div class="sb-item${i===0?' on':''}" data-i="${i}">
+          <span class="sb-kind">${r.kind}</span>
+          <span class="sb-label">${r.label}</span>
+          <span class="sb-meta">${r.meta||''}</span>
+        </div>`).join('');
+      results.classList.remove('hidden');
+      results.querySelectorAll('.sb-item').forEach(el => {
+        el.onmouseenter = () => { sbSelected = +el.dataset.i; highlight(); };
+        el.onclick = () => open(+el.dataset.i);
+      });
+    };
+
+    const highlight = () => {
+      results.querySelectorAll('.sb-item').forEach((el, i) => el.classList.toggle('on', i === sbSelected));
+    };
+
+    const open = (idx) => {
+      const r = sbResults[idx];
+      if (!r) return;
+      input.value = '';
+      results.classList.add('hidden');
+      input.blur();
+      if (r.target) { this.navigateToTarget(r.target); return; }
+      this.navigate(r.view);
+      if (r.onOpen) setTimeout(r.onOpen, 60);
+    };
+
+    input.oninput = () => render(input.value);
+    input.onkeydown = (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); sbSelected = Math.min(sbResults.length - 1, sbSelected + 1); highlight(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); sbSelected = Math.max(0, sbSelected - 1); highlight(); }
+      else if (e.key === 'Enter') { e.preventDefault(); open(sbSelected); }
+      else if (e.key === 'Escape') { input.value = ''; results.classList.add('hidden'); input.blur(); }
+    };
+    input.onfocus = () => { if (input.value.trim()) render(input.value); };
+    input.onblur = () => setTimeout(() => results.classList.add('hidden'), 150);
+
+    // / key focuses the bar (only when not in another input)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '/' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault(); input.focus(); input.select();
+      }
+    });
   },
 
   // ── Notifications navigateur ────────────────────────────────────────────

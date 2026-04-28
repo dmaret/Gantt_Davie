@@ -71,7 +71,7 @@ App.views.commandes = {
       </tr>`;
     }).join('');
     document.getElementById('c-table').innerHTML = `
-      <table class="data">
+      <div class="tbl-wrap"><table class="data col-freeze-1">
         <thead><tr>
           <th>Réf</th><th>Fournisseur</th><th>Projet</th>
           <th class="right">HT</th><th class="right">TVA</th><th class="right">TTC</th>
@@ -80,7 +80,7 @@ App.views.commandes = {
           <th>Progression</th><th>Statut</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
-      </table>
+      </table></div>
     `;
     document.querySelectorAll('.axe-tg').forEach(b => b.onclick = () => {
       const c = DB.state.commandes.find(x => x.id === b.dataset.cmd);
@@ -135,7 +135,7 @@ App.views.commandes = {
       </div>
       <div class="muted small" id="cf-ttc-line" style="margin:-6px 0 10px 0">TVA · TTC calculés automatiquement</div>
       <div class="field"><label>Projet</label>
-        <select id="cf-prj">${s.projets.map(p=>`<option value="${p.id}" ${p.id===c.projetId?'selected':''}>${p.code} — ${p.nom}</option>`).join('')}</select>
+        <select id="cf-prj">${App.projetsOptions(c.projetId, '— Aucun projet —')}</select>
       </div>
       <h3 style="margin-top:10px">Lignes</h3>
       <div id="cf-lignes">${(c.lignes||[]).map((l,i)=>this.ligneRow(l,i)).join('')}</div>

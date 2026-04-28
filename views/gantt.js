@@ -48,7 +48,7 @@ App.views.gantt = {
     const n = this.state.selectedIds.size;
     if (!n) { if (existing) existing.remove(); return; }
     const s = DB.state;
-    const projOpts = '<option value="">Projet…</option>' + s.projets.map(p => `<option value="${p.id}">${p.code} — ${p.nom}</option>`).join('');
+    const projOpts = App.projetsOptions('', 'Projet…');
     const html = `
       <strong>${n} tâche(s) sélectionnée(s)</strong>
       <span class="spacer"></span>
@@ -359,10 +359,71 @@ App.views.gantt = {
     return n;
   },
 
+  // Returns up to maxSlots available windows for machineId for a task of neededWD workdays,
+  // starting search from fromDate, excluding taskId itself. Each slot: { debut, fin, deltaWD }
+  _findMachineSlots(machineId, taskId, neededWD, fromDate, maxSlots = 3) {
+    const subWorkdays = (iso, n) => { let cur = iso, done = 0; while (done < n) { cur = D.addDays(cur, -1); if (!D.isWeekend(cur)) done++; } return cur; };
+    const occupied = DB.state.taches.filter(t => t.machineId === machineId && t.id !== taskId);
+    const slots = [];
+    let probe = fromDate;
+    const limit = D.addDays(fromDate, 180);
+    while (probe <= limit && slots.length < maxSlots) {
+      if (D.isWeekend(probe)) { probe = D.addDays(probe, 1); continue; }
+      const slotFin = D.addWorkdays(probe, neededWD - 1);
+      const clash = occupied.some(t => probe <= t.fin && slotFin >= t.debut);
+      if (!clash) {
+        const currentTask = DB.tache(taskId);
+        const deltaWD = currentTask ? D.workdaysBetween(currentTask.debut, probe) : 0;
+        slots.push({ debut: probe, fin: slotFin, deltaWD });
+        probe = D.addWorkdays(slotFin, 1);
+      } else {
+        const nextAfter = occupied.filter(t => t.fin >= probe).sort((a,b)=>a.fin.localeCompare(b.fin));
+        probe = nextAfter.length ? D.addWorkdays(nextAfter[0].fin, 1) : D.addDays(probe, 1);
+      }
+    }
+    return slots;
+  },
+
+  // Simulates cascade impact if task taskId is shifted by deltaWD workdays. Returns days added to latest project end.
+  _simulateCascadeImpact(taskId, deltaWD) {
+    const state = DB.state;
+    const subWorkdays = (iso, n) => { let cur = iso, done = 0; while (done < n) { cur = D.addDays(cur, -1); if (!D.isWeekend(cur)) done++; } return cur; };
+    const moveWD = (iso, n) => n >= 0 ? D.addWorkdays(iso, n) : subWorkdays(iso, -n);
+    const t = DB.tache(taskId);
+    if (!t) return { shifted: 0, projectDelay: 0 };
+    const origProjectEnd = state.taches.filter(x => x.projetId === t.projetId).reduce((m, x) => x.fin > m ? x.fin : m, '');
+    // Deep-copy only the affected task and its followers for simulation
+    const queue = [taskId];
+    const visited = new Set([taskId]);
+    const simEnds = {};
+    const newFin = moveWD(t.fin, deltaWD);
+    simEnds[taskId] = newFin;
+    let shifted = 0;
+    while (queue.length) {
+      const tid = queue.shift();
+      const followers = state.taches.filter(x => (x.dependances||[]).includes(tid));
+      for (const f of followers) {
+        if (visited.has(f.id)) continue;
+        visited.add(f.id);
+        simEnds[f.id] = moveWD(f.fin, deltaWD);
+        shifted++;
+        queue.push(f.id);
+      }
+    }
+    const simProjectEnd = state.taches.filter(x => x.projetId === t.projetId).reduce((m, x) => {
+      const fin = simEnds[x.id] || x.fin;
+      return fin > m ? fin : m;
+    }, '');
+    const projectDelay = origProjectEnd && simProjectEnd ? D.workdaysBetween(origProjectEnd, simProjectEnd) : 0;
+    return { shifted, projectDelay };
+  },
+
   render(root) {
     const st = this.state;
     if (!st.rangeStart) st.rangeStart = D.addDays(D.today(), -14);
     this._loadPersistedState();
+    const oldMm = document.getElementById('gantt-minimap');
+    if (oldMm) oldMm.remove();
 
     root.innerHTML = `
       <div class="gantt-wrap">
@@ -375,8 +436,7 @@ App.views.gantt = {
             <option value="lieu">Grouper par lieu</option>
           </select>
           <select id="g-proj">
-            <option value="">Tous les projets</option>
-            ${DB.state.projets.map(p => `<option value="${p.id}">${p.code} — ${p.nom}</option>`).join('')}
+            ${App.projetsOptions(st.projetFilter, 'Tous les projets')}
           </select>
           <input type="search" id="g-search" placeholder="Rechercher une tâche...">
           <button class="btn-ghost" id="g-prev">◀</button>
@@ -406,6 +466,7 @@ App.views.gantt = {
           <button class="btn-ghost" id="g-csv">⤓ Exporter CSV</button>
           <button class="btn-ghost" id="g-ics" title="Exporter vers Outlook / Google Agenda / Apple Calendar">📅 Export .ics</button>
           <button class="btn-ghost" id="g-rapport" title="Rapport hebdomadaire imprimable par lieu">📋 Rapport</button>
+          <button class="btn-ghost" id="g-flux" title="Vue flux atelier — schéma machines & dépendances">🔗 Flux</button>
           <button class="btn-ghost" id="g-level" data-perm="edit" title="Détecter les surcharges et proposer un rééquilibrage automatique des ressources">⚖ Équilibrer</button>
           <button class="btn-ghost" id="g-baseline" data-perm="edit" title="Sauvegarder l'état actuel du planning comme référence (baseline)">📸 Baseline</button>
           <select id="g-bl-sel" title="Comparer avec une baseline sauvegardée"><option value="">— Comparer —</option></select>
@@ -467,6 +528,10 @@ App.views.gantt = {
     };
     document.getElementById('g-ics').onclick = () => this.exportICS();
     document.getElementById('g-rapport').onclick = () => this.showRapportHebdo();
+    document.getElementById('g-flux').onclick = () => {
+      if (st.projetFilter) App.views.flux.state.projet = st.projetFilter;
+      App.navigate('flux');
+    };
     document.getElementById('g-level').onclick = () => this.resourceLeveling();
     document.getElementById('g-baseline').onclick = () => this.saveBaseline();
     const blSel = document.getElementById('g-bl-sel');
@@ -626,7 +691,11 @@ App.views.gantt = {
     const todayOffset = D.diffDays(start, D.today());
     if (todayOffset >= 0 && todayOffset < days) {
       const todayX = LABEL_W + todayOffset * CELL_W + Math.floor(CELL_W / 2);
-      paths.push(`<line x1="${todayX}" y1="30" x2="${todayX}" y2="${totalH}" class="today-line"/>`);
+      paths.push(`<line x1="${todayX}" y1="0" x2="${todayX}" y2="${totalH}" class="today-line"/>`);
+      const lblW = 64, lblH = 17;
+      const lblX = todayX + lblW + 4 < totalW ? todayX + 2 : todayX - lblW - 2;
+      paths.push(`<rect x="${lblX}" y="4" width="${lblW}" height="${lblH}" rx="4" fill="#ef4444" opacity=".92"/>`);
+      paths.push(`<text x="${lblX + lblW / 2}" y="16" text-anchor="middle" class="today-label">Aujourd'hui</text>`);
     }
     if (st.showDeps) {
       DB.state.taches.forEach(t => {
@@ -723,6 +792,7 @@ App.views.gantt = {
       this.makeDraggable(el, CELL_W);
     });
     this.renderSelectionBar();
+    this._drawMinimap();
     overlay.querySelectorAll('.gantt-resize-handle').forEach(el => {
       el.style.pointerEvents = 'auto';
       this.makeResizable(el, CELL_W);
@@ -772,6 +842,71 @@ App.views.gantt = {
         this.openTacheForm(null, { debut, fin });
       });
     }
+  },
+
+  _drawMinimap() {
+    const st = this.state;
+    let mm = document.getElementById('gantt-minimap');
+    if (!mm) {
+      mm = document.createElement('div');
+      mm.id = 'gantt-minimap';
+      mm.className = 'gantt-minimap';
+      document.body.appendChild(mm);
+    }
+
+    const tasks = DB.state.taches.filter(t => {
+      if (st.projetFilter && t.projetId !== st.projetFilter) return false;
+      if (st.search && !t.nom.toLowerCase().includes(st.search)) return false;
+      return !t.jalon;
+    });
+
+    if (!tasks.length) { mm.style.display = 'none'; return; }
+    mm.style.display = '';
+
+    const MM_W = 200, MM_H = 64;
+    const minDate = tasks.reduce((m, t) => t.debut < m ? t.debut : m, tasks[0].debut);
+    const maxDate = tasks.reduce((m, t) => t.fin > m ? t.fin : m, tasks[0].fin);
+    const totalDays = Math.max(1, D.diffDays(minDate, maxDate));
+    const scaleX = MM_W / totalDays;
+
+    const projetIds = [...new Set(tasks.map(t => t.projetId))];
+    const rowH = Math.max(2, Math.min(10, Math.floor(MM_H / projetIds.length)));
+
+    const bars = projetIds.map((pid, i) => {
+      const prj = DB.projet(pid);
+      const color = prj ? prj.couleur : '#6b7280';
+      const y = i * rowH;
+      return tasks.filter(t => t.projetId === pid).map(t => {
+        const x = Math.max(0, Math.round(D.diffDays(minDate, t.debut) * scaleX));
+        const w = Math.max(1, Math.round(D.diffDays(minDate, t.fin) * scaleX));
+        return `<rect x="${x}" y="${y}" width="${w}" height="${rowH - 1}" fill="${color}" opacity=".75" rx="1"/>`;
+      }).join('');
+    }).join('');
+
+    const todayOff = D.diffDays(minDate, D.today());
+    const todayLine = todayOff >= 0 && todayOff <= totalDays
+      ? `<line x1="${Math.round(todayOff * scaleX)}" y1="0" x2="${Math.round(todayOff * scaleX)}" y2="${MM_H}" stroke="#ef4444" stroke-width="1.5" opacity=".9"/>`
+      : '';
+
+    const vpStart = Math.round(D.diffDays(minDate, st.rangeStart) * scaleX);
+    const vpW = Math.max(4, Math.round(st.rangeDays * scaleX));
+    const vpX = Math.max(0, Math.min(MM_W - vpW, vpStart));
+    const viewport = `
+      <rect x="${vpX}" y="0" width="${vpW}" height="${MM_H}" fill="var(--primary)" opacity=".12" rx="2"/>
+      <rect x="${vpX}" y="0" width="${vpW}" height="${MM_H}" fill="none" stroke="var(--primary)" stroke-width="1.5" rx="2" opacity=".7"/>`;
+
+    mm.innerHTML = `
+      <svg width="${MM_W}" height="${MM_H}" viewBox="0 0 ${MM_W} ${MM_H}" style="display:block">${bars}${todayLine}${viewport}</svg>
+      <div class="gantt-minimap-hint">Planning — clic pour naviguer</div>`;
+
+    mm.onclick = e => {
+      const rect = mm.querySelector('svg').getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      st.rangeStart = D.addDays(minDate, Math.round(ratio * totalDays - st.rangeDays / 2));
+      const startEl = document.getElementById('g-start');
+      if (startEl) startEl.value = st.rangeStart;
+      if (document.getElementById('g-table')) this.draw();
+    };
   },
 
   downloadTemplate() {
@@ -972,6 +1107,8 @@ App.views.gantt = {
         const ts = taches.filter(t => t.projetId === p.id).sort((a,b) => a.debut.localeCompare(b.debut));
         if (ts.length) pushGroup(p.id, p.code + ' — ' + p.nom, ts);
       });
+      const libres = taches.filter(t => !t.projetId).sort((a,b) => a.debut.localeCompare(b.debut));
+      if (libres.length) pushGroup('__libre__', '— Tâches libres (sans projet)', libres);
     } else if (st.mode === 'personne') {
       const perTs = {};
       taches.forEach(t => (t.assignes||[]).forEach(pid => (perTs[pid] = perTs[pid] || []).push(t)));
@@ -1080,17 +1217,73 @@ App.views.gantt = {
   openTacheForm(tid, prefill = {}) {
     const isNew = !tid;
     const s = DB.state;
-    if (isNew && !s.projets.length) { App.toast("Créer d'abord un projet",'error'); App.navigate('projets'); return; }
     const t = tid ? DB.tache(tid) : {
-      id: DB.uid('T'), projetId: s.projets[0].id, nom:'',
+      id: DB.uid('T'), projetId: prefill.projetId || (s.projets[0]?.id || ''), nom:'',
       debut: prefill.debut || D.today(), fin: prefill.fin || D.addDays(D.today(), 4),
-      assignes:[], machineId:null, lieuId:null, type:'prod', avancement:0, jalon:false, dependances:[],
+      assignes:[], machineId:null, lieuId:null, type:'prod', avancement:0, jalon:false, dependances:[], gestes:[],
+    };
+    if (!t.gestes) t.gestes = [];
+    const machConflict = prefill.machineConflict || null;
+    let machConflictHtml = '';
+    if (machConflict) {
+      const cm  = DB.machine(machConflict.machineId);
+      const ct2 = DB.tache(machConflict.conflictTacheId);
+      const cp2 = ct2 ? DB.projet(ct2.projetId) : null;
+      const neededWD = Math.max(1, D.workdaysBetween(t.debut, t.fin));
+      const slots = this._findMachineSlots(machConflict.machineId, t.id, neededWD, t.debut);
+      const slotsHtml = slots.length ? slots.map((sl, i) => {
+        const impact = this._simulateCascadeImpact(t.id, sl.deltaWD);
+        const impactTxt = impact.projectDelay > 0 ? `+${impact.projectDelay} j.o. sur le projet` : impact.projectDelay < 0 ? `${impact.projectDelay} j.o.` : 'sans impact projet';
+        const cascadeTxt = impact.shifted > 0 ? ` · ${impact.shifted} tâche(s) décalée(s)` : '';
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-radius:4px;background:var(--surface-2);margin-top:3px;font-size:11px;">
+          <span>📅 <strong>${D.fmt(sl.debut)}</strong> → <strong>${D.fmt(sl.fin)}</strong> <span class="muted">(${sl.deltaWD > 0 ? '+' : ''}${sl.deltaWD} j.o.) — ${impactTxt}${cascadeTxt}</span></span>
+          <button type="button" class="btn btn-secondary slot-apply" data-slot-idx="${i}" style="padding:2px 8px;font-size:11px;margin-left:8px">Appliquer</button>
+        </div>`;
+      }).join('') : `<div class="muted small" style="margin-top:4px">Aucun créneau libre trouvé dans les 6 prochains mois.</div>`;
+      machConflictHtml = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:7px 9px;font-size:11px;color:#dc2626;margin-bottom:5px;">
+        <div>⚠ <strong>${cm?.nom||'—'}</strong> aussi utilisée par ${cp2?`<strong>${cp2.code}</strong> · `:''}${ct2?.nom||'—'} (${D.fmt(ct2?.debut)}→${D.fmt(ct2?.fin)})</div>
+        <div style="margin-top:5px;color:var(--text)"><strong style="font-size:11px;color:#dc2626">Créneaux disponibles :</strong>${slotsHtml}</div>
+      </div>`;
+      // Store slots for use in onclick handlers
+      machConflict._slots = slots;
+    }
+    const gestesParCat = (DB.CATALOGUE_GESTES || []).reduce((acc, g) => {
+      if (!acc[g.categorie]) acc[g.categorie] = [];
+      acc[g.categorie].push(g);
+      return acc;
+    }, {});
+    const renderGestesSection = () => {
+      const sel = t.gestes || [];
+      const totalSec = sel.reduce((n, code) => n + DB.tempsGeste(code), 0);
+      const fmtT = s => s < 60 ? s+'s' : Math.round(s/60) < 60 ? Math.round(s/60)+'min' : Math.floor(s/3600)+'h'+Math.round((s%3600)/60)+'min';
+      return `<div style="display:flex;align-items:center;gap:4px">
+        <button type="button" class="btn-ghost f-geste-prev" title="Catégorie précédente" style="flex-shrink:0;padding:2px 8px;font-size:18px;line-height:1;align-self:center">‹</button>
+        <div class="ep-geste-scroll f-geste-scroll" style="max-height:120px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px;background:var(--surface-2);flex:1">
+          ${Object.entries(gestesParCat).map(([cat, gestes], catIdx) => `
+            <div class="ep-cat-section" data-cat-idx="${catIdx}" style="margin-bottom:6px">
+              <div class="muted small" style="font-weight:600;margin-bottom:3px">${cat}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px">
+                ${gestes.map(g => {
+                  const checked = sel.includes(g.code);
+                  return `<label title="${g.notes||''}" style="display:flex;align-items:flex-start;gap:3px;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:10px;border:1px solid ${checked?'var(--primary)':'var(--border)'};background:${checked?'var(--primary-weak)':'transparent'}">
+                    <input type="checkbox" class="f-geste-cb" data-code="${g.code}" ${checked?'checked':''} style="margin:2px 0 0">
+                    <span><span style="font-weight:600">${g.code}</span><br><span class="muted" style="font-size:9px">${g.description}</span></span>
+                  </label>`;
+                }).join('')}
+              </div>
+            </div>`).join('')}
+        </div>
+        <button type="button" class="btn-ghost f-geste-next" title="Catégorie suivante" style="flex-shrink:0;padding:2px 8px;font-size:18px;line-height:1;align-self:center">›</button>
+      </div>
+      ${sel.length ? `<div class="muted small f-geste-est" style="margin-top:4px">⏱ Estimation : ${fmtT(totalSec)} / pièce · ${sel.length} geste(s) sélectionné(s)</div>` : ''}`;
     };
     const body = `
       <div class="field"><label>Nom</label><input id="f-nom" value="${t.nom||''}"></div>
       <div class="row">
         <div class="field"><label>Projet</label>
-          <select id="f-projet">${s.projets.map(p => `<option value="${p.id}" ${p.id===t.projetId?'selected':''}>${p.code} — ${p.nom}</option>`).join('')}</select>
+          <select id="f-projet">
+            ${App.projetsOptions(t.projetId)}
+          </select>
         </div>
         <div class="field"><label>Type</label>
           <select id="f-type">
@@ -1108,14 +1301,25 @@ App.views.gantt = {
       </div>
       <div class="row">
         <div class="field"><label>Machine</label>
-          <select id="f-machine"><option value="">—</option>${s.machines.map(m => `<option value="${m.id}" ${m.id===t.machineId?'selected':''}>${m.nom}</option>`).join('')}</select>
+          ${machConflictHtml}
+          <select id="f-machine" style="${machConflict?'border:2px solid #dc2626;':''}" ><option value="">—</option>${s.machines.map(m => `<option value="${m.id}" ${m.id===t.machineId?'selected':''}>${m.nom}</option>`).join('')}</select>
         </div>
         <div class="field"><label>Lieu</label>
           <select id="f-lieu"><option value="">—</option>${s.lieux.map(l => `<option value="${l.id}" ${l.id===t.lieuId?'selected':''}>${l.nom}</option>`).join('')}</select>
         </div>
       </div>
       <div class="field"><label>Assignés</label>
-        <div class="assignes-list" id="f-assignes-wrap">
+        <div id="f-assignes-chips" style="display:flex;flex-wrap:wrap;gap:5px;min-height:24px;align-items:center">
+          ${(t.assignes||[]).length
+            ? (t.assignes||[]).map(aid => {
+                const p = s.personnes.find(x => x.id === aid);
+                return p ? `<span class="badge good" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;cursor:default">${App.personneLabel(p)}<button type="button" class="chip-remove" data-pid="${p.id}" title="Retirer" style="background:none;border:none;cursor:pointer;font-size:14px;line-height:1;padding:0;color:inherit;opacity:.7;margin-left:2px">×</button></span>`
+                : '';
+              }).join('')
+            : '<span class="muted small">Aucun assigné</span>'}
+        </div>
+        <button type="button" id="f-assignes-toggle" class="btn btn-secondary" style="margin-top:6px;font-size:11px;padding:3px 10px">⚙ Modifier / + Assigner</button>
+        <div class="assignes-list" id="f-assignes-wrap" style="display:none;margin-top:6px">
           ${s.personnes.map(p => {
             const chk = (t.assignes||[]).includes(p.id);
             return `<label class="assignes-row${chk?' is-checked':''}"><input type="checkbox" class="assignes-cb" value="${p.id}"${chk?' checked':''}> <span>${App.personneLabel(p)}</span> <span class="muted small"> · ${p.role}</span></label>`;
@@ -1138,13 +1342,17 @@ App.views.gantt = {
       <div class="field"><label>📝 Notes / consignes</label>
         <textarea id="f-notes" rows="3" placeholder="Instructions d'exécution, références, points d'attention…">${t.notes||''}</textarea>
       </div>
+      <div class="field">
+        <label>🏷 Gestes associés <span class="muted small">(catalogue atelier — optionnel)</span></label>
+        <div id="f-gestes-wrap">${renderGestesSection()}</div>
+      </div>
       <div class="field"><label>✅ Sous-tâches <span class="muted small" id="f-cl-count">${(t.checklist||[]).length ? (t.checklist||[]).filter(i=>i.done).length+'/'+(t.checklist||[]).length : ''}</span></label>
         <div id="f-cl-list" class="cl-list">
           ${(t.checklist||[]).length ? (t.checklist||[]).map(item => `<div class="cl-item"><label class="cl-row${item.done?' cl-done':''}"><input type="checkbox" class="cl-cb" data-id="${item.id}" ${item.done?'checked':''}><span class="cl-text">${item.texte.replace(/</g,'&lt;')}</span></label><button class="btn-ghost cl-del" data-id="${item.id}" style="padding:0 6px;flex-shrink:0">×</button></div>`).join('') : '<p class="muted small" style="margin:4px 0">Aucune sous-tâche. Ajoute des étapes à cocher ci-dessous.</p>'}
         </div>
         <div style="display:flex;gap:6px;margin-top:4px">
           <input id="f-cl-new" type="text" placeholder="Nouvelle sous-tâche (Entrée pour ajouter)…" style="flex:1">
-          <button class="btn btn-secondary" id="f-cl-add" style="padding:4px 10px;flex-shrink:0">+</button>
+          <button type="button" class="btn btn-secondary" id="f-cl-add" style="padding:4px 10px;flex-shrink:0">+</button>
         </div>
       </div>
       <div class="field"><label>💬 Commentaires (${(t.commentaires||[]).length})</label>
@@ -1189,6 +1397,65 @@ App.views.gantt = {
     `;
     App.openModal(isNew ? 'Nouvelle tâche' : 'Tâche — ' + t.nom, body, foot);
 
+    // Assignés — toggle chips/checkbox list + chip remove
+    const refreshChips = () => {
+      const checked = Array.from(document.querySelectorAll('#f-assignes-wrap .assignes-cb:checked'));
+      const chipsEl = document.getElementById('f-assignes-chips');
+      if (!chipsEl) return;
+      if (checked.length === 0) {
+        chipsEl.innerHTML = '<span class="muted small">Aucun assigné</span>';
+      } else {
+        chipsEl.innerHTML = checked.map(cb => {
+          const p = s.personnes.find(x => x.id === cb.value);
+          return p ? `<span class="badge good" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;cursor:default">${App.personneLabel(p)}<button type="button" class="chip-remove" data-pid="${p.id}" title="Retirer" style="background:none;border:none;cursor:pointer;font-size:14px;line-height:1;padding:0;color:inherit;opacity:.7;margin-left:2px">×</button></span>` : '';
+        }).join('');
+        chipsEl.querySelectorAll('.chip-remove').forEach(btn => {
+          btn.onclick = () => {
+            const cb = document.querySelector(`#f-assignes-wrap .assignes-cb[value="${btn.dataset.pid}"]`);
+            if (cb) { cb.checked = false; cb.closest('.assignes-row')?.classList.remove('is-checked'); }
+            refreshChips();
+          };
+        });
+      }
+    };
+    // Bind chip-remove on initial chips
+    document.querySelectorAll('#f-assignes-chips .chip-remove').forEach(btn => {
+      btn.onclick = () => {
+        const cb = document.querySelector(`#f-assignes-wrap .assignes-cb[value="${btn.dataset.pid}"]`);
+        if (cb) { cb.checked = false; cb.closest('.assignes-row')?.classList.remove('is-checked'); }
+        refreshChips();
+      };
+    });
+    // Toggle button
+    const toggleBtn = document.getElementById('f-assignes-toggle');
+    if (toggleBtn) toggleBtn.onclick = () => {
+      const wrap = document.getElementById('f-assignes-wrap');
+      const hidden = wrap.style.display === 'none';
+      wrap.style.display = hidden ? '' : 'none';
+      toggleBtn.textContent = hidden ? '▲ Masquer la liste' : '⚙ Modifier / + Assigner';
+    };
+    // When a checkbox changes, refresh chips
+    document.querySelectorAll('#f-assignes-wrap .assignes-cb').forEach(cb => {
+      cb.addEventListener('change', refreshChips);
+    });
+
+    // Machine conflict — slot apply buttons
+    if (machConflict && machConflict._slots) {
+      const subWorkdays = (iso, n) => { let cur = iso, done = 0; while (done < n) { cur = D.addDays(cur, -1); if (!D.isWeekend(cur)) done++; } return cur; };
+      document.querySelectorAll('.slot-apply').forEach(btn => {
+        btn.onclick = () => {
+          const idx = +btn.dataset.slotIdx;
+          const sl = machConflict._slots[idx];
+          if (!sl) return;
+          document.getElementById('f-debut').value = sl.debut;
+          document.getElementById('f-fin').value = sl.fin;
+          const durEl = document.getElementById('f-dur');
+          if (durEl) durEl.textContent = Math.max(0, D.workdaysBetween(sl.debut, sl.fin)) + ' j.o.';
+          App.toast(`Dates mises à jour : ${D.fmt(sl.debut)} → ${D.fmt(sl.fin)}`, 'success');
+        };
+      });
+    }
+
     // Suggestions d'affectation
     const renderSugg = () => {
       const pseudo = { debut: document.getElementById('f-debut').value, fin: document.getElementById('f-fin').value, machineId: document.getElementById('f-machine').value || null, lieuId: document.getElementById('f-lieu').value || null, type: document.getElementById('f-type').value };
@@ -1196,7 +1463,7 @@ App.views.gantt = {
       document.getElementById('f-sugg').innerHTML = '💡 Suggestions : ' + sugg.map(x => `<button type="button" class="chip" data-sugg="${x.p.id}" style="cursor:pointer">${App.personneLabel(x.p)}${x.compMatch?' ✓':''} · charge ${x.charge}j</button>`).join(' ');
       document.querySelectorAll('[data-sugg]').forEach(b => b.onclick = () => {
         const cb = document.querySelector(`#f-assignes-wrap .assignes-cb[value="${b.dataset.sugg}"]`);
-        if (cb && !cb.checked) { cb.checked = true; cb.closest('.assignes-row').classList.add('is-checked'); }
+        if (cb && !cb.checked) { cb.checked = true; cb.closest('.assignes-row').classList.add('is-checked'); refreshChips(); }
       });
     };
     renderSugg();
@@ -1204,6 +1471,47 @@ App.views.gantt = {
     const updateDur = () => { const el = document.getElementById('f-dur'); if (el) el.textContent = Math.max(0, D.workdaysBetween(document.getElementById('f-debut').value, document.getElementById('f-fin').value)) + ' j.o.'; };
     ['f-debut','f-fin'].forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('change', updateDur); });
     const avEl = document.getElementById('f-avancement'); if (avEl) avEl.oninput = e => { const d = document.getElementById('f-av-val'); if (d) d.textContent = e.target.value + '%'; };
+    // Gestes — checkboxes + navigation catégorie
+    const refreshGestes = () => {
+      t.gestes = Array.from(document.querySelectorAll('#f-gestes-wrap .f-geste-cb:checked')).map(cb => cb.dataset.code);
+      // Update label styles without re-rendering (preserves scroll position)
+      document.querySelectorAll('#f-gestes-wrap .f-geste-cb').forEach(cb => {
+        const label = cb.closest('label');
+        if (!label) return;
+        const checked = cb.checked;
+        label.style.borderColor = checked ? 'var(--primary)' : 'var(--border)';
+        label.style.background = checked ? 'var(--primary-weak)' : 'transparent';
+      });
+      // Update estimation text
+      const totalSec = t.gestes.reduce((n, code) => n + DB.tempsGeste(code), 0);
+      const fmtT = s => s < 60 ? s+'s' : Math.round(s/60) < 60 ? Math.round(s/60)+'min' : Math.floor(s/3600)+'h'+Math.round((s%3600)/60)+'min';
+      const wrap = document.getElementById('f-gestes-wrap');
+      let est = wrap ? wrap.querySelector('.f-geste-est') : null;
+      if (t.gestes.length) {
+        if (!est) { est = document.createElement('div'); est.className = 'muted small f-geste-est'; est.style.marginTop = '4px'; if (wrap) wrap.appendChild(est); }
+        est.textContent = `⏱ Estimation : ${fmtT(totalSec)} / pièce · ${t.gestes.length} geste(s) sélectionné(s)`;
+      } else if (est) {
+        est.remove();
+      }
+    };
+    const bindGestes = () => {
+      document.querySelectorAll('#f-gestes-wrap .f-geste-cb').forEach(cb => cb.onchange = refreshGestes);
+      const prevBtn = document.querySelector('#f-gestes-wrap .f-geste-prev');
+      const nextBtn = document.querySelector('#f-gestes-wrap .f-geste-next');
+      if (prevBtn) prevBtn.onclick = () => {
+        const c = document.querySelector('#f-gestes-wrap .f-geste-scroll');
+        const secs = c.querySelectorAll('.ep-cat-section');
+        let cur = 0; secs.forEach((s,i) => { if (s.offsetTop <= c.scrollTop + 8) cur = i; });
+        if (cur > 0) c.scrollTop = secs[cur - 1].offsetTop;
+      };
+      if (nextBtn) nextBtn.onclick = () => {
+        const c = document.querySelector('#f-gestes-wrap .f-geste-scroll');
+        const secs = c.querySelectorAll('.ep-cat-section');
+        let cur = 0; secs.forEach((s,i) => { if (s.offsetTop <= c.scrollTop + 8) cur = i; });
+        if (cur < secs.length - 1) c.scrollTop = secs[cur + 1].offsetTop;
+      };
+    };
+    bindGestes();
     // Checklist sous-tâches
     const localCL = JSON.parse(JSON.stringify(t.checklist || []));
     const refreshCL = () => {
@@ -1217,8 +1525,23 @@ App.views.gantt = {
       listEl.querySelectorAll('.cl-cb').forEach(cb => cb.onchange = () => { const i = localCL.find(x=>x.id===cb.dataset.id); if (i) i.done = cb.checked; refreshCL(); });
       listEl.querySelectorAll('.cl-del').forEach(btn => btn.onclick = () => { const idx = localCL.findIndex(x=>x.id===btn.dataset.id); if (idx>=0) localCL.splice(idx,1); refreshCL(); });
     };
-    const addCLItem = () => { const inp = document.getElementById('f-cl-new'); if (!inp) return; const txt = inp.value.trim(); if (!txt) return; localCL.push({id:DB.uid('CL'),texte:txt,done:false}); inp.value=''; refreshCL(); };
-    const clAddBtn = document.getElementById('f-cl-add'); if (clAddBtn) clAddBtn.onclick = addCLItem;
+    const addCLItem = () => {
+      const inp = document.getElementById('f-cl-new');
+      if (!inp) return;
+      const txt = inp.value.trim();
+      if (!txt) { inp.focus(); inp.style.outline = '2px solid var(--danger)'; setTimeout(() => inp.style.outline = '', 1000); return; }
+      localCL.push({id:DB.uid('CL'),texte:txt,done:false});
+      inp.value = '';
+      inp.focus();
+      refreshCL();
+      // Scroll la liste pour voir le nouvel item
+      const listEl = document.getElementById('f-cl-list');
+      if (listEl) listEl.scrollTop = listEl.scrollHeight;
+    };
+    // Délégation sur modal-body pour être robuste aux re-renders
+    document.getElementById('modal-body').addEventListener('click', e => {
+      if (e.target.closest('#f-cl-add')) addCLItem();
+    });
     const clNewInp = document.getElementById('f-cl-new'); if (clNewInp) clNewInp.onkeydown = e => { if (e.key==='Enter') { e.preventDefault(); addCLItem(); } };
     refreshCL();
     const assignesWrap = document.getElementById('f-assignes-wrap');
@@ -1272,6 +1595,7 @@ App.views.gantt = {
           cb.checked = selectedIds.has(cb.value);
           cb.closest('.assignes-row').classList.toggle('is-checked', selectedIds.has(cb.value));
         });
+        refreshChips();
         const missing = [];
         prop.slots.forEach(sl => {
           const got = sl.selected.filter(c => selectedIds.has(c.p.id)).length;
@@ -1406,6 +1730,7 @@ App.views.gantt = {
       t.jalon = document.getElementById('f-jalon').checked;
       t.dependances = Array.from(document.getElementById('f-deps').selectedOptions).map(o => o.value);
       t.notes = document.getElementById('f-notes').value;
+      t.gestes = Array.from(document.querySelectorAll('#f-gestes-wrap .f-geste-cb:checked')).map(cb => cb.dataset.code);
       t.checklist = localCL;
       if (!t.nom) { App.toast('Nom requis','error'); return; }
 

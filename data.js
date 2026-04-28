@@ -45,6 +45,15 @@ const DB = {
     if (!this.state.modelesProjets) {
       this.state.modelesProjets = defaultModelesProjets();
     }
+    // v3.7 : positions des blocs dans la vue Flux atelier
+    if (!this.state.fluxLayout) this.state.fluxLayout = {};
+    // v3.8 : groupe sur les projets + groupe sur les modèles de projet
+    this.state.projets.forEach(p => { if (p.groupe === undefined) p.groupe = ''; });
+    (this.state.modelesProjets || []).forEach(mp => { if (mp.groupe === undefined) mp.groupe = ''; });
+    // v3.9 : accès aux modules par groupe
+    Object.keys(this.state.groupes || {}).forEach(k => {
+      if (!this.state.groupes[k].moduleAccess) this.state.groupes[k].moduleAccess = defaultModuleAccess(k);
+    });
   },
 
   checkIntegrity() {
@@ -173,7 +182,7 @@ const DB = {
     localStorage.setItem(STORAGE_KEY, snap);
     return true;
   },
-  reset() { this.state = seed(); this.save(); },
+  reset() { this.state = seed(); this.migrate(); this.save(); },
   importJSON(obj) { this.state = obj; this.save(); },
   exportJSON() { return JSON.stringify(this.state, null, 2); },
 
@@ -311,11 +320,49 @@ function defaultUsers() {
 }
 
 // Permissions par groupe (paramétrables via la vue Admin)
+const MODULES_ACCESS = [
+  { id:'dashboard',      label:'Tableau de bord', cat:'Navigation' },
+  { id:'gantt',          label:'Gantt',            cat:'Navigation' },
+  { id:'kanban',         label:'Kanban',           cat:'Navigation' },
+  { id:'calendrier',     label:'Calendrier',       cat:'Navigation' },
+  { id:'timeline',       label:'Timeline',         cat:'Navigation' },
+  { id:'majourney',      label:'Ma journée',       cat:'Navigation' },
+  { id:'personnes',      label:'Personnes',        cat:'Organisation' },
+  { id:'lieux',          label:'Lieux',            cat:'Organisation' },
+  { id:'machines',       label:'Machines',         cat:'Organisation' },
+  { id:'flux',           label:'Flux atelier',     cat:'Organisation' },
+  { id:'projets',        label:'Projets',          cat:'Organisation' },
+  { id:'equipes',        label:'Équipes',          cat:'Organisation' },
+  { id:'stock',          label:'Stock',            cat:'Production' },
+  { id:'bom',            label:'BOM',              cat:'Production' },
+  { id:'commandes',      label:'Commandes',        cat:'Production' },
+  { id:'capacite',       label:'Capacité',         cat:'Production' },
+  { id:'ressources',     label:'Ressources',       cat:'Production' },
+  { id:'plan',           label:'Plan atelier',     cat:'Production' },
+  { id:'deplacements',   label:'Déplacements',     cat:'Suivi' },
+  { id:'absences',       label:'Absences',         cat:'Suivi' },
+  { id:'audit',          label:'Historique',       cat:'Suivi' },
+  { id:'whatif',         label:'What-if',          cat:'Suivi' },
+  { id:'modeles',        label:'Modèles',          cat:'Suivi' },
+  { id:'modelesprojets', label:'Modèles projet',   cat:'Suivi' },
+  { id:'aide',           label:'Guide',            cat:'Suivi' },
+];
+
+function defaultModuleAccess(groupe) {
+  const all = Object.fromEntries(MODULES_ACCESS.map(m => [m.id, true]));
+  if (groupe === 'utilisateur') {
+    return { ...all, lieux:false, machines:false, flux:false, stock:false, bom:false,
+      commandes:false, capacite:false, ressources:false, plan:false,
+      audit:false, whatif:false, modeles:false, modelesprojets:false };
+  }
+  return all;
+}
+
 function defaultGroupes() {
   return {
-    utilisateur: { libelle:'Utilisateur', description:'Consultation seule', perms:{ read:true, edit:false, sign:false, engage:false, admin:false, whatif:false, reset:false } },
-    MSP:         { libelle:'MSP',         description:'Édition + signature des axes autorisés', perms:{ read:true, edit:true,  sign:true,  engage:true,  admin:false, whatif:true,  reset:false } },
-    admin:       { libelle:'Admin',       description:'Tous droits + gestion utilisateurs',     perms:{ read:true, edit:true,  sign:true,  engage:true,  admin:true,  whatif:true,  reset:true  } },
+    utilisateur: { libelle:'Utilisateur', description:'Consultation seule',                    perms:{ read:true, edit:false, sign:false, engage:false, admin:false, whatif:false, reset:false }, moduleAccess: defaultModuleAccess('utilisateur') },
+    MSP:         { libelle:'MSP',         description:'Édition + signature des axes autorisés', perms:{ read:true, edit:true,  sign:true,  engage:true,  admin:false, whatif:true,  reset:false }, moduleAccess: defaultModuleAccess('MSP') },
+    admin:       { libelle:'Admin',       description:'Tous droits + gestion utilisateurs',     perms:{ read:true, edit:true,  sign:true,  engage:true,  admin:true,  whatif:true,  reset:true  }, moduleAccess: defaultModuleAccess('admin') },
   };
 }
 

@@ -1,8 +1,7 @@
-// Vue "Ma journée" — planning personnel filtré sur l'utilisateur connecté
+// Vue "Ma journée" — planning personnel + planning équipe
 App.views.majourney = {
-  state: { selectedPersonneId: null },
+  state: { selectedPersonneId: null, weekOffset: 0, mode: 'personal', nbJours: 20 },
 
-  // Résout la personne courante depuis currentUser().nom (format "Prénom Nom")
   _resolvePersonne() {
     const s = DB.state;
     const u = App.currentUser();
@@ -18,12 +17,28 @@ App.views.majourney = {
     ) || null;
   },
 
+  _weekBounds(offset) {
+    const today = D.today();
+    const base = offset === 0 ? today : D.addWorkdays(today, offset * 5);
+    return { start: base, end: D.addWorkdays(base, 4) };
+  },
+
+  // Génère la liste des N prochains jours ouvrés à partir de today
+  _workingDays(n, fromDate) {
+    const days = [];
+    let cur = fromDate || D.today();
+    while (days.length < n) {
+      if (!D.isWeekend(cur)) days.push(cur);
+      cur = D.addDays(cur, 1);
+    }
+    return days;
+  },
+
   render(root) {
     const s = DB.state;
     const today = D.today();
     const st = this.state;
 
-    // Résolution de la personne
     const autoPersonne = this._resolvePersonne();
     if (!autoPersonne && !st.selectedPersonneId && s.personnes.length) {
       st.selectedPersonneId = s.personnes[0].id;
@@ -31,73 +46,84 @@ App.views.majourney = {
     const personne = autoPersonne || s.personnes.find(p => p.id === st.selectedPersonneId) || null;
     const showSelector = !autoPersonne;
 
-    // Libellé de l'utilisateur
     const userLabel = personne ? App.personneLabel(personne) : 'Inconnu';
 
-    // Limites de la semaine courante (L→V) et de la semaine prochaine
-    const weekStart = today;
-    const weekEnd   = D.addWorkdays(today, 4);
-    const nextWeekStart = D.addWorkdays(today, 5);
-    const nextWeekEnd   = D.addWorkdays(today, 9);
+    root.innerHTML = `
+      <div class="toolbar">
+        <strong>🗓 Ma journée</strong>
+        <span class="spacer"></span>
+        <div class="btn-group" style="display:flex;gap:2px">
+          <button class="btn-ghost${st.mode==='personal'?' active':''}" id="mj-mode-personal">👤 Ma journée</button>
+          <button class="btn-ghost${st.mode==='equipe'?' active':''}" id="mj-mode-equipe">👥 Planning équipe</button>
+        </div>
+      </div>
+      <div id="mj-content"></div>
+    `;
 
-    // Tâches de la personne
+    document.getElementById('mj-mode-personal').onclick = () => { st.mode = 'personal'; App.refresh(); };
+    document.getElementById('mj-mode-equipe').onclick  = () => { st.mode = 'equipe';   App.refresh(); };
+
+    if (st.mode === 'equipe') {
+      this._renderEquipeMode(document.getElementById('mj-content'));
+    } else {
+      this._renderPersonalMode(document.getElementById('mj-content'), personne, userLabel, showSelector, today);
+    }
+  },
+
+  // ─── MODE PERSONNEL ───────────────────────────────────────────────────────
+
+  _renderPersonalMode(root, personne, userLabel, showSelector, today) {
+    const s = DB.state;
+    const st = this.state;
+
+    const { start: weekStart, end: weekEnd } = this._weekBounds(st.weekOffset);
+    const isCurrentWeek = st.weekOffset === 0;
+    const weekLabel = isCurrentWeek ? 'Cette semaine' : st.weekOffset === 1 ? 'Semaine prochaine' : st.weekOffset < 0 ? `Semaine ${st.weekOffset}` : `Semaine +${st.weekOffset}`;
+
     const mesTaches = personne
       ? s.taches.filter(t => !t.jalon && (t.assignes || []).includes(personne.id))
       : [];
 
-    // ---- Statistiques rapides ----
-    const tachesActives = mesTaches.filter(t => t.debut <= today && t.fin >= today);
-    const tachesSemaine = mesTaches.filter(t => t.fin >= weekStart && t.debut <= weekEnd);
-    const heuresSemaine = tachesSemaine.reduce((n, t) => {
+    const tachesActives  = mesTaches.filter(t => t.debut <= today && t.fin >= today);
+    const tachesSemaine  = mesTaches.filter(t => t.fin >= weekStart && t.debut <= weekEnd);
+    const heuresSemaine  = tachesSemaine.reduce((n, t) => {
       const a = t.debut < weekStart ? weekStart : t.debut;
       const b = t.fin   > weekEnd   ? weekEnd   : t.fin;
       return n + D.workdaysBetween(a, b) * 7;
     }, 0);
     const avancementMoyen = tachesActives.length
-      ? Math.round(tachesActives.reduce((n, t) => n + (t.avancement || 0), 0) / tachesActives.length)
-      : 0;
+      ? Math.round(tachesActives.reduce((n, t) => n + (t.avancement || 0), 0) / tachesActives.length) : 0;
 
-    // ---- Absences à venir (30 j) ----
     const horizon30 = D.addDays(today, 30);
     const mesAbsences = personne
       ? (personne.absences || []).filter(a => a.fin >= today && a.debut <= horizon30)
-          .slice().sort((a, b) => a.debut.localeCompare(b.debut))
-      : [];
-
-    // ---- Déplacements à venir (7 j) ----
+          .slice().sort((a, b) => a.debut.localeCompare(b.debut)) : [];
     const horizon7 = D.addDays(today, 7);
     const mesDeplacements = personne
-      ? s.deplacements
-          .filter(d => d.personneId === personne.id && d.date >= today && d.date <= horizon7)
-          .slice().sort((a, b) => a.date.localeCompare(b.date))
-      : [];
+      ? s.deplacements.filter(d => d.personneId === personne.id && d.date >= today && d.date <= horizon7)
+          .slice().sort((a, b) => a.date.localeCompare(b.date)) : [];
 
-    // ---- Rendu ----
     root.innerHTML = `
-      <div class="toolbar">
-        <strong>🗓 Ma journée — ${userLabel}</strong>
+      <div class="toolbar" style="margin-top:8px">
+        <strong class="muted">${userLabel}</strong>
         <span class="muted small">${D.fmt(today)}</span>
         <span class="spacer"></span>
-        ${showSelector ? `
-          <select id="mj-personne-sel" title="Choisir une personne">
-            ${s.personnes.map(p => `<option value="${p.id}" ${p.id === (personne && personne.id) ? 'selected' : ''}>${App.personneLabel(p)}</option>`).join('')}
-          </select>
-        ` : ''}
-        <button class="btn-ghost" id="mj-btn-week">📅 Cette semaine</button>
-        <button class="btn-ghost" id="mj-btn-nextweek">📆 Semaine prochaine</button>
+        ${showSelector ? `<select id="mj-personne-sel">${s.personnes.map(p => `<option value="${p.id}" ${p.id===(personne&&personne.id)?'selected':''}>${App.personneLabel(p)}</option>`).join('')}</select>` : ''}
+        <button class="btn-ghost" id="mj-prev">‹</button>
+        <button class="btn-ghost${st.weekOffset===0?' active':''}" id="mj-today" style="font-size:12px">Aujourd'hui</button>
+        <button class="btn-ghost" id="mj-next">›</button>
       </div>
 
-      <!-- Statistiques rapides -->
       <div class="grid grid-3" style="margin-bottom:14px">
         <div class="card">
           <div class="muted small">Tâches actives aujourd'hui</div>
           <div style="font-size:28px;font-weight:700">${tachesActives.length}</div>
-          <div class="small muted">${tachesActives.length ? tachesActives.map(t => t.nom).join(', ').substring(0, 60) + (tachesActives.map(t=>t.nom).join(', ').length > 60 ? '…' : '') : 'Aucune'}</div>
+          <div class="small muted">${tachesActives.length ? tachesActives.map(t=>t.nom).join(', ').substring(0,60)+(tachesActives.map(t=>t.nom).join(', ').length>60?'…':'') : 'Aucune'}</div>
         </div>
         <div class="card">
-          <div class="muted small">Heures estimées cette semaine</div>
+          <div class="muted small">Heures estimées — ${weekLabel}</div>
           <div style="font-size:28px;font-weight:700">${heuresSemaine}<span class="small muted"> h</span></div>
-          <div class="small muted">${tachesSemaine.length} tâche(s) · capacité ${personne && personne.capaciteHebdo ? personne.capaciteHebdo : 35} h</div>
+          <div class="small muted">${tachesSemaine.length} tâche(s) · capacité ${personne&&personne.capaciteHebdo?personne.capaciteHebdo:35} h</div>
         </div>
         <div class="card">
           <div class="muted small">Avancement moyen (actives)</div>
@@ -106,55 +132,241 @@ App.views.majourney = {
         </div>
       </div>
 
-      <!-- Section Aujourd'hui -->
       <div class="card" style="margin-bottom:14px">
         <h2>Aujourd'hui</h2>
         ${this._renderAujourdhui(tachesActives)}
       </div>
-
-      <!-- Section Cette semaine -->
       <div class="card" style="margin-bottom:14px">
-        <h2>Cette semaine <span class="muted small">(${D.fmt(weekStart)} → ${D.fmt(weekEnd)})</span></h2>
+        <h2>${weekLabel} <span class="muted small">(${D.fmt(weekStart)} → ${D.fmt(weekEnd)})</span></h2>
         ${this._renderSemaine(tachesSemaine)}
       </div>
-
-      <!-- Section Mes absences -->
       <div class="card" style="margin-bottom:14px">
         <h2>Mes absences <span class="muted small">(30 prochains jours)</span></h2>
         ${this._renderAbsences(mesAbsences)}
       </div>
-
-      <!-- Section Mes déplacements -->
       <div class="card" style="margin-bottom:14px">
         <h2>Mes déplacements <span class="muted small">(7 prochains jours)</span></h2>
         ${this._renderDeplacements(mesDeplacements)}
       </div>
     `;
 
-    // Bindings
+    document.getElementById('mj-prev').onclick   = () => { st.weekOffset--; App.refresh(); };
+    document.getElementById('mj-next').onclick   = () => { st.weekOffset++; App.refresh(); };
+    document.getElementById('mj-today').onclick  = () => { st.weekOffset = 0; App.refresh(); };
     if (showSelector) {
       const sel = document.getElementById('mj-personne-sel');
       if (sel) sel.onchange = e => { st.selectedPersonneId = e.target.value; App.refresh(); };
     }
-
-    const btnWeek = document.getElementById('mj-btn-week');
-    if (btnWeek) btnWeek.onclick = () => {
-      App.navigate('calendrier');
-    };
-
-    const btnNextWeek = document.getElementById('mj-btn-nextweek');
-    if (btnNextWeek) btnNextWeek.onclick = () => {
-      App.navigate('gantt');
-    };
-
-    // Rendre chaque ligne de tâche cliquable
     document.querySelectorAll('[data-tache-id]').forEach(el => {
-      el.addEventListener('click', () => {
-        App.navigateToTarget({ view: 'gantt', tacheId: el.dataset.tacheId });
-      });
+      el.addEventListener('click', () => App.navigateToTarget({ view:'gantt', tacheId: el.dataset.tacheId }));
       el.style.cursor = 'pointer';
     });
   },
+
+  // ─── MODE ÉQUIPE ──────────────────────────────────────────────────────────
+
+  _renderEquipeMode(root) {
+    const s = DB.state;
+    const st = this.state;
+    const today = D.today();
+    const nb = st.nbJours || 20;
+    const days = this._workingDays(nb);
+
+    const personnes = (s.personnes || []).slice().sort((a,b) =>
+      (a.nom||'').localeCompare(b.nom||'')
+    );
+
+    // Tâches indexées par personne → jour
+    const tasksByPersonDay = {};
+    personnes.forEach(p => {
+      tasksByPersonDay[p.id] = {};
+      days.forEach(day => { tasksByPersonDay[p.id][day] = []; });
+    });
+    s.taches.forEach(t => {
+      if (t.jalon) return;
+      (t.assignes || []).forEach(pid => {
+        if (!tasksByPersonDay[pid]) return;
+        days.forEach(day => {
+          if (t.debut <= day && t.fin >= day) tasksByPersonDay[pid][day].push(t);
+        });
+      });
+    });
+
+    const DAY_ABBR = ['Di','Lu','Ma','Me','Je','Ve','Sa'];
+
+    // Calcul d'occupation par personne (pour l'ordre / colorisation)
+    const busyCount = pid => days.filter(d => tasksByPersonDay[pid] && tasksByPersonDay[pid][d] && tasksByPersonDay[pid][d].length > 0).length;
+
+    root.innerHTML = `
+      <div class="toolbar" style="margin-top:8px">
+        <span class="muted small">Prochains jours ouvrés à partir du ${D.fmt(today)}</span>
+        <span class="spacer"></span>
+        <label class="muted small" style="display:flex;align-items:center;gap:6px">
+          Jours : <select id="mj-nb-jours" style="width:70px">
+            ${[10,15,20,25,30].map(n=>`<option value="${n}" ${n===nb?'selected':''}>${n}</option>`).join('')}
+          </select>
+        </label>
+        <button class="btn-ghost" id="mj-print-equipe">⎙ Imprimer</button>
+      </div>
+
+      <div style="overflow-x:auto;margin-top:8px">
+        <table style="border-collapse:collapse;font-size:11px;white-space:nowrap;width:100%">
+          <thead>
+            <tr>
+              <th style="position:sticky;left:0;z-index:2;background:var(--surface);padding:5px 10px;text-align:left;border-bottom:2px solid var(--border);min-width:130px;font-size:11px">Personne</th>
+              ${days.map(day => {
+                const isToday = day === today;
+                const abbr = DAY_ABBR[D.parse(day).getUTCDay()];
+                const num  = D.fmt(day).slice(0, 5); // "26 avr"
+                return `<th style="min-width:46px;max-width:60px;text-align:center;padding:3px 2px;border-bottom:2px solid var(--border);font-weight:${isToday?'700':'500'};color:${isToday?'var(--primary)':'var(--text-muted)'};font-size:10px;${isToday?'background:var(--primary-weak);border-radius:4px 4px 0 0':''}">
+                  <div>${abbr}</div><div>${num}</div>
+                </th>`;
+              }).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${personnes.map((p, ri) => {
+              const initials = ((p.prenom||'').charAt(0)+(p.nom||'').charAt(0)).toUpperCase();
+              const occupied = busyCount(p.id);
+              const rowBg = ri % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)';
+              return `<tr style="background:${rowBg}">
+                <td style="position:sticky;left:0;z-index:1;background:${rowBg};padding:4px 8px;border-bottom:1px solid var(--border);font-size:11px">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--primary-weak);color:var(--primary);font-size:9px;font-weight:700;flex-shrink:0">${initials}</span>
+                    <span>${App.personneLabel(p)}</span>
+                    ${occupied ? `<span class="badge muted" style="font-size:9px">${occupied}j</span>` : ''}
+                  </div>
+                </td>
+                ${days.map(day => {
+                  const tasks = (tasksByPersonDay[p.id]||{})[day] || [];
+                  const isToday = day === today;
+                  const cellBg = isToday ? 'rgba(44,95,179,0.06)' : '';
+                  if (!tasks.length) return `<td style="border-bottom:1px solid var(--border);border-right:1px solid var(--border-light,#eee);padding:2px;min-width:46px;height:30px;${cellBg?'background:'+cellBg:''}"></td>`;
+                  return `<td style="border-bottom:1px solid var(--border);border-right:1px solid var(--border-light,#eee);padding:2px;vertical-align:top;${cellBg?'background:'+cellBg:''}">
+                    ${tasks.map(t => {
+                      const prj = DB.projet(t.projetId);
+                      const col = prj ? prj.couleur : '#888';
+                      return `<div title="${t.nom}${prj?' · '+prj.nom:''}" style="background:${col}20;border-left:3px solid ${col};padding:1px 3px;font-size:9px;margin-bottom:1px;overflow:hidden;border-radius:0 2px 2px 0;line-height:1.3;cursor:pointer" data-tache-id="${t.id}">${prj?prj.code:'—'}</div>`;
+                    }).join('')}
+                  </td>`;
+                }).join('')}
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Légende projets -->
+      <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <span class="muted small">Légende :</span>
+        ${s.projets.filter(p=>p.statut!=='clos').map(p=>`
+          <span style="display:flex;align-items:center;gap:4px;font-size:10px">
+            <span style="width:10px;height:10px;border-radius:2px;background:${p.couleur};flex-shrink:0"></span>
+            ${p.code}
+          </span>`).join('')}
+      </div>
+    `;
+
+    // Bindings
+    document.getElementById('mj-nb-jours').onchange = e => { st.nbJours = +e.target.value; App.refresh(); };
+    document.getElementById('mj-print-equipe').onclick = () => this._printEquipe(personnes, days, tasksByPersonDay, DAY_ABBR, today);
+
+    root.querySelectorAll('[data-tache-id]').forEach(el => {
+      el.addEventListener('click', e => { e.stopPropagation(); App.navigateToTarget({ view:'gantt', tacheId: el.dataset.tacheId }); });
+    });
+  },
+
+  // ─── IMPRESSION PLANNING ÉQUIPE ───────────────────────────────────────────
+
+  _printEquipe(personnes, days, tasksByPersonDay, DAY_ABBR, today) {
+    const s = DB.state;
+    const user = App.currentUser();
+    const debut = D.fmt(days[0]);
+    const fin   = D.fmt(days[days.length - 1]);
+
+    const rowsHtml = personnes.map(p => {
+      const initials = ((p.prenom||'').charAt(0)+(p.nom||'').charAt(0)).toUpperCase();
+      return `<tr>
+        <td class="pname">
+          <span class="av">${initials}</span>
+          ${App.personneLabel(p)}
+        </td>
+        ${days.map(day => {
+          const tasks = (tasksByPersonDay[p.id]||{})[day] || [];
+          const isToday = day === today;
+          if (!tasks.length) return `<td class="${isToday?'today':''}"></td>`;
+          return `<td class="${isToday?'today':''}">
+            ${tasks.map(t => {
+              const prj = DB.projet(t.projetId);
+              const col = prj ? prj.couleur : '#888';
+              return `<div class="pill" style="border-left:3px solid ${col};background:${col}18" title="${t.nom}">${prj?prj.code:'—'}</div>`;
+            }).join('')}
+          </td>`;
+        }).join('')}
+      </tr>`;
+    }).join('');
+
+    const legendHtml = s.projets.filter(p=>p.statut!=='clos').map(p=>
+      `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px">
+        <span style="width:10px;height:10px;border-radius:2px;background:${p.couleur};display:inline-block"></span>
+        <strong>${p.code}</strong> ${p.nom}
+      </span>`
+    ).join('');
+
+    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+      <title>Planning équipe — ${debut} → ${fin}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 0; color: #222; font-size: 10px; }
+        h1 { font-size: 15px; margin: 0 0 4px; border-bottom: 2px solid #2c5fb3; padding-bottom: 4px; color: #2c5fb3; }
+        .meta { font-size: 9px; color: #888; margin-bottom: 10px; }
+        table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+        th { font-size: 9px; font-weight: 600; color: #666; text-align: center; padding: 2px 1px; border-bottom: 2px solid #ddd; }
+        th.today-h { color: #2c5fb3; font-weight: 700; background: #e8f0fb; }
+        td { border-bottom: 1px solid #eee; border-right: 1px solid #f2f2f2; padding: 2px 1px; vertical-align: top; min-height: 22px; }
+        td.today { background: #f0f6ff; }
+        td.pname { text-align: left; padding: 3px 6px; white-space: nowrap; font-size: 10px; font-weight: 500; border-right: 2px solid #ddd; width: 110px; background: #fafafa; }
+        .av { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: #e8f0fb; color: #2c5fb3; font-size: 8px; font-weight: 700; margin-right: 4px; }
+        .pill { background: #eee; border-left: 3px solid #888; padding: 1px 2px; font-size: 8px; margin-bottom: 1px; border-radius: 0 2px 2px 0; overflow: hidden; white-space: nowrap; }
+        .legend { margin-top: 10px; font-size: 9px; border-top: 1px solid #ddd; padding-top: 6px; }
+        .footer { margin-top: 8px; font-size: 8px; color: #bbb; text-align: center; border-top: 1px solid #eee; padding-top: 4px; }
+        tr:nth-child(even) td { background: #fafafa; }
+        tr:nth-child(even) td.today { background: #edf4ff; }
+        tr:nth-child(even) td.pname { background: #f2f2f2; }
+        @media print {
+          @page { size: A3 landscape; margin: 8mm; }
+          body { margin: 0; }
+        }
+      </style></head><body>
+      <h1>Planning équipe</h1>
+      <div class="meta">Du ${debut} au ${fin} · Généré le ${D.fmt(today)} par ${user ? user.nom : '—'} · Atelier · Planification</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:left;padding-left:6px;width:110px">Personne</th>
+            ${days.map(day => {
+              const isToday = day === today;
+              const abbr = DAY_ABBR[D.parse(day).getUTCDay()];
+              const num  = D.fmt(day).slice(0,5);
+              return `<th class="${isToday?'today-h':''}"><div>${abbr}</div><div>${num}</div></th>`;
+            }).join('')}
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <div class="legend"><strong>Légende :</strong> ${legendHtml}</div>
+      <div class="footer">Atelier · Planification — ${D.fmt(today)}</div>
+      <script>setTimeout(() => window.print(), 400);</script>
+    </body></html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) { App.toast('Pop-up bloqué — autoriser les pop-ups', 'error'); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  },
+
+  // ─── RENDUS PERSONNELS ────────────────────────────────────────────────────
 
   _renderAujourdhui(taches) {
     if (!taches.length) return `<p class="muted">Aucune tâche active aujourd'hui.</p>`;
@@ -184,30 +396,25 @@ App.views.majourney = {
 
   _renderSemaine(taches) {
     if (!taches.length) return `<p class="muted">Aucune tâche cette semaine.</p>`;
+    const today = D.today();
     return `<table class="data">
       <thead>
-        <tr>
-          <th>Tâche</th>
-          <th>Projet</th>
-          <th>Début</th>
-          <th>Fin</th>
-          <th>Avancement</th>
-          <th>Actions</th>
-        </tr>
+        <tr><th>Tâche</th><th>Projet</th><th>Personnes assignées</th><th>Début</th><th>Fin</th><th>Avancement</th><th></th></tr>
       </thead>
       <tbody>
         ${taches.map(t => {
           const prj  = DB.projet(t.projetId);
           const pct  = t.avancement || 0;
-          const today = D.today();
           const isLate = t.fin < today && pct < 100;
           const barCls = isLate ? 'bad' : pct >= 100 ? 'good' : '';
+          const assignes = (t.assignes || []).map(id => DB.personne(id)).filter(Boolean).map(p => {
+            const initials = ((p.prenom||'').charAt(0)+(p.nom||'').charAt(0)).toUpperCase();
+            return `<span title="${App.personneLabel(p)}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--primary-weak);color:var(--primary);font-size:9px;font-weight:700;border:1px solid var(--primary)">${initials}</span>`;
+          }).join('');
           return `<tr data-tache-id="${t.id}" role="button" tabindex="0">
-            <td>
-              <strong>${t.nom}</strong>
-              ${isLate ? '<span class="badge bad" style="font-size:9px;margin-left:4px">retard</span>' : ''}
-            </td>
-            <td>${prj ? `<span class="badge" style="background:${prj.couleur}22;color:${prj.couleur}">${prj.code}</span>` : '<span class="muted">—</span>'}</td>
+            <td><strong>${t.nom}</strong>${isLate?'<span class="badge bad" style="font-size:9px;margin-left:4px">retard</span>':''}</td>
+            <td>${prj?`<span class="badge" style="background:${prj.couleur}22;color:${prj.couleur}">${prj.code}</span>`:'<span class="muted">—</span>'}</td>
+            <td><div style="display:flex;gap:3px;flex-wrap:wrap">${assignes||'<span class="muted small">—</span>'}</div></td>
             <td class="mono">${D.fmt(t.debut)}</td>
             <td class="mono">${D.fmt(t.fin)}</td>
             <td style="min-width:120px">
@@ -216,9 +423,7 @@ App.views.majourney = {
                 <span class="small muted">${pct}%</span>
               </div>
             </td>
-            <td>
-              <button class="btn-ghost small mj-gantt-btn" data-tache-id="${t.id}" title="Voir dans le Gantt">→ Gantt</button>
-            </td>
+            <td><button class="btn-ghost small" data-tache-id="${t.id}">→ Gantt</button></td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -233,13 +438,10 @@ App.views.majourney = {
       const nbJours = D.workdaysBetween(a.debut, a.fin) + 1;
       return `<li class="alert-row" onclick="App.navigate('absences')" role="button" tabindex="0" style="cursor:pointer">
         <div>
-          <div>
-            <strong>${a.motif}</strong>
-            ${a.note ? `<span class="muted small"> · ${a.note}</span>` : ''}
-          </div>
+          <strong>${a.motif}</strong>${a.note?`<span class="muted small"> · ${a.note}</span>`:''}
           <div class="small muted">${D.fmt(a.debut)} → ${D.fmt(a.fin)} · ${nbJours} j. ouvré(s)</div>
         </div>
-        <span class="badge ${encours ? 'bad' : 'warn'}">${encours ? 'en cours' : 'à venir'}</span>
+        <span class="badge ${encours?'bad':'warn'}">${encours?'en cours':'à venir'}</span>
         <span class="alert-arrow">›</span>
       </li>`;
     }).join('')}</ul>`;
@@ -248,23 +450,16 @@ App.views.majourney = {
   _renderDeplacements(deplacements) {
     if (!deplacements.length) return `<p class="muted">Aucun déplacement dans les 7 prochains jours.</p>`;
     return `<ul class="list">${deplacements.map(d => {
-      const origine  = DB.lieu(d.origineId);
-      const dest     = DB.lieu(d.destinationId);
-      const prj      = DB.projet(d.projetId);
+      const origine = DB.lieu(d.origineId), dest = DB.lieu(d.destinationId), prj = DB.projet(d.projetId);
       return `<li class="alert-row" onclick="App.navigate('deplacements')" role="button" tabindex="0" style="cursor:pointer">
         <div>
-          <div>
-            <strong>${d.motif}</strong>
-            ${prj ? `<span class="badge" style="background:${prj.couleur}22;color:${prj.couleur};margin-left:6px">${prj.code}</span>` : ''}
-          </div>
-          <div class="small muted">${D.fmt(d.date)} · ${origine ? origine.nom : '—'} → ${dest ? dest.nom : '—'} · ${d.duree}</div>
+          <strong>${d.motif}</strong>${prj?`<span class="badge" style="background:${prj.couleur}22;color:${prj.couleur};margin-left:6px">${prj.code}</span>`:''}
+          <div class="small muted">${D.fmt(d.date)} · ${origine?origine.nom:'—'} → ${dest?dest.nom:'—'} · ${d.duree}</div>
         </div>
         <span class="alert-arrow">›</span>
       </li>`;
     }).join('')}</ul>`;
   },
 
-  draw() {
-    // draw() vide — la vue ne fait pas de rendu canvas/SVG incrémental
-  },
+  draw() {},
 };

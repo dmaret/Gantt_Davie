@@ -39,6 +39,7 @@ App.views.modelesprojets = {
         <div>
           <h3 style="margin:0 0 4px">${mp.nom}</h3>
           <div class="muted small">${mp.description || ''}</div>
+          ${mp.groupe ? `<span class="badge" style="margin-top:4px;display:inline-block;background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb);font-size:10px">${mp.groupe}</span>` : ''}
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div class="small" style="font-weight:600">${dureeTotal} j.o.</div>
@@ -125,20 +126,24 @@ App.views.modelesprojets = {
           </div>
           <div class="field" style="margin-top:6px">
             <label style="font-size:11px">Gestes associés <span class="muted small">(temps/pièce estimé : ${this._fmtTemps(tempsTotalEtape)})</span></label>
-            <div style="max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px;background:var(--surface-2)">
-              ${Object.entries(gestesParCat).map(([cat, gestes]) => `
-                <div style="margin-bottom:4px">
-                  <div class="muted small" style="font-weight:600;margin-bottom:2px">${cat}</div>
-                  <div style="display:flex;flex-wrap:wrap;gap:4px">
-                    ${gestes.map(g => {
-                      const sel = (e.gestes || []).includes(g.code);
-                      return `<label title="${g.description} — ${g.notes}" style="display:flex;align-items:center;gap:3px;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:10px;border:1px solid ${sel ? 'var(--primary)' : 'var(--border)'};background:${sel ? 'var(--primary-weak)' : 'transparent'}">
-                        <input type="checkbox" class="ep-geste" data-i="${idx}" data-code="${g.code}" ${sel ? 'checked' : ''} style="margin:0">
-                        ${g.code}
-                      </label>`;
-                    }).join('')}
-                  </div>
-                </div>`).join('')}
+            <div style="display:flex;align-items:stretch;gap:4px">
+              <button class="btn-ghost ep-cat-prev" data-i="${idx}" title="Catégorie précédente" style="flex-shrink:0;padding:2px 8px;font-size:18px;line-height:1;align-self:center">‹</button>
+              <div class="ep-geste-scroll" data-i="${idx}" style="max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px;background:var(--surface-2);flex:1">
+                ${Object.entries(gestesParCat).map(([cat, gestes], catIdx) => `
+                  <div class="ep-cat-section" data-cat-idx="${catIdx}" style="margin-bottom:4px">
+                    <div class="muted small" style="font-weight:600;margin-bottom:2px">${cat}</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:4px">
+                      ${gestes.map(g => {
+                        const sel = (e.gestes || []).includes(g.code);
+                        return `<label title="${g.description} — ${g.notes}" style="display:flex;align-items:center;gap:3px;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:10px;border:1px solid ${sel ? 'var(--primary)' : 'var(--border)'};background:${sel ? 'var(--primary-weak)' : 'transparent'}">
+                          <input type="checkbox" class="ep-geste" data-i="${idx}" data-code="${g.code}" ${sel ? 'checked' : ''} style="margin:0">
+                          ${g.code}
+                        </label>`;
+                      }).join('')}
+                    </div>
+                  </div>`).join('')}
+              </div>
+              <button class="btn-ghost ep-cat-next" data-i="${idx}" title="Catégorie suivante" style="flex-shrink:0;padding:2px 8px;font-size:18px;line-height:1;align-self:center">›</button>
             </div>
           </div>
           ${prevEtapes.length ? `<div class="field" style="margin-top:4px">
@@ -161,10 +166,18 @@ App.views.modelesprojets = {
       }).join('');
     };
 
+    const existingGroups = [...new Set((s.projets||[]).map(p => p.groupe||'').filter(Boolean))].sort();
     const body = `
       <div class="row">
         <div class="field"><label>Nom du modèle</label><input id="mpf-nom" value="${mp.nom}" placeholder="Logistique complète…"></div>
         <div class="field"><label>Couleur</label><input type="color" id="mpf-col" value="${mp.couleur || '#2c5fb3'}"></div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Groupe associé <span class="muted small">(ex: PRJ-Log — s'applique aux projets de ce groupe)</span></label>
+          <input id="mpf-groupe" list="mpf-groupe-list" value="${mp.groupe||''}" placeholder="Laisser vide = modèle générique">
+          <datalist id="mpf-groupe-list">${existingGroups.map(g=>`<option value="${g}">`).join('')}</datalist>
+        </div>
       </div>
       <div class="field"><label>Description</label><input id="mpf-desc" value="${mp.description || ''}" placeholder="Description du flux couvert par ce modèle…"></div>
       <div style="display:flex;align-items:center;gap:8px;margin:12px 0 6px">
@@ -230,6 +243,18 @@ App.views.modelesprojets = {
         mp.etapes.splice(+e.target.dataset.i, 1);
         rebind();
       });
+      document.querySelectorAll('.ep-cat-prev, .ep-cat-next').forEach(el => el.onclick = e => {
+        const i = e.currentTarget.dataset.i;
+        const container = document.querySelector(`.ep-geste-scroll[data-i="${i}"]`);
+        if (!container) return;
+        const sections = container.querySelectorAll('.ep-cat-section');
+        if (!sections.length) return;
+        const dir = e.currentTarget.classList.contains('ep-cat-next') ? 1 : -1;
+        let currentIdx = 0;
+        sections.forEach((sec, si) => { if (sec.offsetTop <= container.scrollTop + 8) currentIdx = si; });
+        const next = Math.max(0, Math.min(sections.length - 1, currentIdx + dir));
+        container.scrollTop = sections[next].offsetTop;
+      });
     };
     bindEtapes();
 
@@ -242,6 +267,7 @@ App.views.modelesprojets = {
       mp.nom = document.getElementById('mpf-nom').value.trim();
       mp.couleur = document.getElementById('mpf-col').value;
       mp.description = document.getElementById('mpf-desc').value.trim();
+      mp.groupe = document.getElementById('mpf-groupe').value.trim();
       if (!mp.nom) { App.toast('Nom requis', 'error'); return; }
       if (!s.modelesProjets) s.modelesProjets = [];
       if (isNew) { s.modelesProjets.push(mp); DB.logAudit('create', 'modele-projet', mp.id, mp.nom); }
@@ -264,7 +290,7 @@ App.views.modelesprojets = {
 
   // ── Instanciation ────────────────────────────────────────────────────────────
 
-  instancier(id) {
+  instancier(id, presetProjetId = null) {
     if (!App.can('edit')) { App.toast('Lecture seule', 'error'); return; }
     const s = DB.state;
     const mp = (s.modelesProjets || []).find(x => x.id === id);
@@ -291,9 +317,12 @@ App.views.modelesprojets = {
     };
 
     const renderPreview = () => {
-      const pid = document.getElementById('mpi-proj').value;
-      const debut = document.getElementById('mpi-debut').value;
-      const qte = +document.getElementById('mpi-qte').value || 1;
+      const projEl = document.getElementById('mpi-proj');
+      const debutEl = document.getElementById('mpi-debut');
+      if (!projEl || !debutEl) return '<p class="muted small">Choisir un projet et une date de début</p>';
+      const pid = projEl.dataset.pid || projEl.value;
+      const debut = debutEl.value;
+      const qte = +(document.getElementById('mpi-qte')?.value) || 1;
       if (!pid || !debut) return '<p class="muted small">Choisir un projet et une date de début</p>';
       const rows = preview(pid, debut, qte);
       return `<table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -319,13 +348,15 @@ App.views.modelesprojets = {
     };
 
     const today = D.today();
+    const presetProjet = presetProjetId ? s.projets.find(p => p.id === presetProjetId) : null;
     const body = `
       <div class="row">
         <div class="field">
           <label>Projet d'affectation</label>
-          <select id="mpi-proj">
-            ${s.projets.map(p => `<option value="${p.id}">${p.code} — ${p.nom}</option>`).join('')}
-          </select>
+          ${presetProjet
+            ? `<input id="mpi-proj" value="${presetProjet.code} — ${presetProjet.nom}" readonly style="background:var(--surface-2);color:var(--text-muted)" data-pid="${presetProjet.id}">`
+            : `<select id="mpi-proj">${App.projetsOptions(presetProjetId||'', '— Choisir un projet —')}</select>`
+          }
         </div>
         <div class="field">
           <label>Date de début</label>
@@ -341,7 +372,7 @@ App.views.modelesprojets = {
           <strong style="font-size:13px">Aperçu des tâches créées</strong>
           <button class="btn-ghost" id="mpi-refresh" style="font-size:11px">↺ Actualiser</button>
         </div>
-        <div id="mpi-preview" style="overflow-x:auto">${renderPreview()}</div>
+        <div id="mpi-preview" style="overflow-x:auto"><p class="muted small">Choisir un projet et une date de début</p></div>
       </div>
       <p class="muted small" style="margin-top:10px">Les gestes seront notés dans les notes de chaque tâche pour référence.</p>
     `;
@@ -352,6 +383,11 @@ App.views.modelesprojets = {
     `;
     App.openModal(`Instancier : ${mp.nom}`, body, foot);
 
+    const getPid = () => {
+      const el = document.getElementById('mpi-proj');
+      if (!el) return '';
+      return el.dataset.pid || el.value;
+    };
     const refreshPreview = () => {
       document.getElementById('mpi-preview').innerHTML = renderPreview();
     };
@@ -359,9 +395,10 @@ App.views.modelesprojets = {
     document.getElementById('mpi-debut').onchange = refreshPreview;
     document.getElementById('mpi-qte').oninput = refreshPreview;
     document.getElementById('mpi-refresh').onclick = refreshPreview;
+    refreshPreview();
 
     document.getElementById('mpi-ok').onclick = () => {
-      const pid = document.getElementById('mpi-proj').value;
+      const pid = getPid();
       const debut = document.getElementById('mpi-debut').value;
       const qte = +document.getElementById('mpi-qte').value || 1;
       if (!pid || !debut) { App.toast('Projet et date requis', 'error'); return; }

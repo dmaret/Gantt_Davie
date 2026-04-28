@@ -58,6 +58,12 @@ body {
   flex-shrink: 0;
 }
 .btn-back-nav:hover { background: var(--surface-2); color: var(--primary); border-color: var(--primary); }
+.btn-nav-hist {
+  font-size: 16px; padding: 2px 7px; color: var(--text-muted);
+  opacity: .85;
+}
+.btn-nav-hist:hover { color: var(--primary); }
+.nav-hist-sep { width: 1px; height: 16px; background: var(--border); margin: 0 4px; align-self: center; }
 .logo { color: var(--primary); font-size: 20px; }
 .title { letter-spacing: .3px; }
 .brand-owner {
@@ -85,6 +91,13 @@ body {
   background: var(--primary-weak); color: var(--primary); border-color: transparent;
   font-weight: 600;
 }
+.nav-sep { margin-left: 8px; }
+.nav-sep::before {
+  content: '';
+  position: absolute; left: -6px; top: 25%; bottom: 25%;
+  width: 1px; background: var(--border);
+  border-radius: 1px;
+}
 .nav-badge {
   position: absolute; top: -4px; right: -2px;
   background: var(--warning); color: #fff;
@@ -101,6 +114,7 @@ body {
   cursor: pointer; font-size: 13px; font-family: inherit;
 }
 .btn-ghost:hover { background: var(--surface-2); }
+.fx-view-btn.fx-view-active { background: var(--primary); color: #fff; border-color: var(--primary); }
 .user-select {
   background: var(--surface-2); border: 1px solid var(--border);
   padding: 6px 8px; border-radius: 6px; color: var(--text);
@@ -201,6 +215,37 @@ body {
   background: var(--primary-weak); border-radius: 6px;
   font-size: 12px; color: var(--text-muted);
 }
+
+/* Flux atelier — vue schéma machines */
+.flux-wrap { display: flex; flex-direction: column; height: calc(100vh - var(--topbar-h, 56px) - var(--footer-h, 36px) - 8px); }
+.flux-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.flux-sidebar {
+  width: 190px; flex-shrink: 0; border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 12px; font-size: 12px;
+}
+.flux-canvas { flex: 1; position: relative; overflow: auto; background: var(--surface-2); }
+.fx-block {
+  position: absolute; width: 160px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px;
+  cursor: pointer; user-select: none; box-sizing: border-box;
+  transition: box-shadow .15s, opacity .1s;
+}
+.fx-block:hover { box-shadow: 0 4px 16px rgba(0,0,0,.14); }
+.fx-draggable { cursor: grab; }
+.fx-draggable:active { cursor: grabbing; }
+.fx-block-name { font-weight: 700; font-size: 13px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx-block-lieu { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
+.fx-block-status { font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+.fx-block-task { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx-bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 5px; }
+.fx-bar > div { height: 100%; border-radius: 2px; transition: width .3s; }
+.fx-bar-pct { font-size: 9px; color: var(--text-muted); text-align: right; margin-top: 2px; }
+.fx-sb-title { font-weight: 700; font-size: 12px; margin-bottom: 8px; }
+.fx-leg { display: flex; align-items: center; justify-content: space-between; padding: 3px 0; font-size: 11px; }
+.fx-sb-task { padding: 5px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 4px; }
+.fx-sb-task-name { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-sb-task-sub { font-size: 10px; color: var(--text-muted); }
 .aide-kbd {
   display: inline-block; padding: 2px 7px;
   background: var(--surface-2); border: 1px solid var(--border);
@@ -479,6 +524,54 @@ body {
 @media (max-width: 900px) { .dashboard-grid { grid-template-columns: 1fr; } .dashboard-grid .panel.panel-full { grid-column: 1; } }
 
 /* Main */
+/* Search bar */
+#searchbar-wrap {
+  position: relative; flex-shrink: 0;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 5px 16px;
+}
+#searchbar-inner {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 4px 12px;
+  max-width: 600px; margin: 0 auto;
+  transition: border-color .15s, box-shadow .15s;
+}
+#searchbar-inner:focus-within {
+  border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-weak);
+}
+#searchbar-icon { font-size: 13px; opacity: .5; flex-shrink: 0; }
+#searchbar-input {
+  flex: 1; border: none; background: transparent; outline: none;
+  font-size: 13px; font-family: inherit; color: var(--text); min-width: 0;
+}
+#searchbar-input::placeholder { color: var(--text-muted); }
+#searchbar-kbd {
+  font-size: 10px; padding: 1px 5px; border-radius: 4px;
+  background: var(--border); color: var(--text-muted);
+  border: 1px solid var(--border); white-space: nowrap; flex-shrink: 0;
+}
+#searchbar-results {
+  position: absolute; top: 100%;
+  left: 50%; transform: translateX(-50%);
+  width: min(600px, calc(100% - 32px));
+  background: var(--surface); border: 1px solid var(--border);
+  border-top: none; border-radius: 0 0 10px 10px; box-shadow: var(--shadow);
+  max-height: 320px; overflow-y: auto; z-index: 200;
+}
+#searchbar-results.hidden { display: none; }
+.sb-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 14px; cursor: pointer; border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.sb-item:last-child { border-bottom: none; }
+.sb-item:hover, .sb-item.on { background: var(--primary-weak); }
+.sb-kind { font-size: 10px; font-weight: 700; color: var(--text-muted); min-width: 64px; text-transform: uppercase; }
+.sb-label { font-weight: 500; flex: 1; }
+.sb-meta { font-size: 11px; color: var(--text-muted); }
+.sb-empty { padding: 10px 14px; color: var(--text-muted); font-size: 13px; }
+
 main#view-root {
   flex: 1; overflow: auto; padding: 20px;
 }
@@ -498,6 +591,7 @@ main#view-root {
 .grid-2 { grid-template-columns: repeat(2, 1fr); }
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
+.prj-group-header { margin: 16px 0 6px; }
 @media (max-width: 900px) {
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
 }
@@ -535,10 +629,20 @@ table.data th {
   letter-spacing: .3px;
   background: var(--surface-2);
   position: sticky; top: 0;
+  z-index: 2;
+  box-shadow: 0 1px 0 var(--border);
 }
 table.data tr:hover td { background: var(--surface-2); }
 
-/* Buttons */
+/* Freeze first column on wide tables */
+.col-freeze-1 thead th:first-child { position:sticky; left:0; z-index:3; background:var(--surface-2); }
+.col-freeze-1 tbody td:first-child { position:sticky; left:0; z-index:1; background:var(--surface); box-shadow:1px 0 0 var(--border); }
+.col-freeze-1 tr:hover td:first-child { background:var(--surface-2); }
+
+/* Scroll wrapper for wide tables */
+.tbl-wrap { overflow-x:auto; }
+
+
 .btn {
   background: var(--primary); color: #fff; border: none;
   padding: 8px 14px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 13px;
@@ -750,7 +854,20 @@ body.dark .h-cell[data-lvl="1"] { background: #254a77; color: #cfe4ff; }
 .gantt-bar.critical { box-shadow: 0 0 0 2px var(--danger) inset; }
 
 /* Ligne "Aujourd'hui" dans le SVG Gantt */
-.today-line { stroke: #ef4444; stroke-width: 1.5; opacity: .65; stroke-dasharray: 5 3; pointer-events: none; }
+.today-line { stroke: #ef4444; stroke-width: 2; opacity: .9; pointer-events: none; }
+.today-label { font-size: 10px; fill: #fff; font-weight: 700; pointer-events: none; font-family: inherit; }
+
+/* Minimap Gantt */
+.gantt-minimap {
+  position: fixed; bottom: 16px; right: 16px;
+  width: 200px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: var(--shadow);
+  overflow: hidden; cursor: pointer; z-index: 500;
+  opacity: .85; transition: opacity .15s, box-shadow .15s;
+}
+.gantt-minimap:hover { opacity: 1; box-shadow: 0 4px 20px rgba(0,0,0,.15); }
+.gantt-minimap-hint { padding: 2px 6px; font-size: 9px; color: var(--text-muted); background: var(--surface); border-top: 1px solid var(--border); text-align: center; }
 
 /* Barre de progression à l'intérieur des barres Gantt */
 .gantt-bar-progress {
@@ -871,6 +988,16 @@ body.tablette table.data { font-size: 16px; }
   background: var(--primary-weak); color: var(--primary);
   font-size: 12px; font-weight: 600; white-space: nowrap;
 }
+
+/* Row highlight flash animation (navigateToTarget) */
+@keyframes row-flash {
+  0%   { background: rgba(255, 193, 7, 0.45); }
+  60%  { background: rgba(255, 193, 7, 0.15); }
+  100% { background: transparent; }
+}
+.row-flash { animation: row-flash 2s ease-out forwards; }
+.sub-row { padding-left: 20px !important; }
+.sub-indent { display: block; }
 
 /* Impression */
 @media print {

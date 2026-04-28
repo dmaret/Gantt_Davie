@@ -183,26 +183,41 @@ App.views.absences = {
           const note = r['note'] || '';
           const personne = s.personnes.find(p => norm(p.prenom) === norm(prenom) && norm(p.nom) === norm(nomP));
           const errors = [];
-          if (!personne) errors.push('personne introuvable');
           if (!debut.match(/^\d{4}-\d{2}-\d{2}$/)) errors.push('date début invalide');
           if (!fin.match(/^\d{4}-\d{2}-\d{2}$/)) errors.push('date fin invalide');
+          const unknown = !personne && !errors.length;
           const duplicate = personne && (personne.absences||[]).some(a => a.debut === debut && a.fin === fin);
-          return { prenom, nomP, debut, fin, motif, note, personne, errors, duplicate };
+          return { prenom, nomP, debut, fin, motif, note, personne, errors, unknown, duplicate };
         }).filter(r => r.prenom || r.nomP);
         if (!parsed.length) { App.toast('Aucune absence à importer','warn'); return; }
-        const creates = parsed.filter(r => !r.errors.length && !r.duplicate).length;
+        const importable = parsed.filter(r => !r.errors.length && !r.unknown && !r.duplicate);
+        const unknownRows = parsed.filter(r => r.unknown);
         const dups = parsed.filter(r => r.duplicate).length;
-        const body = `<p class="muted small">${creates} à créer · ${dups} doublon(s) ignoré(s) · ${parsed.filter(r=>r.errors.length).length} erreur(s)</p>
+        const errs = parsed.filter(r => r.errors.length).length;
+        const body = `
+          <p class="muted small" id="ab-import-summary">${importable.length} à créer · ${unknownRows.length > 0 ? `<span style="color:#c47800">${unknownRows.length} personne(s) inconnue(s) — cocher pour créer</span> · ` : ''}${dups} doublon(s) ignoré(s) · ${errs} erreur(s)</p>
           <table class="data"><thead><tr><th>Personne</th><th>Début</th><th>Fin</th><th>Motif</th><th>Statut</th></tr></thead><tbody>
-          ${parsed.map(r => `<tr>
-            <td>${r.prenom} ${r.nomP}</td><td>${r.debut}</td><td>${r.fin}</td><td>${r.motif}</td>
-            <td>${r.errors.length?`<span class="badge bad">${r.errors.join(', ')}</span>`:r.duplicate?'<span class="badge muted">doublon</span>':'<span class="badge good">nouveau</span>'}</td>
-          </tr>`).join('')}
+          ${parsed.map((r, i) => {
+            const rowStyle = r.unknown ? 'background:#fff8ed;' : r.errors.length ? 'background:#fef2f2;' : '';
+            const status = r.errors.length
+              ? `<span class="badge bad">${r.errors.join(', ')}</span>`
+              : r.duplicate
+              ? '<span class="badge muted">doublon</span>'
+              : r.unknown
+              ? `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap"><input type="checkbox" class="ab-unknown-cb" data-idx="${i}"> <span class="badge warn">inconnu · créer ?</span></label>`
+              : '<span class="badge good">nouveau</span>';
+            return `<tr style="${rowStyle}"><td>${r.prenom} ${r.nomP}</td><td>${r.debut}</td><td>${r.fin}</td><td>${r.motif}</td><td>${status}</td></tr>`;
+          }).join('')}
           </tbody></table>`;
-        const importable = parsed.filter(r => !r.errors.length && !r.duplicate);
         const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>
           <button class="btn" id="ab-import-ok">Importer (${importable.length})</button>`;
         App.openModal('Aperçu import — Absences', body, foot);
+        const updateCount = () => {
+          const checked = document.querySelectorAll('.ab-unknown-cb:checked').length;
+          const btn = document.getElementById('ab-import-ok');
+          if (btn) btn.textContent = `Importer (${importable.length + checked})`;
+        };
+        document.querySelectorAll('.ab-unknown-cb').forEach(cb => cb.onchange = updateCount);
         document.getElementById('ab-import-ok').onclick = () => {
           importable.forEach(r => {
             const abs = { id: DB.uid('ABS'), debut: r.debut, fin: r.fin, motif: r.motif, note: r.note };
@@ -210,8 +225,22 @@ App.views.absences = {
             r.personne.absences.push(abs);
             DB.logAudit('create','absence',abs.id,r.prenom+' '+r.nomP+' (import)');
           });
+          let newPersonsCount = 0;
+          document.querySelectorAll('.ab-unknown-cb:checked').forEach(cb => {
+            const r = parsed[+cb.dataset.idx];
+            const newPers = {
+              id: DB.uid('P'), prenom: r.prenom, nom: r.nomP, role: '—',
+              competences: [], capaciteHebdo: 35, couleur: '#888',
+              horaires: defaultHoraires(), pendingValidation: true,
+            };
+            s.personnes.push(newPers);
+            const abs = { id: DB.uid('ABS'), debut: r.debut, fin: r.fin, motif: r.motif, note: r.note };
+            newPers.absences = [abs];
+            DB.logAudit('create','absence',abs.id, r.prenom+' '+r.nomP+' (import — à valider)');
+            newPersonsCount++;
+          });
           DB.save(); App.closeModal(); App.refresh();
-          App.toast(`${importable.length} absence(s) importée(s)`, 'success');
+          App.toast(`${importable.length} absence(s) importée(s)${newPersonsCount ? ` · ${newPersonsCount} personne(s) créée(s) — À valider` : ''}`, 'success');
         };
       } catch(err) { App.toast('Erreur : ' + err.message, 'error'); }
     };

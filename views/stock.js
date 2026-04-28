@@ -69,10 +69,10 @@ App.views.stock = {
       </tr>`;
     }).join('');
     document.getElementById('st-table').innerHTML = `
-      <table class="data">
+      <div class="tbl-wrap"><table class="data col-freeze-1">
         <thead><tr><th>Réf</th><th>Article</th><th>Stockage</th><th class="right">Qté</th><th class="right">Seuil</th><th>Niveau</th><th>Projets liés</th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>
+      </table></div>
       <p class="muted small" style="margin-top:10px">${list.length} article(s)</p>
     `;
     document.querySelectorAll('#st-table tbody td.st-open').forEach(td => td.style.cursor = 'pointer');

@@ -15,6 +15,8 @@ App.views.dashboard = {
     'top-articles':{ title:'🏷 Top articles (besoins BOM)',                 size:1, render(s) { return App.views.dashboard.renderTopArticles(s); } },
     'avancement-projets': { title:'📊 Avancement par projet',              size:1, render(s) { return App.views.dashboard.renderAvancementProjets(s); } },
     'sante-donnees':      { title:'🩺 Santé des données',                   size:1, render() { return App.views.dashboard.renderIntegrity(); } },
+    'flux-machines':      { title:'🔗 Flux machines — état en temps réel',   size:1, render(s, today) { return App.views.dashboard.renderFluxMachines(s, today); } },
+    'vue-globale':        { title:'🎯 Vue globale',                           size:1, render(s, today) { return App.views.dashboard.renderVueGlobale(s, today); } },
   },
 
   render(root) {
@@ -128,7 +130,10 @@ App.views.dashboard = {
   renderProactive() {
     const alerts = App.proactiveAlerts();
     if (!alerts.length) return `<p class="muted">Tout est bon. ✔</p>`;
-    return `<ul class="list">${alerts.slice(0, 10).map(a => `<li><span class="badge ${a.niveau}">${a.kind}</span> <span>${a.msg}</span></li>`).join('')}</ul>${alerts.length > 10 ? `<p class="muted small">+${alerts.length-10} autre(s)</p>` : ''}`;
+    return `<ul class="list list-clickable">${alerts.slice(0, 10).map(a => {
+      const nav = a.target ? `onclick="App.navigateToTarget(${JSON.stringify(a.target)})" role="button" tabindex="0"` : '';
+      return `<li class="alert-row" ${nav}><span class="badge ${a.niveau}">${a.kind}</span> <span class="alert-msg">${a.msg}</span>${a.target ? '<span class="alert-arrow">›</span>' : ''}</li>`;
+    }).join('')}</ul>${alerts.length > 10 ? `<p class="muted small">+${alerts.length-10} autre(s)</p>` : ''}`;
   },
 
   renderPredictions(s) {
@@ -155,12 +160,56 @@ App.views.dashboard = {
   renderConflicts(c) {
     const total = c.personnes.length + c.machines.length + c.stock.length + c.commandes.length;
     if (total === 0) return `<p class="muted">Aucun conflit détecté. ✔</p>`;
-    const row = (badge, kind, text, view) => `<li class="alert-row" onclick="App.navigateToTarget({view:'${view}'})" role="button" tabindex="0"><span class="badge ${badge}">${kind}</span> <span class="alert-msg">${text}</span> <span class="alert-arrow">›</span></li>`;
     const rows = [];
-    if (c.personnes.length) rows.push(row('bad','Personnes',`${c.personnes.length} chevauchement(s) d'affectation`, 'gantt'));
-    if (c.machines.length)  rows.push(row('bad','Machines', `${c.machines.length} conflit(s) d'utilisation`, 'machines'));
-    if (c.stock.length)     rows.push(row('warn','Stock',   `${c.stock.length} article(s) sous seuil`, 'stock'));
-    if (c.commandes.length) rows.push(row('warn','Commandes',`${c.commandes.length} en attente de validations 4A`, 'commandes'));
+    const MAX = 4;
+    const subRow = (target, text) =>
+      `<li class="alert-row sub-row" onclick="App.navigateToTarget(${JSON.stringify(target).replace(/"/g,"'")})" role="button" tabindex="0">
+        <span class="sub-indent muted small">↳ ${text}</span><span class="alert-arrow">›</span>
+      </li>`;
+
+    if (c.personnes.length) {
+      rows.push(`<li class="alert-row" onclick="App.navigateToTarget({view:'personnes'})" role="button" tabindex="0"><span class="badge bad">Personnes</span> <span class="alert-msg">${c.personnes.length} chevauchement(s) d'affectation</span> <span class="alert-arrow">›</span></li>`);
+      c.personnes.slice(0, MAX).forEach(p => {
+        const per = DB.personne(p.personneId);
+        const t1 = DB.tache(p.t1), t2 = DB.tache(p.t2);
+        rows.push(subRow({view:'personnes', personneId: p.personneId},
+          `${per ? App.personneLabel(per) : '—'} · <em>${t1?.nom||'—'}</em> ↔ <em>${t2?.nom||'—'}</em>`));
+      });
+      if (c.personnes.length > MAX) rows.push(`<li class="muted small sub-row" style="padding:2px 10px 4px">+${c.personnes.length - MAX} autre(s)</li>`);
+    }
+
+    if (c.machines.length) {
+      rows.push(`<li class="alert-row" onclick="App.navigateToTarget({view:'machines'})" role="button" tabindex="0"><span class="badge bad">Machines</span> <span class="alert-msg">${c.machines.length} conflit(s) d'utilisation</span> <span class="alert-arrow">›</span></li>`);
+      c.machines.slice(0, MAX).forEach(m => {
+        const mach = DB.machine(m.machineId);
+        const t1 = DB.tache(m.t1), t2 = DB.tache(m.t2);
+        const p1 = t1 ? DB.projet(t1.projetId) : null, p2 = t2 ? DB.projet(t2.projetId) : null;
+        rows.push(subRow({view:'gantt', tacheId: m.t1, machineId: m.machineId, conflictTacheId: m.t2},
+          `${mach?.nom||'—'} · ${p1?p1.code+' ':''}${t1?.nom||'—'} ↔ ${p2?p2.code+' ':''}${t2?.nom||'—'}`));
+      });
+      if (c.machines.length > MAX) rows.push(`<li class="muted small sub-row" style="padding:2px 10px 4px">+${c.machines.length - MAX} autre(s)</li>`);
+    }
+
+    if (c.stock.length) {
+      rows.push(`<li class="alert-row" onclick="App.navigateToTarget({view:'stock'})" role="button" tabindex="0"><span class="badge warn">Stock</span> <span class="alert-msg">${c.stock.length} article(s) sous seuil</span> <span class="alert-arrow">›</span></li>`);
+      c.stock.slice(0, MAX).forEach(s => {
+        const art = DB.stock(s.id);
+        rows.push(subRow({view:'stock', articleId: s.id},
+          `${art?.ref||'—'} — ${art?.nom||'—'} (manque : ${s.manque} ${art?.unite||''})`));
+      });
+      if (c.stock.length > MAX) rows.push(`<li class="muted small sub-row" style="padding:2px 10px 4px">+${c.stock.length - MAX} autre(s)</li>`);
+    }
+
+    if (c.commandes.length) {
+      rows.push(`<li class="alert-row" onclick="App.navigateToTarget({view:'commandes'})" role="button" tabindex="0"><span class="badge warn">Commandes</span> <span class="alert-msg">${c.commandes.length} en attente de validations 4A</span> <span class="alert-arrow">›</span></li>`);
+      c.commandes.slice(0, MAX).forEach(cmd => {
+        const commande = DB.state.commandes.find(x => x.id === cmd.id);
+        rows.push(subRow({view:'commandes', commandeId: cmd.id},
+          `${commande?.ref||'—'} · ${commande?.fournisseur||'—'} (${cmd.manquants.join(', ')})`));
+      });
+      if (c.commandes.length > MAX) rows.push(`<li class="muted small sub-row" style="padding:2px 10px 4px">+${c.commandes.length - MAX} autre(s)</li>`);
+    }
+
     return `<ul class="list list-clickable">${rows.join('')}</ul>`;
   },
 
@@ -410,6 +459,112 @@ App.views.dashboard = {
       </div>
       <ul class="list list-clickable">${rows.join('')}</ul>
       ${issues.length > 12 ? `<p class="muted small">+${issues.length - 12} autre(s) — corrige pour voir la liste complète</p>` : ''}
+    `;
+  },
+
+  renderVueGlobale(s, today) {
+    const taches = s.taches.filter(t => !t.jalon);
+    const total  = taches.length;
+    if (!total) return `<div style="text-align:center;padding:20px">
+      <p class="muted">Aucune tâche planifiée.</p>
+      <button class="btn" onclick="App.navigate('gantt')" style="margin-top:8px">+ Créer une tâche</button>
+    </div>`;
+
+    const done   = taches.filter(t => t.avancement === 100).length;
+    const inProg = taches.filter(t => t.avancement > 0 && t.avancement < 100).length;
+    const late   = taches.filter(t => t.fin < today && t.avancement < 100).length;
+    const pct    = Math.round(done / total * 100);
+    const circ   = 2 * Math.PI * 38;
+    const dashDone   = (done   / total * circ).toFixed(1);
+    const dashInProg = (inProg / total * circ).toFixed(1);
+    const doneCls    = pct >= 75 ? '#16a34a' : pct >= 40 ? '#2c5fb3' : '#f59e0b';
+
+    const chargeMap = {};
+    taches.filter(t => t.debut <= today && t.fin >= today && t.avancement < 100).forEach(t => {
+      (t.assignes || []).forEach(pid => { chargeMap[pid] = (chargeMap[pid] || 0) + 1; });
+    });
+    const chargeList = Object.entries(chargeMap)
+      .map(([pid, n]) => ({ p: DB.personne(pid), n }))
+      .filter(x => x.p)
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 6);
+    const maxCharge = chargeList[0]?.n || 1;
+
+    return `
+      <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+        <div style="text-align:center;flex-shrink:0">
+          <svg width="100" height="100" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="38" fill="none" stroke="var(--border)" stroke-width="11"/>
+            <circle cx="50" cy="50" r="38" fill="none" stroke="${doneCls}" stroke-width="11"
+              stroke-dasharray="${dashDone} ${circ.toFixed(1)}" stroke-linecap="butt"
+              transform="rotate(-90 50 50)" opacity=".9"/>
+            <circle cx="50" cy="50" r="38" fill="none" stroke="${doneCls}" stroke-width="11"
+              stroke-dasharray="${dashInProg} ${circ.toFixed(1)}" stroke-linecap="butt"
+              stroke-dashoffset="-${dashDone}"
+              transform="rotate(-90 50 50)" opacity=".3"/>
+            <text x="50" y="47" text-anchor="middle" font-size="18" font-weight="700" fill="var(--text)">${pct}%</text>
+            <text x="50" y="61" text-anchor="middle" font-size="9" fill="var(--text-muted)">terminé</text>
+          </svg>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.6">
+            <span style="color:#16a34a">■</span> ${done} term.&nbsp;
+            <span style="color:var(--primary)">■</span> ${inProg} en cours<br>
+            ${late ? `<span style="color:#dc2626">■</span> ${late} en retard` : '✔ Aucun retard'}
+          </div>
+        </div>
+        <div style="flex:1;min-width:120px">
+          <div class="muted small" style="font-weight:600;margin-bottom:8px">Charge actuelle / personne</div>
+          ${chargeList.length ? chargeList.map(({ p, n }) => {
+            const pct2 = Math.round(n / maxCharge * 100);
+            const barColor = n > 3 ? '#dc2626' : n > 1 ? '#f59e0b' : '#059669';
+            return `<div style="margin-bottom:6px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px">${App.personneLabel(p)}</span>
+                <span style="font-weight:600;color:${barColor};flex-shrink:0">${n} tâche${n > 1 ? 's' : ''}</span>
+              </div>
+              <div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${pct2}%;background:${barColor};border-radius:3px;"></div>
+              </div>
+            </div>`;
+          }).join('') : '<p class="muted small">Personne n\'a de tâche active aujourd\'hui.</p>'}
+        </div>
+      </div>
+    `;
+  },
+
+  renderFluxMachines(s, today) {
+    const machines = s.machines || [];
+    if (!machines.length) return `<p class="muted small">Aucune machine configurée. <a href="#" onclick="App.navigate('machines');return false">Configurer →</a></p>`;
+
+    const status = m => {
+      const taches = (s.taches || []).filter(t => t.machineId === m.id);
+      const running = taches.filter(t => t.debut <= today && t.fin >= today && t.avancement < 100);
+      const late    = taches.filter(t => t.fin < today && t.avancement < 100);
+      if (running.length > 1) return { c: '#dc2626', l: 'Surchargé',  t: running[0] };
+      if (late.length)         return { c: '#f59e0b', l: 'En retard',  t: late[0]    };
+      if (running.length)      return { c: '#2c5fb3', l: 'En cours',   t: running[0] };
+      return                          { c: '#059669', l: 'Libre',      t: null        };
+    };
+
+    const rows = machines.slice(0, 12).map(m => {
+      const st = status(m);
+      return `<li class="alert-row" onclick="App.views.flux.state.projet='';App.navigate('flux')" role="button" tabindex="0"
+          style="display:flex;align-items:center;gap:8px;padding:6px 10px">
+        <span style="color:${st.c};font-size:14px;flex-shrink:0">●</span>
+        <span style="flex:1;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.nom}</span>
+        <span style="font-size:11px;color:${st.c};flex-shrink:0">${st.l}</span>
+        ${st.t ? `<span class="muted" style="font-size:10px;flex-shrink:0;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${st.t.nom}</span>` : ''}
+      </li>`;
+    });
+
+    const counts = machines.reduce((a, m) => { a[status(m).l] = (a[status(m).l]||0)+1; return a; }, {});
+    return `
+      <div style="display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+        ${[['#059669','Libre'],['#2c5fb3','En cours'],['#f59e0b','En retard'],['#dc2626','Surchargé']].map(([c,l]) =>
+          `<span style="font-size:12px;color:${c}">● ${l} <strong>${counts[l]||0}</strong></span>`).join('')}
+      </div>
+      <ul class="list list-clickable">${rows.join('')}</ul>
+      ${machines.length > 12 ? `<p class="muted small">${machines.length - 12} machine(s) supplémentaires</p>` : ''}
+      <div style="margin-top:8px"><button class="btn-ghost" onclick="App.navigate('flux')" style="font-size:12px">🔗 Ouvrir la vue Flux →</button></div>
     `;
   },
 };

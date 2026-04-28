@@ -10,13 +10,12 @@
 <meta name="apple-mobile-web-app-title" content="Atelier Plan">
 <link rel="apple-touch-icon" href="icons/icon-192.svg">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232563eb'/%3E%3Ctext x='50%25' y='54%25' font-size='40' text-anchor='middle' dominant-baseline='middle' fill='white' font-family='Arial,sans-serif' font-weight='bold'%3E%E2%97%86%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=20260426">
 </head>
 <body>
 <div id="app">
   <header class="topbar">
     <div class="brand">
-      <button id="btn-back" class="btn-back-nav" title="Vue précédente (Alt+←)" hidden>‹</button>
       <span class="logo">◆</span>
       <span class="title">Atelier · Planification</span>
       <span class="brand-owner" title="Davie MARET — MSP · Atelier Conditionnement & Logistique · EPI Genève · v3.0">DM</span>
@@ -26,20 +25,21 @@
       <button data-view="gantt" class="nav-btn">Gantt</button>
       <button data-view="kanban" class="nav-btn">Kanban</button>
       <button data-view="calendrier" class="nav-btn">Calendrier</button>
-      <button data-view="personnes" class="nav-btn">Personnes</button>
+      <button data-view="personnes" class="nav-btn nav-sep">Personnes</button>
       <button data-view="lieux" class="nav-btn">Lieux</button>
       <button data-view="machines" class="nav-btn">Machines</button>
-      <button data-view="projets" class="nav-btn">Projets</button>
+      <button data-view="flux" class="nav-btn">Flux</button>
+      <button data-view="projets" class="nav-btn nav-sep">Projets</button>
       <button data-view="stock" class="nav-btn">Stock</button>
       <button data-view="bom" class="nav-btn">BOM</button>
       <button data-view="deplacements" class="nav-btn">Déplacements</button>
       <button data-view="commandes" class="nav-btn">Commandes</button>
-      <button data-view="capacite" class="nav-btn">Capacité</button>
+      <button data-view="capacite" class="nav-btn nav-sep">Capacité</button>
       <button data-view="ressources" class="nav-btn">Ressources</button>
       <button data-view="equipes" class="nav-btn">Équipes</button>
       <button data-view="plan" class="nav-btn">Plan</button>
       <button data-view="absences" class="nav-btn">Absences</button>
-      <button data-view="modeles" class="nav-btn">Modèles</button>
+      <button data-view="modeles" class="nav-btn nav-sep">Modèles</button>
       <button data-view="modelesprojets" class="nav-btn">Modèles projet</button>
       <button data-view="audit" class="nav-btn">Historique</button>
       <button data-view="whatif" class="nav-btn">What-if</button>
@@ -62,9 +62,21 @@
       <button id="btn-help" class="btn-ghost" title="Raccourcis clavier (?)">?</button>
       <button id="btn-tablette" class="btn-ghost" title="Mode tablette atelier (lecture seule)">📋</button>
       <button id="btn-reset" class="btn-ghost" data-perm="reset" title="Réinitialiser aux données de démonstration">Reset</button>
+      <span class="nav-hist-sep"></span>
+      <button id="btn-back" class="btn-ghost btn-nav-hist" title="Vue précédente (Alt+←)" hidden>‹</button>
+      <button id="btn-fwd" class="btn-ghost btn-nav-hist" title="Vue suivante (Alt+→)" hidden>›</button>
       <button id="btn-theme" class="btn-ghost" title="Basculer thème">☾</button>
     </div>
   </header>
+
+  <div id="searchbar-wrap">
+    <div id="searchbar-inner">
+      <span id="searchbar-icon">🔍</span>
+      <input type="search" id="searchbar-input" placeholder="Rechercher une tâche, un projet, une personne, un article… (/ pour focus)" autocomplete="off" spellcheck="false">
+      <kbd id="searchbar-kbd">Ctrl+K</kbd>
+    </div>
+    <div id="searchbar-results" class="sb-results hidden"></div>
+  </div>
 
   <main id="view-root"></main>
 
@@ -108,6 +120,7 @@
 <script src="views/modeles.js?v=20260423"></script>
 <script src="views/audit.js?v=20260423"></script>
 <script src="views/whatif.js?v=20260423"></script>
+<script src="views/flux.js?v=20260426"></script>
 <script src="views/kanban.js?v=20260423"></script>
 <script src="views/admin.js?v=20260423"></script>
 <script src="views/majourney.js?v=20260425"></script>
