@@ -396,6 +396,14 @@ const App = {
   // target: { view, projetId?, personneId?, tacheId?, articleId?, machineId?, lieuId?, commandeId? }
   navigateToTarget(target) {
     if (!target || !target.view) return;
+    // Ouvrir une tâche en modal sans quitter la vue courante
+    if (target.view === 'gantt' && target.tacheId && this.views.gantt?.openTacheForm) {
+      const prefill = target.machineId
+        ? { machineConflict: { machineId: target.machineId, conflictTacheId: target.conflictTacheId } }
+        : {};
+      this.views.gantt.openTacheForm(target.tacheId, prefill);
+      return;
+    }
     this.navigate(target.view);
     // Laisser le temps à la vue de se rendre avant d'ouvrir le form
     setTimeout(() => {
@@ -406,16 +414,6 @@ const App = {
         } else if (target.view === 'personnes' && target.personneId && this.views.personnes?.openForm) {
           this.views.personnes.openForm(target.personneId);
           this._flashRow(target.personneId);
-        } else if (target.view === 'gantt' && target.tacheId && this.views.gantt?.openTacheForm) {
-          const t = DB.tache(target.tacheId);
-          if (t && this.views.gantt.state) {
-            this.views.gantt.state.rangeStart = D.addDays(t.debut, -3);
-            this.views.gantt.draw && this.views.gantt.draw();
-          }
-          const prefill = target.machineId
-            ? { machineConflict: { machineId: target.machineId, conflictTacheId: target.conflictTacheId } }
-            : {};
-          this.views.gantt.openTacheForm(target.tacheId, prefill);
         } else if (target.view === 'stock' && target.articleId && this.views.stock?.openForm) {
           this.views.stock.openForm(target.articleId);
           this._flashRow(target.articleId);
