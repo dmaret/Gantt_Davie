@@ -1,6 +1,6 @@
 // Vue Flux atelier — schéma visuel machines connectées par dépendances de tâches
 App.views.flux = {
-  state: { projet: '', lieu: '', editMode: false, viewMode: 'canvas', zoom: '20j' },
+  state: { projet: '', lieu: '', editMode: false, viewMode: 'canvas', zoom: '20j', canvasStyle: 'normal' },
   _ZOOM_PRESETS: {
     '10j': { label: '10 j', pxDay: 55, BACK: 2, FWD:  8 },
     '20j': { label: '20 j', pxDay: 40, BACK: 3, FWD: 17 },
@@ -22,6 +22,11 @@ App.views.flux = {
       </label>
       <button class="btn-ghost" id="fx-auto" title="Réorganiser en grille automatique">⚡ Auto</button>
       ${App.can('edit') ? `<button class="btn-ghost" id="fx-save">💾 Sauver</button>` : ''}
+      <select id="fx-cstyle" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);">
+        <option value="normal" ${(this.state.canvasStyle||'normal')==='normal'?'selected':''}>🗺 Normal</option>
+        <option value="blueprint" ${this.state.canvasStyle==='blueprint'?'selected':''}>📐 Blueprint</option>
+        <option value="plan" ${this.state.canvasStyle==='plan'?'selected':''}>🏭 Plan atelier</option>
+      </select>
     ` : '';
 
     const swimZoom = this.state.viewMode === 'swimlanes' ? `
@@ -50,7 +55,7 @@ App.views.flux = {
         </div>
         <div class="flux-body">
           <div class="flux-sidebar" id="fx-sidebar">${this._sidebar(machines)}</div>
-          <div class="flux-canvas" id="fx-canvas">
+          <div class="flux-canvas fx-bg-${this.state.canvasStyle||'normal'}" id="fx-canvas">
             ${this._renderBody(machines)}
           </div>
         </div>
@@ -74,6 +79,8 @@ App.views.flux = {
       if (autoEl) autoEl.onclick = () => { this._autoLayout(machines); this.render(root); };
       const sv = document.getElementById('fx-save');
       if (sv) sv.onclick = () => { DB.save(); App.toast('Disposition sauvegardée', 'success'); };
+      const styleEl = document.getElementById('fx-cstyle');
+      if (styleEl) styleEl.onchange = e => { this.state.canvasStyle = e.target.value; this.render(root); };
 
       if (!this.state.editMode) {
         root.querySelectorAll('.fx-block').forEach(el => {
@@ -294,13 +301,28 @@ App.views.flux = {
 
   _blocks(machines) {
     const layout = DB.state.fluxLayout;
-    return machines.map(m => {
+    const cs = this.state.canvasStyle || 'normal';
+    const typeIcon = m => {
+      const n = (m.nom||'').toLowerCase();
+      if (n.includes('cnc')) return '⚙';
+      if (n.includes('laser')) return '⚡';
+      if (n.includes('presse') || n.includes('plieuse')) return '📐';
+      if (n.includes('soudure') || n.includes('soud')) return '🔥';
+      if (n.includes('peinture') || n.includes('peintr')) return '🖌';
+      if (n.includes('montage') || n.includes('assembl')) return '🔩';
+      return '🔧';
+    };
+    return machines.map((m, idx) => {
       const pos = layout[m.id];
       const st  = this._status(m.id);
       const lieu = (DB.state.lieux || []).find(l => l.id === m.lieuId);
       const task = st.tasks[0];
-      return `<div class="fx-block${this.state.editMode ? ' fx-draggable' : ''}" data-mid="${m.id}"
+      const badgeColor = st.code === 'libre' ? '#6b7280' : st.color;
+      const iconHtml = cs !== 'normal' ? `<div class="fx-type-icon">${typeIcon(m)}</div>` : '';
+      return `<div class="fx-block fx-block-${cs}${this.state.editMode ? ' fx-draggable' : ''}" data-mid="${m.id}"
           style="left:${pos.x}px;top:${pos.y}px;border-top:3px solid ${st.color}">
+        <div class="fx-badge-num" style="background:${badgeColor}">${idx+1}</div>
+        ${iconHtml}
         <div class="fx-block-name">${m.nom}</div>
         ${lieu ? `<div class="fx-block-lieu">${lieu.nom}</div>` : ''}
         <div class="fx-block-status" style="color:${st.color}">● ${st.label}${st.code === 'surcharge' ? ' (' + st.tasks.length + ')' : ''}</div>
@@ -317,8 +339,10 @@ App.views.flux = {
     const svg = document.getElementById('fx-svg');
     if (!svg) return;
     const layout = DB.state.fluxLayout || {};
-    const taches  = DB.state.taches || [];
+    const taches = DB.state.taches || [];
+    const today  = D.today();
     const BW = 160, BH = 95;
+    const cs = this.state.canvasStyle || 'normal';
 
     const conns = new Map();
     taches.filter(t => !this.state.projet || t.projetId === this.state.projet).forEach(t => {
@@ -326,14 +350,37 @@ App.views.flux = {
       (t.dependances || []).forEach(depId => {
         const dep = taches.find(x => x.id === depId);
         if (!dep || !dep.machineId || dep.machineId === t.machineId) return;
-        conns.set(dep.machineId + '->' + t.machineId, { from: dep.machineId, to: t.machineId });
+        const key = dep.machineId + '->' + t.machineId;
+        const ex  = conns.get(key) || { from: dep.machineId, to: t.machineId, active: false, retard: false };
+        if (t.debut <= today && t.fin >= today && t.avancement < 100) ex.active = true;
+        if (t.fin < today && t.avancement < 100) ex.retard = true;
+        conns.set(key, ex);
       });
     });
 
+    const roughFilter = cs === 'plan' ? `
+      <filter id="fx-rough" x="-5%" y="-5%" width="110%" height="110%">
+        <feTurbulence type="turbulence" baseFrequency="0.04" numOctaves="2" seed="3" result="noise"/>
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G"/>
+      </filter>` : '';
+
+    const filterAttr = cs === 'plan' ? 'filter="url(#fx-rough)"' : '';
+
     svg.innerHTML = `<defs>
-      <marker id="fxarr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-        <polygon points="0 0, 8 3, 0 6" fill="var(--primary)" opacity="0.6"/>
+      ${roughFilter}
+      <marker id="fxarr-active" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+        <polygon points="0 0, 9 3.5, 0 7" fill="#2563eb"/>
       </marker>
+      <marker id="fxarr-retard" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+        <polygon points="0 0, 9 3.5, 0 7" fill="#f59e0b"/>
+      </marker>
+      <marker id="fxarr-idle" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+        <polygon points="0 0, 9 3.5, 0 7" fill="#9ca3af"/>
+      </marker>
+      <style>
+        @keyframes fxflow { to { stroke-dashoffset: -40; } }
+        @keyframes fxflow-fast { to { stroke-dashoffset: -28; } }
+      </style>
     </defs>
     ${[...conns.values()].map(c => {
       const fp = layout[c.from], tp = layout[c.to];
@@ -341,9 +388,21 @@ App.views.flux = {
       const x1 = fp.x + BW, y1 = fp.y + BH / 2;
       const x2 = tp.x,      y2 = tp.y + BH / 2;
       const bend = Math.abs(x2 - x1) * 0.45 + 30;
-      return `<path d="M${x1},${y1} C${x1+bend},${y1} ${x2-bend},${y2} ${x2},${y2}"
-        fill="none" stroke="var(--primary)" stroke-width="2" opacity="0.45"
-        stroke-dasharray="8,4" marker-end="url(#fxarr)"/>`;
+      const d = `M${x1},${y1} C${x1+bend},${y1} ${x2-bend},${y2} ${x2},${y2}`;
+      if (c.retard) {
+        return `<path d="${d}" fill="none" stroke="#f59e0b" stroke-width="2.5"
+          stroke-dasharray="10,5" marker-end="url(#fxarr-retard)" ${filterAttr}
+          style="animation:fxflow-fast .8s linear infinite"/>
+          <path d="${d}" fill="none" stroke="#f59e0b" stroke-width="1" opacity="0.2" ${filterAttr}/>`;
+      } else if (c.active) {
+        return `<path d="${d}" fill="none" stroke="#2563eb" stroke-width="2.5"
+          stroke-dasharray="12,5" marker-end="url(#fxarr-active)" ${filterAttr}
+          style="animation:fxflow 1.4s linear infinite"/>
+          <path d="${d}" fill="none" stroke="#2563eb" stroke-width="1" opacity="0.15" ${filterAttr}/>`;
+      } else {
+        return `<path d="${d}" fill="none" stroke="#9ca3af" stroke-width="1.5"
+          stroke-dasharray="6,4" marker-end="url(#fxarr-idle)" opacity="0.55" ${filterAttr}/>`;
+      }
     }).join('')}`;
   },
 

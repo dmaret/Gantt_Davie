@@ -246,6 +246,54 @@ body {
 .fx-sb-task { padding: 5px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 4px; }
 .fx-sb-task-name { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fx-sb-task-sub { font-size: 10px; color: var(--text-muted); }
+
+/* Flux canvas styles */
+@keyframes fxflow { to { stroke-dashoffset: -40; } }
+@keyframes fxflow-fast { to { stroke-dashoffset: -28; } }
+
+.fx-badge-num {
+  position: absolute; top: -8px; left: -8px;
+  width: 20px; height: 20px; border-radius: 50%;
+  color: #fff; font-size: 10px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  z-index: 1;
+}
+.fx-type-icon {
+  font-size: 18px; text-align: center; margin-bottom: 3px; line-height: 1;
+}
+
+/* Blueprint style */
+.fx-bg-blueprint {
+  background-color: #e8f0fe !important;
+  background-image:
+    linear-gradient(rgba(37,99,235,.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37,99,235,.15) 1px, transparent 1px) !important;
+  background-size: 40px 40px !important;
+}
+.fx-block-blueprint {
+  background: rgba(255,255,255,.92);
+  border: 1.5px solid #93c5fd;
+  border-radius: 4px;
+  font-family: ui-monospace, 'Courier New', monospace;
+}
+.fx-block-blueprint .fx-block-name { color: #1e40af; }
+
+/* Plan atelier style */
+.fx-bg-plan {
+  background-color: #f5f4ee !important;
+  background-image:
+    linear-gradient(rgba(0,0,0,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,.06) 1px, transparent 1px) !important;
+  background-size: 20px 20px !important;
+}
+.fx-block-plan {
+  background: #fffef8;
+  border: 2px solid #78716c;
+  border-radius: 3px;
+}
+.fx-block-plan .fx-block-name { font-family: ui-monospace, monospace; }
+
 .aide-kbd {
   display: inline-block; padding: 2px 7px;
   background: var(--surface-2); border: 1px solid var(--border);
