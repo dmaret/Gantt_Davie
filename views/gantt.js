@@ -1240,7 +1240,7 @@ App.views.gantt = {
           <button type="button" class="btn btn-secondary slot-apply" data-slot-idx="${i}" style="padding:2px 8px;font-size:11px;margin-left:8px">Appliquer</button>
         </div>`;
       }).join('') : `<div class="muted small" style="margin-top:4px">Aucun créneau libre trouvé dans les 6 prochains mois.</div>`;
-      machConflictHtml = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:7px 9px;font-size:11px;color:#dc2626;margin-bottom:5px;">
+      machConflictHtml = `<div id="mach-conflict-banner" style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:7px 9px;font-size:11px;color:#dc2626;margin-bottom:5px;">
         <div>⚠ <strong>${cm?.nom||'—'}</strong> aussi utilisée par ${cp2?`<strong>${cp2.code}</strong> · `:''}${ct2?.nom||'—'} (${D.fmt(ct2?.debut)}→${D.fmt(ct2?.fin)})</div>
         <div style="margin-top:5px;color:var(--text)"><strong style="font-size:11px;color:#dc2626">Créneaux disponibles :</strong>${slotsHtml}</div>
       </div>`;
@@ -1451,7 +1451,18 @@ App.views.gantt = {
           document.getElementById('f-fin').value = sl.fin;
           const durEl = document.getElementById('f-dur');
           if (durEl) durEl.textContent = Math.max(0, D.workdaysBetween(sl.debut, sl.fin)) + ' j.o.';
-          App.toast(`Dates mises à jour : ${D.fmt(sl.debut)} → ${D.fmt(sl.fin)}`, 'success');
+          // Bannière verte : conflit résolu
+          const banner = document.getElementById('mach-conflict-banner');
+          if (banner) {
+            banner.style.cssText = 'background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:7px 9px;font-size:11px;color:#16a34a;margin-bottom:5px;';
+            banner.innerHTML = `<div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:15px">✅</span>
+              <span><strong>Conflit résolu</strong> — créneau appliqué : <strong>${D.fmt(sl.debut)}</strong> → <strong>${D.fmt(sl.fin)}</strong></span>
+            </div>`;
+          }
+          const machSel = document.getElementById('f-machine');
+          if (machSel) machSel.style.border = '';
+          renderSugg();
         };
       });
     }
