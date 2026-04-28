@@ -14,8 +14,8 @@ App.views.lieux = {
         <strong>Lieux</strong>
         <span class="spacer"></span>
         <input type="file" id="l-import-file" accept=".csv,.json" hidden>
-        <button class="btn-ghost" id="l-tpl" data-perm="edit">⬇ Modèle</button>
-        <button class="btn-ghost" id="l-import" data-perm="edit">⬆ Importer</button>
+        <button class="btn-ghost" id="l-tpl" data-perm="admin">⬇ Modèle</button>
+        <button class="btn-ghost" id="l-import" data-perm="admin">⬆ Importer</button>
         <button class="btn-ghost" id="l-csv">⤓ Exporter CSV</button>
         <button class="btn" id="l-add">+ Ajouter un lieu</button>
       </div>

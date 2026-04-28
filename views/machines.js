@@ -12,8 +12,8 @@ App.views.machines = {
         <label class="small"><input type="checkbox" id="m-conf"> Seulement conflits</label>
         <span class="spacer"></span>
         <input type="file" id="m-import-file" accept=".csv,.json" hidden>
-        <button class="btn-ghost" id="m-tpl" data-perm="edit">⬇ Modèle</button>
-        <button class="btn-ghost" id="m-import" data-perm="edit">⬆ Importer</button>
+        <button class="btn-ghost" id="m-tpl" data-perm="admin">⬇ Modèle</button>
+        <button class="btn-ghost" id="m-import" data-perm="admin">⬆ Importer</button>
         <button class="btn-ghost" id="m-csv">⤓ Exporter CSV</button>
         <button class="btn" id="m-add">+ Ajouter une machine</button>
       </div>

@@ -3,7 +3,6 @@ App.views.kanban = {
 
   newItem() {
     if (App.views.gantt) App.views.gantt.openTacheForm(null);
-    App.navigate('gantt');
   },
 
   render(root) {
@@ -88,7 +87,7 @@ App.views.kanban = {
         <div style="font-size:48px;margin-bottom:12px">📋</div>
         <strong style="font-size:16px;color:var(--text);display:block;margin-bottom:6px">Aucune tâche</strong>
         <p style="margin:0 0 20px;font-size:13px">Crée une tâche depuis le Gantt pour la voir apparaître ici.</p>
-        <button class="btn" onclick="App.views.gantt.newItem();App.navigate('gantt')">+ Créer une tâche</button>
+        <button class="btn" onclick="App.views.kanban.newItem()">+ Créer une tâche</button>
       </div>`;
       return;
     }
@@ -138,9 +137,7 @@ App.views.kanban = {
         card.style.opacity = '';
       });
       card.addEventListener('click', () => {
-        const tid = card.dataset.tid;
-        if (App.views.gantt) App.views.gantt.openTacheForm(tid);
-        App.navigate('gantt');
+        App.navigateToTarget({ view: 'gantt', tacheId: card.dataset.tid });
       });
     });
   },

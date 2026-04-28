@@ -359,6 +359,65 @@ App.views.gantt = {
     return n;
   },
 
+  // Returns up to maxSlots available windows for machineId for a task of neededWD workdays,
+  // starting search from fromDate, excluding taskId itself. Each slot: { debut, fin, deltaWD }
+  _findMachineSlots(machineId, taskId, neededWD, fromDate, maxSlots = 3) {
+    const subWorkdays = (iso, n) => { let cur = iso, done = 0; while (done < n) { cur = D.addDays(cur, -1); if (!D.isWeekend(cur)) done++; } return cur; };
+    const occupied = DB.state.taches.filter(t => t.machineId === machineId && t.id !== taskId);
+    const slots = [];
+    let probe = fromDate;
+    const limit = D.addDays(fromDate, 180);
+    while (probe <= limit && slots.length < maxSlots) {
+      if (D.isWeekend(probe)) { probe = D.addDays(probe, 1); continue; }
+      const slotFin = D.addWorkdays(probe, neededWD - 1);
+      const clash = occupied.some(t => probe <= t.fin && slotFin >= t.debut);
+      if (!clash) {
+        const currentTask = DB.tache(taskId);
+        const deltaWD = currentTask ? D.workdaysBetween(currentTask.debut, probe) : 0;
+        slots.push({ debut: probe, fin: slotFin, deltaWD });
+        probe = D.addWorkdays(slotFin, 1);
+      } else {
+        const nextAfter = occupied.filter(t => t.fin >= probe).sort((a,b)=>a.fin.localeCompare(b.fin));
+        probe = nextAfter.length ? D.addWorkdays(nextAfter[0].fin, 1) : D.addDays(probe, 1);
+      }
+    }
+    return slots;
+  },
+
+  // Simulates cascade impact if task taskId is shifted by deltaWD workdays. Returns days added to latest project end.
+  _simulateCascadeImpact(taskId, deltaWD) {
+    const state = DB.state;
+    const subWorkdays = (iso, n) => { let cur = iso, done = 0; while (done < n) { cur = D.addDays(cur, -1); if (!D.isWeekend(cur)) done++; } return cur; };
+    const moveWD = (iso, n) => n >= 0 ? D.addWorkdays(iso, n) : subWorkdays(iso, -n);
+    const t = DB.tache(taskId);
+    if (!t) return { shifted: 0, projectDelay: 0 };
+    const origProjectEnd = state.taches.filter(x => x.projetId === t.projetId).reduce((m, x) => x.fin > m ? x.fin : m, '');
+    // Deep-copy only the affected task and its followers for simulation
+    const queue = [taskId];
+    const visited = new Set([taskId]);
+    const simEnds = {};
+    const newFin = moveWD(t.fin, deltaWD);
+    simEnds[taskId] = newFin;
+    let shifted = 0;
+    while (queue.length) {
+      const tid = queue.shift();
+      const followers = state.taches.filter(x => (x.dependances||[]).includes(tid));
+      for (const f of followers) {
+        if (visited.has(f.id)) continue;
+        visited.add(f.id);
+        simEnds[f.id] = moveWD(f.fin, deltaWD);
+        shifted++;
+        queue.push(f.id);
+      }
+    }
+    const simProjectEnd = state.taches.filter(x => x.projetId === t.projetId).reduce((m, x) => {
+      const fin = simEnds[x.id] || x.fin;
+      return fin > m ? fin : m;
+    }, '');
+    const projectDelay = origProjectEnd && simProjectEnd ? D.workdaysBetween(origProjectEnd, simProjectEnd) : 0;
+    return { shifted, projectDelay };
+  },
+
   render(root) {
     const st = this.state;
     if (!st.rangeStart) st.rangeStart = D.addDays(D.today(), -14);
@@ -402,8 +461,8 @@ App.views.gantt = {
           <span class="muted small" title="Ctrl/Cmd + clic pour multi-sélection et actions en lot">💡 Ctrl+clic = sélection multiple</span>
           <span class="spacer"></span>
           <input type="file" id="g-import-file" accept=".csv,.json" hidden>
-          <button class="btn-ghost" id="g-tpl" data-perm="edit">⬇ Modèle</button>
-          <button class="btn-ghost" id="g-import" data-perm="edit">⬆ Importer</button>
+          <button class="btn-ghost" id="g-tpl" data-perm="admin">⬇ Modèle</button>
+          <button class="btn-ghost" id="g-import" data-perm="admin">⬆ Importer</button>
           <button class="btn-ghost" id="g-csv">⤓ Exporter CSV</button>
           <button class="btn-ghost" id="g-ics" title="Exporter vers Outlook / Google Agenda / Apple Calendar">📅 Export .ics</button>
           <button class="btn-ghost" id="g-rapport" title="Rapport hebdomadaire imprimable par lieu">📋 Rapport</button>
@@ -1170,7 +1229,23 @@ App.views.gantt = {
       const cm  = DB.machine(machConflict.machineId);
       const ct2 = DB.tache(machConflict.conflictTacheId);
       const cp2 = ct2 ? DB.projet(ct2.projetId) : null;
-      machConflictHtml = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:5px 9px;font-size:11px;color:#dc2626;margin-bottom:5px;">⚠ <strong>${cm?.nom||'—'}</strong> aussi utilisée par ${cp2?`<strong>${cp2.code}</strong> · `:''}${ct2?.nom||'—'} (${D.fmt(ct2?.debut)}→${D.fmt(ct2?.fin)})</div>`;
+      const neededWD = Math.max(1, D.workdaysBetween(t.debut, t.fin));
+      const slots = this._findMachineSlots(machConflict.machineId, t.id, neededWD, t.debut);
+      const slotsHtml = slots.length ? slots.map((sl, i) => {
+        const impact = this._simulateCascadeImpact(t.id, sl.deltaWD);
+        const impactTxt = impact.projectDelay > 0 ? `+${impact.projectDelay} j.o. sur le projet` : impact.projectDelay < 0 ? `${impact.projectDelay} j.o.` : 'sans impact projet';
+        const cascadeTxt = impact.shifted > 0 ? ` · ${impact.shifted} tâche(s) décalée(s)` : '';
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-radius:4px;background:var(--surface-2);margin-top:3px;font-size:11px;">
+          <span>📅 <strong>${D.fmt(sl.debut)}</strong> → <strong>${D.fmt(sl.fin)}</strong> <span class="muted">(${sl.deltaWD > 0 ? '+' : ''}${sl.deltaWD} j.o.) — ${impactTxt}${cascadeTxt}</span></span>
+          <button type="button" class="btn btn-secondary slot-apply" data-slot-idx="${i}" style="padding:2px 8px;font-size:11px;margin-left:8px">Appliquer</button>
+        </div>`;
+      }).join('') : `<div class="muted small" style="margin-top:4px">Aucun créneau libre trouvé dans les 6 prochains mois.</div>`;
+      machConflictHtml = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:7px 9px;font-size:11px;color:#dc2626;margin-bottom:5px;">
+        <div>⚠ <strong>${cm?.nom||'—'}</strong> aussi utilisée par ${cp2?`<strong>${cp2.code}</strong> · `:''}${ct2?.nom||'—'} (${D.fmt(ct2?.debut)}→${D.fmt(ct2?.fin)})</div>
+        <div style="margin-top:5px;color:var(--text)"><strong style="font-size:11px;color:#dc2626">Créneaux disponibles :</strong>${slotsHtml}</div>
+      </div>`;
+      // Store slots for use in onclick handlers
+      machConflict._slots = slots;
     }
     const gestesParCat = (DB.CATALOGUE_GESTES || []).reduce((acc, g) => {
       if (!acc[g.categorie]) acc[g.categorie] = [];
@@ -1234,7 +1309,17 @@ App.views.gantt = {
         </div>
       </div>
       <div class="field"><label>Assignés</label>
-        <div class="assignes-list" id="f-assignes-wrap">
+        <div id="f-assignes-chips" style="display:flex;flex-wrap:wrap;gap:5px;min-height:24px;align-items:center">
+          ${(t.assignes||[]).length
+            ? (t.assignes||[]).map(aid => {
+                const p = s.personnes.find(x => x.id === aid);
+                return p ? `<span class="badge good" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;cursor:default">${App.personneLabel(p)}<button type="button" class="chip-remove" data-pid="${p.id}" title="Retirer" style="background:none;border:none;cursor:pointer;font-size:14px;line-height:1;padding:0;color:inherit;opacity:.7;margin-left:2px">×</button></span>`
+                : '';
+              }).join('')
+            : '<span class="muted small">Aucun assigné</span>'}
+        </div>
+        <button type="button" id="f-assignes-toggle" class="btn btn-secondary" style="margin-top:6px;font-size:11px;padding:3px 10px">⚙ Modifier / + Assigner</button>
+        <div class="assignes-list" id="f-assignes-wrap" style="display:none;margin-top:6px">
           ${s.personnes.map(p => {
             const chk = (t.assignes||[]).includes(p.id);
             return `<label class="assignes-row${chk?' is-checked':''}"><input type="checkbox" class="assignes-cb" value="${p.id}"${chk?' checked':''}> <span>${App.personneLabel(p)}</span> <span class="muted small"> · ${p.role}</span></label>`;
@@ -1312,6 +1397,65 @@ App.views.gantt = {
     `;
     App.openModal(isNew ? 'Nouvelle tâche' : 'Tâche — ' + t.nom, body, foot);
 
+    // Assignés — toggle chips/checkbox list + chip remove
+    const refreshChips = () => {
+      const checked = Array.from(document.querySelectorAll('#f-assignes-wrap .assignes-cb:checked'));
+      const chipsEl = document.getElementById('f-assignes-chips');
+      if (!chipsEl) return;
+      if (checked.length === 0) {
+        chipsEl.innerHTML = '<span class="muted small">Aucun assigné</span>';
+      } else {
+        chipsEl.innerHTML = checked.map(cb => {
+          const p = s.personnes.find(x => x.id === cb.value);
+          return p ? `<span class="badge good" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;cursor:default">${App.personneLabel(p)}<button type="button" class="chip-remove" data-pid="${p.id}" title="Retirer" style="background:none;border:none;cursor:pointer;font-size:14px;line-height:1;padding:0;color:inherit;opacity:.7;margin-left:2px">×</button></span>` : '';
+        }).join('');
+        chipsEl.querySelectorAll('.chip-remove').forEach(btn => {
+          btn.onclick = () => {
+            const cb = document.querySelector(`#f-assignes-wrap .assignes-cb[value="${btn.dataset.pid}"]`);
+            if (cb) { cb.checked = false; cb.closest('.assignes-row')?.classList.remove('is-checked'); }
+            refreshChips();
+          };
+        });
+      }
+    };
+    // Bind chip-remove on initial chips
+    document.querySelectorAll('#f-assignes-chips .chip-remove').forEach(btn => {
+      btn.onclick = () => {
+        const cb = document.querySelector(`#f-assignes-wrap .assignes-cb[value="${btn.dataset.pid}"]`);
+        if (cb) { cb.checked = false; cb.closest('.assignes-row')?.classList.remove('is-checked'); }
+        refreshChips();
+      };
+    });
+    // Toggle button
+    const toggleBtn = document.getElementById('f-assignes-toggle');
+    if (toggleBtn) toggleBtn.onclick = () => {
+      const wrap = document.getElementById('f-assignes-wrap');
+      const hidden = wrap.style.display === 'none';
+      wrap.style.display = hidden ? '' : 'none';
+      toggleBtn.textContent = hidden ? '▲ Masquer la liste' : '⚙ Modifier / + Assigner';
+    };
+    // When a checkbox changes, refresh chips
+    document.querySelectorAll('#f-assignes-wrap .assignes-cb').forEach(cb => {
+      cb.addEventListener('change', refreshChips);
+    });
+
+    // Machine conflict — slot apply buttons
+    if (machConflict && machConflict._slots) {
+      const subWorkdays = (iso, n) => { let cur = iso, done = 0; while (done < n) { cur = D.addDays(cur, -1); if (!D.isWeekend(cur)) done++; } return cur; };
+      document.querySelectorAll('.slot-apply').forEach(btn => {
+        btn.onclick = () => {
+          const idx = +btn.dataset.slotIdx;
+          const sl = machConflict._slots[idx];
+          if (!sl) return;
+          document.getElementById('f-debut').value = sl.debut;
+          document.getElementById('f-fin').value = sl.fin;
+          const durEl = document.getElementById('f-dur');
+          if (durEl) durEl.textContent = Math.max(0, D.workdaysBetween(sl.debut, sl.fin)) + ' j.o.';
+          App.toast(`Dates mises à jour : ${D.fmt(sl.debut)} → ${D.fmt(sl.fin)}`, 'success');
+        };
+      });
+    }
+
     // Suggestions d'affectation
     const renderSugg = () => {
       const pseudo = { debut: document.getElementById('f-debut').value, fin: document.getElementById('f-fin').value, machineId: document.getElementById('f-machine').value || null, lieuId: document.getElementById('f-lieu').value || null, type: document.getElementById('f-type').value };
@@ -1319,7 +1463,7 @@ App.views.gantt = {
       document.getElementById('f-sugg').innerHTML = '💡 Suggestions : ' + sugg.map(x => `<button type="button" class="chip" data-sugg="${x.p.id}" style="cursor:pointer">${App.personneLabel(x.p)}${x.compMatch?' ✓':''} · charge ${x.charge}j</button>`).join(' ');
       document.querySelectorAll('[data-sugg]').forEach(b => b.onclick = () => {
         const cb = document.querySelector(`#f-assignes-wrap .assignes-cb[value="${b.dataset.sugg}"]`);
-        if (cb && !cb.checked) { cb.checked = true; cb.closest('.assignes-row').classList.add('is-checked'); }
+        if (cb && !cb.checked) { cb.checked = true; cb.closest('.assignes-row').classList.add('is-checked'); refreshChips(); }
       });
     };
     renderSugg();
@@ -1451,6 +1595,7 @@ App.views.gantt = {
           cb.checked = selectedIds.has(cb.value);
           cb.closest('.assignes-row').classList.toggle('is-checked', selectedIds.has(cb.value));
         });
+        refreshChips();
         const missing = [];
         prop.slots.forEach(sl => {
           const got = sl.selected.filter(c => selectedIds.has(c.p.id)).length;

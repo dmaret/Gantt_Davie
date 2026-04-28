@@ -9,7 +9,7 @@ App.views.personnes = {
         <select id="p-lieu"><option value="">Tous lieux</option>${s.lieux.filter(l=>l.type==='production').map(l=>`<option value="${l.id}">${l.nom}</option>`).join('')}</select>
         <span class="spacer"></span>
         <input type="file" id="p-import-file" accept=".csv,.json" hidden>
-        <button class="btn-ghost" id="p-import" data-perm="edit" title="Importer des personnes depuis un fichier CSV ou JSON">⬆ Importer</button>
+        <button class="btn-ghost" id="p-import" data-perm="admin" title="Importer des personnes depuis un fichier CSV ou JSON">⬆ Importer</button>
         <button class="btn-ghost" id="p-tpl" title="Télécharger un modèle CSV pour importer des personnes">⬇ Modèle</button>
         <button class="btn-ghost" id="p-csv" title="Exporter la liste des personnes en CSV">⤓ Exporter CSV</button>
         <button class="btn-ghost" id="p-export" title="Exporter le planning hebdomadaire en CSV (ouvrable dans Excel)">⬇ Planning CSV</button>
@@ -82,8 +82,8 @@ App.views.personnes = {
         const cls = (on) => `h-slot ${on?'on':''} ${canEdit?'clickable':''}`;
         return `<div class="h-day"><div class="h-label">${JOURS_COURT[i]}</div><div class="${cls(h[j]?.matin)}" ${atts('matin')} title="${j} matin"></div><div class="${cls(h[j]?.aprem)}" ${atts('aprem')} title="${j} après-midi"></div></div>`;
       }).join('')}</div>`;
-      return `<tr data-id="${p.id}">
-        <td><strong class="p-name" style="cursor:pointer">${App.personneLabel(p)}</strong></td>
+      return `<tr data-id="${p.id}"${p.pendingValidation ? ' style="background:#fff8ed;"' : ''}>
+        <td><strong class="p-name" style="cursor:pointer">${App.personneLabel(p)}</strong>${p.pendingValidation ? ' <span class="badge warn" title="Importé automatiquement — à valider">⚠ À valider</span>' : ''}</td>
         <td>${p.role}</td>
         <td><span class="muted">${DB.lieu(p.lieuPrincipalId)?.nom || '—'}</span></td>
         <td>${(p.competences||[]).map(c => `<span class="chip">${c}</span>`).join('')}</td>
@@ -431,6 +431,10 @@ App.views.personnes = {
       <div class="muted small" style="margin-top:4px">Cocher = travaille sur cette demi-journée. Total : <span id="pf-dj">${horairesDemiJournees(p.horaires)}</span> demi-journées/semaine.</div>
     `;
     const body = `
+      ${p.pendingValidation ? `<div style="background:#fff8ed;border:1px solid #f59e0b;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#92400e;">
+        ⚠ <strong>Personne importée automatiquement — en attente de validation.</strong><br>
+        <span class="muted">Complète les informations ci-dessous puis clique sur <strong>Valider</strong> pour confirmer, ou <strong>Refuser</strong> pour supprimer cette entrée.</span>
+      </div>` : ''}
       <div class="row">
         <div class="field"><label>Prénom</label><input id="pf-prenom" value="${p.prenom||''}"></div>
         <div class="field"><label>Nom</label><input id="pf-nom" value="${p.nom||''}"></div>
@@ -450,12 +454,13 @@ App.views.personnes = {
       <div class="field"><label>Profil de travail hebdomadaire</label>${horairesGrid}</div>
     `;
     const foot = `
-      ${!isNew?'<button class="btn btn-danger" id="pf-del">Supprimer</button>':''}
+      ${!isNew && !p.pendingValidation ? '<button class="btn btn-danger" id="pf-del">Supprimer</button>' : ''}
+      ${p.pendingValidation ? '<button class="btn btn-danger" id="pf-refuse">Refuser</button>' : ''}
       <span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="pf-cancel">Annuler</button>
-      <button class="btn" id="pf-save">${isNew?'Créer':'Enregistrer'}</button>
+      <button class="btn" id="pf-save">${p.pendingValidation ? '✓ Valider' : isNew ? 'Créer' : 'Enregistrer'}</button>
     `;
-    App.openModal(isNew?'Nouvelle personne':App.personneLabel(p), body, foot);
+    App.openModal(isNew ? 'Nouvelle personne' : (p.pendingValidation ? '⚠ À valider — ' : '') + App.personneLabel(p), body, foot);
     document.getElementById('pf-cancel').onclick = () => App.closeModal();
     // Live recount des demi-journées
     document.querySelectorAll('.horaires-editor input[data-jour]').forEach(cb => cb.onchange = () => {
@@ -476,10 +481,20 @@ App.views.personnes = {
       document.querySelectorAll('.horaires-editor input[data-jour]').forEach(cb => { if (cb.checked) horaires[cb.dataset.jour][cb.dataset.slot] = true; });
       p.horaires = horaires;
       if (!p.prenom || !p.nom) { App.toast('Prénom et nom requis','error'); return; }
+      const wasPending = p.pendingValidation;
+      delete p.pendingValidation;
       if (isNew) s.personnes.push(p);
-      DB.save(); App.closeModal(); App.toast('Enregistré','success'); App.refresh();
+      DB.save(); App.closeModal();
+      App.toast(wasPending ? `${p.prenom} ${p.nom} validé·e ✓` : 'Enregistré', 'success');
+      App.refresh();
     };
-    if (!isNew) {
+    const refuseBtn = document.getElementById('pf-refuse');
+    if (refuseBtn) refuseBtn.onclick = () => {
+      if (!confirm(`Refuser et supprimer ${p.prenom} ${p.nom} ? Ses absences importées seront aussi supprimées.`)) return;
+      s.personnes = s.personnes.filter(x => x.id !== p.id);
+      DB.save(); App.closeModal(); App.toast(`${p.prenom} ${p.nom} refusé·e et supprimé·e`, 'info'); App.refresh();
+    };
+    if (!isNew && !p.pendingValidation) {
       document.getElementById('pf-del').onclick = () => {
         if (!confirm('Supprimer cette personne ? Ses affectations de tâches seront retirées.')) return;
         s.personnes = s.personnes.filter(x => x.id !== p.id);

@@ -11,8 +11,8 @@ App.views.bom = {
         <label class="small"><input type="checkbox" id="b-rup"> Seulement ruptures prévues</label>
         <span class="spacer"></span>
         <input type="file" id="b-import-file" accept=".csv,.json" hidden>
-        <button class="btn-ghost" id="b-tpl" data-perm="edit">⬇ Modèle</button>
-        <button class="btn-ghost" id="b-import" data-perm="edit">⬆ Importer</button>
+        <button class="btn-ghost" id="b-tpl" data-perm="admin">⬇ Modèle</button>
+        <button class="btn-ghost" id="b-import" data-perm="admin">⬆ Importer</button>
         <button class="btn-ghost" id="b-csv">⤓ Exporter CSV</button>
       </div>
       <div class="grid grid-2">

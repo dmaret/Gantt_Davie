@@ -6,8 +6,8 @@ App.views.deplacements = {
         <strong>Déplacements</strong>
         <span class="spacer"></span>
         <input type="file" id="d-import-file" accept=".csv,.json" hidden>
-        <button class="btn-ghost" id="d-tpl" data-perm="edit">⬇ Modèle</button>
-        <button class="btn-ghost" id="d-import" data-perm="edit">⬆ Importer</button>
+        <button class="btn-ghost" id="d-tpl" data-perm="admin">⬇ Modèle</button>
+        <button class="btn-ghost" id="d-import" data-perm="admin">⬆ Importer</button>
         <button class="btn-ghost" id="d-csv">⤓ Exporter CSV</button>
         <button class="btn" id="d-add">+ Nouveau déplacement</button>
       </div>

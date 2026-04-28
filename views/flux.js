@@ -165,7 +165,7 @@ App.views.flux = {
           <div style="position:absolute;left:${x}px;top:4px;width:${w}px;height:calc(100% - 8px);
             background:${bc}20;border:1.5px solid ${bc}99;border-radius:5px;overflow:hidden;
             cursor:pointer;box-sizing:border-box;display:flex;align-items:center;"
-            onclick="if(App.views.gantt)App.views.gantt.openTacheForm('${t.id}');App.navigate('gantt');"
+            onclick="App.navigateToTarget({view:'gantt',tacheId:'${t.id}'});"
             title="${t.nom}${proj?' · '+proj.code:''} (${D.fmt(t.debut)}→${D.fmt(t.fin)}) — ${pct}%">
             <div style="position:absolute;bottom:0;left:0;height:3px;width:${pct}%;background:${bc};"></div>
             ${showLabel ? `<div style="padding:0 5px;font-size:10px;font-weight:600;color:${bc};

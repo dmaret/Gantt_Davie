@@ -7,8 +7,8 @@ App.views.commandes = {
         <span class="muted small">Règle « ${s.regle4A.libelle} » : engagement bloqué tant que les ${s.regle4A.axes.length} axes ne sont pas tous validés.</span>
         <span class="spacer"></span>
         <input type="file" id="c-import-file" accept=".csv,.json" hidden>
-        <button class="btn-ghost" id="c-tpl" data-perm="edit">⬇ Modèle</button>
-        <button class="btn-ghost" id="c-import" data-perm="edit">⬆ Importer</button>
+        <button class="btn-ghost" id="c-tpl" data-perm="admin">⬇ Modèle</button>
+        <button class="btn-ghost" id="c-import" data-perm="admin">⬆ Importer</button>
         <button class="btn-ghost" id="c-csv">⤓ Exporter CSV</button>
         <button class="btn" id="c-add">+ Nouvelle commande</button>
       </div>

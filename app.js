@@ -9,6 +9,7 @@ const App = {
     DB.load();
     this.applyTheme(localStorage.getItem('theme') || 'light');
     this.bindTopbar();
+    this.initSearchBar();
     this.populateUserSelect();
     this.updateBell();
     this.bellInterval = setInterval(() => this.updateBell(), 30000);
@@ -395,37 +396,59 @@ const App = {
   // target: { view, projetId?, personneId?, tacheId?, articleId?, machineId?, lieuId?, commandeId? }
   navigateToTarget(target) {
     if (!target || !target.view) return;
+    // Ouvrir une tâche en modal sans quitter la vue courante
+    if (target.view === 'gantt' && target.tacheId && this.views.gantt?.openTacheForm) {
+      const prefill = target.machineId
+        ? { machineConflict: { machineId: target.machineId, conflictTacheId: target.conflictTacheId } }
+        : {};
+      this.views.gantt.openTacheForm(target.tacheId, prefill);
+      return;
+    }
     this.navigate(target.view);
     // Laisser le temps à la vue de se rendre avant d'ouvrir le form
     setTimeout(() => {
       try {
         if (target.view === 'projets' && target.projetId && this.views.projets?.openForm) {
           this.views.projets.openForm(target.projetId);
+          this._flashRow(target.projetId);
         } else if (target.view === 'personnes' && target.personneId && this.views.personnes?.openForm) {
           this.views.personnes.openForm(target.personneId);
-        } else if (target.view === 'gantt' && target.tacheId && this.views.gantt?.openTacheForm) {
-          const t = DB.tache(target.tacheId);
-          if (t && this.views.gantt.state) {
-            this.views.gantt.state.rangeStart = D.addDays(t.debut, -3);
-            this.views.gantt.draw && this.views.gantt.draw();
-          }
-          const prefill = target.machineId
-            ? { machineConflict: { machineId: target.machineId, conflictTacheId: target.conflictTacheId } }
-            : {};
-          this.views.gantt.openTacheForm(target.tacheId, prefill);
+          this._flashRow(target.personneId);
         } else if (target.view === 'stock' && target.articleId && this.views.stock?.openForm) {
           this.views.stock.openForm(target.articleId);
+          this._flashRow(target.articleId);
         } else if (target.view === 'machines' && target.machineId && this.views.machines?.openForm) {
           this.views.machines.openForm(target.machineId);
+          this._flashRow(target.machineId);
         } else if (target.view === 'commandes' && target.commandeId && this.views.commandes?.openForm) {
           this.views.commandes.openForm(target.commandeId);
+          this._flashRow(target.commandeId);
         } else if (target.view === 'lieux' && target.lieuId && this.views.lieux?.openForm) {
           this.views.lieux.openForm(target.lieuId);
+          this._flashRow(target.lieuId);
+        } else if (target.view === 'bom' && target.projetId) {
+          // BOM view: just navigate and let it render
+          const bomV = this.views.bom;
+          if (bomV?.state) bomV.state.projet = target.projetId;
+          bomV?.render && bomV.render(document.getElementById('view-root'));
         }
+        // For views navigated without a specific entity (just filtering), flash nothing
       } catch (err) {
         console.warn('navigateToTarget:', err);
       }
     }, 60);
+  },
+
+  _flashRow(id) {
+    if (!id) return;
+    setTimeout(() => {
+      const el = document.querySelector(`[data-id="${CSS.escape(id)}"]`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('row-flash');
+      void el.offsetWidth; // reflow to restart animation
+      el.classList.add('row-flash');
+    }, 120);
   },
 
   bindTopbar() {
@@ -504,7 +527,7 @@ const App = {
     if (map[e.key]) { this.navigate(map[e.key]); e.preventDefault(); return; }
     if (e.key === '?') { this.showHelp(); e.preventDefault(); return; }
     if (e.key === 'n' && this.views[this.view].newItem) { this.views[this.view].newItem(); e.preventDefault(); return; }
-    if (e.key === '/') { const s = document.querySelector('input[type=search]'); if (s) { s.focus(); e.preventDefault(); } return; }
+    if (e.key === '/') { const sb = document.getElementById('searchbar-input'); if (sb) { sb.focus(); sb.select(); e.preventDefault(); } return; }
     if (e.key === 'Escape') { this.closeGlobalSearch(); this.closeModal(); }
   },
 
@@ -983,6 +1006,67 @@ const App = {
     });
 
     return alerts;
+  },
+
+  // ── Barre de recherche persistante ──────────────────────────────────────
+  initSearchBar() {
+    const input = document.getElementById('searchbar-input');
+    const results = document.getElementById('searchbar-results');
+    if (!input || !results) return;
+    let sbSelected = 0, sbResults = [];
+
+    const render = (q) => {
+      sbResults = q.trim() ? this.searchAll(q, 12) : [];
+      sbSelected = 0;
+      if (!sbResults.length) {
+        results.innerHTML = q.trim() ? `<div class="sb-empty">Aucun résultat pour « ${q} »</div>` : '';
+        results.classList.toggle('hidden', !q.trim());
+        return;
+      }
+      results.innerHTML = sbResults.map((r, i) =>
+        `<div class="sb-item${i===0?' on':''}" data-i="${i}">
+          <span class="sb-kind">${r.kind}</span>
+          <span class="sb-label">${r.label}</span>
+          <span class="sb-meta">${r.meta||''}</span>
+        </div>`).join('');
+      results.classList.remove('hidden');
+      results.querySelectorAll('.sb-item').forEach(el => {
+        el.onmouseenter = () => { sbSelected = +el.dataset.i; highlight(); };
+        el.onclick = () => open(+el.dataset.i);
+      });
+    };
+
+    const highlight = () => {
+      results.querySelectorAll('.sb-item').forEach((el, i) => el.classList.toggle('on', i === sbSelected));
+    };
+
+    const open = (idx) => {
+      const r = sbResults[idx];
+      if (!r) return;
+      input.value = '';
+      results.classList.add('hidden');
+      input.blur();
+      if (r.target) { this.navigateToTarget(r.target); return; }
+      this.navigate(r.view);
+      if (r.onOpen) setTimeout(r.onOpen, 60);
+    };
+
+    input.oninput = () => render(input.value);
+    input.onkeydown = (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); sbSelected = Math.min(sbResults.length - 1, sbSelected + 1); highlight(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); sbSelected = Math.max(0, sbSelected - 1); highlight(); }
+      else if (e.key === 'Enter') { e.preventDefault(); open(sbSelected); }
+      else if (e.key === 'Escape') { input.value = ''; results.classList.add('hidden'); input.blur(); }
+    };
+    input.onfocus = () => { if (input.value.trim()) render(input.value); };
+    input.onblur = () => setTimeout(() => results.classList.add('hidden'), 150);
+
+    // / key focuses the bar (only when not in another input)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '/' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault(); input.focus(); input.select();
+      }
+    });
   },
 
   // ── Notifications navigateur ────────────────────────────────────────────

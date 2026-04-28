@@ -131,7 +131,7 @@ App.views.dashboard = {
     const alerts = App.proactiveAlerts();
     if (!alerts.length) return `<p class="muted">Tout est bon. ✔</p>`;
     return `<ul class="list list-clickable">${alerts.slice(0, 10).map(a => {
-      const nav = a.target ? `onclick="App.navigateToTarget(${JSON.stringify(a.target)})" role="button" tabindex="0"` : '';
+      const nav = a.target ? `onclick="App.navigateToTarget(${JSON.stringify(a.target).replace(/"/g,"'")})" role="button" tabindex="0"` : '';
       return `<li class="alert-row" ${nav}><span class="badge ${a.niveau}">${a.kind}</span> <span class="alert-msg">${a.msg}</span>${a.target ? '<span class="alert-arrow">›</span>' : ''}</li>`;
     }).join('')}</ul>${alerts.length > 10 ? `<p class="muted small">+${alerts.length-10} autre(s)</p>` : ''}`;
   },
@@ -160,12 +160,56 @@ App.views.dashboard = {
   renderConflicts(c) {
     const total = c.personnes.length + c.machines.length + c.stock.length + c.commandes.length;
     if (total === 0) return `<p class="muted">Aucun conflit détecté. ✔</p>`;
-    const row = (badge, kind, text, view) => `<li class="alert-row" onclick="App.navigateToTarget({view:'${view}'})" role="button" tabindex="0"><span class="badge ${badge}">${kind}</span> <span class="alert-msg">${text}</span> <span class="alert-arrow">›</span></li>`;
     const rows = [];
-    if (c.personnes.length) rows.push(row('bad','Personnes',`${c.personnes.length} chevauchement(s) d'affectation`, 'personnes'));
-    if (c.machines.length)  rows.push(row('bad','Machines', `${c.machines.length} conflit(s) d'utilisation`, 'machines'));
-    if (c.stock.length)     rows.push(row('warn','Stock',   `${c.stock.length} article(s) sous seuil`, 'stock'));
-    if (c.commandes.length) rows.push(row('warn','Commandes',`${c.commandes.length} en attente de validations 4A`, 'commandes'));
+    const MAX = 4;
+    const subRow = (target, text) =>
+      `<li class="alert-row sub-row" onclick="App.navigateToTarget(${JSON.stringify(target).replace(/"/g,"'")})" role="button" tabindex="0">
+        <span class="sub-indent muted small">↳ ${text}</span><span class="alert-arrow">›</span>
+      </li>`;
+
+    if (c.personnes.length) {
+      rows.push(`<li class="alert-row" onclick="App.navigateToTarget({view:'personnes'})" role="button" tabindex="0"><span class="badge bad">Personnes</span> <span class="alert-msg">${c.personnes.length} chevauchement(s) d'affectation</span> <span class="alert-arrow">›</span></li>`);
+      c.personnes.slice(0, MAX).forEach(p => {
+        const per = DB.personne(p.personneId);
+        const t1 = DB.tache(p.t1), t2 = DB.tache(p.t2);
+        rows.push(subRow({view:'personnes', personneId: p.personneId},
+          `${per ? App.personneLabel(per) : '—'} · <em>${t1?.nom||'—'}</em> ↔ <em>${t2?.nom||'—'}</em>`));
+      });
+      if (c.personnes.length > MAX) rows.push(`<li class="muted small sub-row" style="padding:2px 10px 4px">+${c.personnes.length - MAX} autre(s)</li>`);
+    }
+
+    if (c.machines.length) {
+      rows.push(`<li class="alert-row" onclick="App.navigateToTarget({view:'machines'})" role="button" tabindex="0"><span class="badge bad">Machines</span> <span class="alert-msg">${c.machines.length} conflit(s) d'utilisation</span> <span class="alert-arrow">›</span></li>`);
+      c.machines.slice(0, MAX).forEach(m => {
+        const mach = DB.machine(m.machineId);
+        const t1 = DB.tache(m.t1), t2 = DB.tache(m.t2);
+        const p1 = t1 ? DB.projet(t1.projetId) : null, p2 = t2 ? DB.projet(t2.projetId) : null;
+        rows.push(subRow({view:'gantt', tacheId: m.t1, machineId: m.machineId, conflictTacheId: m.t2},
+          `${mach?.nom||'—'} · ${p1?p1.code+' ':''}${t1?.nom||'—'} ↔ ${p2?p2.code+' ':''}${t2?.nom||'—'}`));
+      });
+      if (c.machines.length > MAX) rows.push(`<li class="muted small sub-row" style="padding:2px 10px 4px">+${c.machines.length - MAX} autre(s)</li>`);
+    }
+
+    if (c.stock.length) {
+      rows.push(`<li class="alert-row" onclick="App.navigateToTarget({view:'stock'})" role="button" tabindex="0"><span class="badge warn">Stock</span> <span class="alert-msg">${c.stock.length} article(s) sous seuil</span> <span class="alert-arrow">›</span></li>`);
+      c.stock.slice(0, MAX).forEach(s => {
+        const art = DB.stock(s.id);
+        rows.push(subRow({view:'stock', articleId: s.id},
+          `${art?.ref||'—'} — ${art?.nom||'—'} (manque : ${s.manque} ${art?.unite||''})`));
+      });
+      if (c.stock.length > MAX) rows.push(`<li class="muted small sub-row" style="padding:2px 10px 4px">+${c.stock.length - MAX} autre(s)</li>`);
+    }
+
+    if (c.commandes.length) {
+      rows.push(`<li class="alert-row" onclick="App.navigateToTarget({view:'commandes'})" role="button" tabindex="0"><span class="badge warn">Commandes</span> <span class="alert-msg">${c.commandes.length} en attente de validations 4A</span> <span class="alert-arrow">›</span></li>`);
+      c.commandes.slice(0, MAX).forEach(cmd => {
+        const commande = DB.state.commandes.find(x => x.id === cmd.id);
+        rows.push(subRow({view:'commandes', commandeId: cmd.id},
+          `${commande?.ref||'—'} · ${commande?.fournisseur||'—'} (${cmd.manquants.join(', ')})`));
+      });
+      if (c.commandes.length > MAX) rows.push(`<li class="muted small sub-row" style="padding:2px 10px 4px">+${c.commandes.length - MAX} autre(s)</li>`);
+    }
+
     return `<ul class="list list-clickable">${rows.join('')}</ul>`;
   },
 

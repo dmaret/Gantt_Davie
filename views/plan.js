@@ -122,11 +122,14 @@ App.views.plan = {
         dots.push(`<text class="plan-person-more" x="${cx-4}" y="${cy+3}">+${people.length-12}</text>`);
       }
       const editClass = st.edit ? 'editable' : '';
+      const cid = `tc-${l.id}`;
+      const titleMaxW = (l.w||180) - 20;
       return `<g class="plan-lieu ${isSel?'selected':''} ${editClass}" data-lieu="${l.id}">
+        <defs><clipPath id="${cid}"><rect x="${l.x||0}" y="${(l.y||0)}" width="${titleMaxW}" height="26"/></clipPath></defs>
         <rect x="${l.x||0}" y="${l.y||0}" width="${l.w||180}" height="${l.h||110}" rx="8" fill="${col.fill}" stroke="${col.stroke}" stroke-width="2"/>
-        <text class="plan-lieu-title" x="${(l.x||0)+10}" y="${(l.y||0)+20}">${typeIcon} ${l.nom}</text>
+        <text class="plan-lieu-title" x="${(l.x||0)+10}" y="${(l.y||0)+20}" clip-path="url(#${cid})">${typeIcon} ${l.nom}</text>
         <text class="plan-lieu-meta" x="${(l.x||0)+10}" y="${(l.y||0)+38}">${charge.tasks.length} tâche${charge.tasks.length>1?'s':''} · ${charge.pct}% charge</text>
-        <text class="plan-lieu-cap" x="${(l.x||0)+(l.w||180)-10}" y="${(l.y||0)+20}" text-anchor="end">cap ${l.capacite}</text>
+        <text class="plan-lieu-cap" x="${(l.x||0)+(l.w||180)-10}" y="${(l.y||0)+38}" text-anchor="end">cap ${l.capacite}</text>
         ${dots.join('')}
       </g>`;
     }).join('');
