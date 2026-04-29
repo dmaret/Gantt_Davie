@@ -415,6 +415,50 @@ App.views.flux = {
 
     svg.innerHTML = `<defs>
       ${roughFilter}
+      <filter id="fx-glow-active" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+        <feMerge>
+          <feMergeNode in="coloredBlur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+      <filter id="fx-glow-retard" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+        <feMerge>
+          <feMergeNode in="coloredBlur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+      <filter id="fx-glow-bottleneck" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+        <feMerge>
+          <feMergeNode in="coloredBlur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+      <filter id="fx-glow-trace" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+        <feMerge>
+          <feMergeNode in="coloredBlur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+      <linearGradient id="fx-grad-active" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" style="stop-color:#2563eb;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#60a5fa;stop-opacity:1" />
+      </linearGradient>
+      <linearGradient id="fx-grad-retard" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#fbbf24;stop-opacity:1" />
+      </linearGradient>
+      <linearGradient id="fx-grad-bottleneck" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" style="stop-color:#dc2626;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#ef4444;stop-opacity:1" />
+      </linearGradient>
+      <linearGradient id="fx-grad-trace" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#a78bfa;stop-opacity:1" />
+      </linearGradient>
       <marker id="fxarr-active" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
         <polygon points="0 0, 9 3.5, 0 7" fill="#2563eb"/>
       </marker>
@@ -424,9 +468,16 @@ App.views.flux = {
       <marker id="fxarr-idle" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
         <polygon points="0 0, 9 3.5, 0 7" fill="#9ca3af"/>
       </marker>
+      <marker id="fxarr-trace" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+        <polygon points="0 0, 9 3.5, 0 7" fill="#7c3aed"/>
+      </marker>
+      <marker id="fxarr-bottleneck" markerWidth="11" markerHeight="9" refX="10" refY="4.5" orient="auto">
+        <polygon points="0 0, 11 4.5, 0 9" fill="#dc2626"/>
+      </marker>
       <style>
         @keyframes fxflow { to { stroke-dashoffset: -40; } }
         @keyframes fxflow-fast { to { stroke-dashoffset: -28; } }
+        @keyframes fxflow-pulse { 0% { opacity: 0.9; } 50% { opacity: 1; } 100% { opacity: 0.9; } }
       </style>
     </defs>
     ${[...conns.values()].map(c => {
@@ -441,31 +492,31 @@ App.views.flux = {
         if (!c.projetIds.has(this.state.projet)) {
           return `<path d="${d}" fill="none" stroke="#9ca3af" stroke-width="1" stroke-dasharray="3,4" opacity="0.15"/>`;
         }
-        return `<path d="${d}" fill="none" stroke="#7c3aed" stroke-width="3.5"
-          stroke-dasharray="14,5" marker-end="url(#fxarr-active)" ${filterAttr}
+        return `<path d="${d}" fill="none" stroke="url(#fx-grad-trace)" stroke-width="4.5"
+          stroke-dasharray="14,5" marker-end="url(#fxarr-trace)" filter="url(#fx-glow-trace)" ${filterAttr}
           style="animation:fxflow 1.2s linear infinite"/>
           <path d="${d}" fill="none" stroke="#7c3aed" stroke-width="1.5" opacity="0.25" ${filterAttr}/>`;
       }
       // Bottleneck : flèches arrivant vers le goulot en rouge épais
       const isToBottleneck = bottleneckId && c.to === bottleneckId;
       if (isToBottleneck) {
-        return `<path d="${d}" fill="none" stroke="#dc2626" stroke-width="4"
-          stroke-dasharray="12,5" marker-end="url(#fxarr-retard)" ${filterAttr}
-          style="animation:fxflow-fast .7s linear infinite"/>
+        return `<path d="${d}" fill="none" stroke="url(#fx-grad-bottleneck)" stroke-width="5.5"
+          stroke-dasharray="12,5" marker-end="url(#fxarr-bottleneck)" filter="url(#fx-glow-bottleneck)" ${filterAttr}
+          style="animation:fxflow-fast .7s linear infinite;opacity:1"/>
           <path d="${d}" fill="none" stroke="#dc2626" stroke-width="1.5" opacity="0.25" ${filterAttr}/>`;
       }
       if (c.retard) {
-        return `<path d="${d}" fill="none" stroke="#f59e0b" stroke-width="2.5"
-          stroke-dasharray="10,5" marker-end="url(#fxarr-retard)" ${filterAttr}
+        return `<path d="${d}" fill="none" stroke="url(#fx-grad-retard)" stroke-width="3.5"
+          stroke-dasharray="10,5" marker-end="url(#fxarr-retard)" filter="url(#fx-glow-retard)" ${filterAttr}
           style="animation:fxflow-fast .8s linear infinite"/>
           <path d="${d}" fill="none" stroke="#f59e0b" stroke-width="1" opacity="0.2" ${filterAttr}/>`;
       } else if (c.active) {
-        return `<path d="${d}" fill="none" stroke="#2563eb" stroke-width="2.5"
-          stroke-dasharray="12,5" marker-end="url(#fxarr-active)" ${filterAttr}
+        return `<path d="${d}" fill="none" stroke="url(#fx-grad-active)" stroke-width="3.5"
+          stroke-dasharray="12,5" marker-end="url(#fxarr-active)" filter="url(#fx-glow-active)" ${filterAttr}
           style="animation:fxflow 1.4s linear infinite"/>
           <path d="${d}" fill="none" stroke="#2563eb" stroke-width="1" opacity="0.15" ${filterAttr}/>`;
       } else {
-        return `<path d="${d}" fill="none" stroke="#9ca3af" stroke-width="1.5"
+        return `<path d="${d}" fill="none" stroke="#9ca3af" stroke-width="2"
           stroke-dasharray="6,4" marker-end="url(#fxarr-idle)" opacity="0.55" ${filterAttr}/>`;
       }
     }).join('')}`;

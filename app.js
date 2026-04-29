@@ -694,7 +694,11 @@ const App = {
       if (this._navHistory.length > 30) this._navHistory.shift();
       this._navFuture = []; // navigation normale efface le futur
     }
-    if (this.view === 'gantt' && name !== 'gantt' && this.views.gantt.clearSelection) this.views.gantt.clearSelection();
+    if (this.view === 'gantt' && name !== 'gantt') {
+      if (this.views.gantt.clearSelection) this.views.gantt.clearSelection();
+      const mm = document.getElementById('gantt-minimap');
+      if (mm) mm.remove();
+    }
     this.view = name;
     location.hash = name;
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === name));
@@ -706,6 +710,10 @@ const App = {
     if (!this._navHistory.length) return;
     this._navFuture.push(this.view);
     const prev = this._navHistory.pop();
+    if (this.view === 'gantt' && prev !== 'gantt') {
+      const mm = document.getElementById('gantt-minimap');
+      if (mm) mm.remove();
+    }
     this.view = prev;
     location.hash = prev;
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === prev));
@@ -717,6 +725,10 @@ const App = {
     if (!this._navFuture.length) return;
     this._navHistory.push(this.view);
     const next = this._navFuture.pop();
+    if (this.view === 'gantt' && next !== 'gantt') {
+      const mm = document.getElementById('gantt-minimap');
+      if (mm) mm.remove();
+    }
     this.view = next;
     location.hash = next;
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === next));
