@@ -22,7 +22,7 @@ App.views.whatif = {
             </ul>
           </li>
         </ol>
-        ${hasSnap ? '<div class="badge warn" style="margin-top:10px">Simulation en cours. Snapshot pris le ' + new Date(JSON.parse(localStorage.getItem(this.SNAP_KEY))._snapDate || Date.now()).toLocaleString('fr-CH') + '</div>' : ''}
+        ${hasSnap ? (() => { try { const sd = JSON.parse(localStorage.getItem(this.SNAP_KEY) || '{}')._snapDate; return '<div class="badge warn" style="margin-top:10px">Simulation en cours. Snapshot pris le ' + new Date(sd || Date.now()).toLocaleString('fr-CH') + '</div>'; } catch(e) { return '<div class="badge bad">Snapshot corrompu</div>'; } })() : ''}
       </div>
       ${hasSnap ? '<div class="card" style="margin-top:14px"><h2>Différences</h2><div id="wi-diff"></div></div>' : ''}
       ${this.renderHistory()}

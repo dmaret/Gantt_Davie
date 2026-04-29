@@ -203,9 +203,9 @@ App.views.dashboard = {
     if (c.commandes.length) {
       rows.push(`<li class="alert-row" onclick="App.navigateToTarget({view:'commandes'})" role="button" tabindex="0"><span class="badge warn">Commandes</span> <span class="alert-msg">${c.commandes.length} en attente de validations 4A</span> <span class="alert-arrow">›</span></li>`);
       c.commandes.slice(0, MAX).forEach(cmd => {
-        const commande = DB.state.commandes.find(x => x.id === cmd.id);
+        const commande = (DB.state.commandes||[]).find(x => x.id === cmd.id);
         rows.push(subRow({view:'commandes', commandeId: cmd.id},
-          `${commande?.ref||'—'} · ${commande?.fournisseur||'—'} (${cmd.manquants.join(', ')})`));
+          `${commande?.ref||'—'} · ${commande?.fournisseur||'—'} (${(cmd.manquants||[]).join(', ')})`));
       });
       if (c.commandes.length > MAX) rows.push(`<li class="muted small sub-row" style="padding:2px 10px 4px">+${c.commandes.length - MAX} autre(s)</li>`);
     }
@@ -240,7 +240,7 @@ App.views.dashboard = {
   renderNextTasks(s, today) {
     const ts = s.taches
       .filter(t => t.fin >= today && t.debut <= D.addWorkdays(today, 7) && !t.jalon)
-      .sort((a,b) => a.debut.localeCompare(b.debut))
+      .sort((a,b) => (a.debut > b.debut ? 1 : a.debut < b.debut ? -1 : 0))
       .slice(0, 8);
     if (!ts.length) return `<p class="muted">Rien à venir cette semaine.</p>`;
     return `<ul class="list list-clickable">${ts.map(t => {
@@ -260,7 +260,7 @@ App.views.dashboard = {
   renderNextMoves(s, today) {
     const ds = s.deplacements
       .filter(d => d.date >= today)
-      .sort((a,b) => a.date.localeCompare(b.date))
+      .sort((a,b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0))
       .slice(0,8);
     if (!ds.length) return `<p class="muted">Aucun déplacement prévu.</p>`;
     return `<ul class="list">${ds.map(d => {
@@ -310,7 +310,7 @@ App.views.dashboard = {
       if (a.fin >= today && a.debut <= horizon) entries.push({ ...a, p });
     }));
     if (!entries.length) return `<p class="muted">Personne d'absent dans les 10 j ouvrés.</p>`;
-    entries.sort((a,b) => a.debut.localeCompare(b.debut));
+    entries.sort((a,b) => (a.debut > b.debut ? 1 : a.debut < b.debut ? -1 : 0));
     return `<ul class="list list-clickable">${entries.slice(0,8).map(e => {
       const encours = e.debut <= today && e.fin >= today;
       return `<li class="alert-row" onclick="App.navigate('absences')" role="button" tabindex="0">
