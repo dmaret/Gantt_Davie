@@ -1,6 +1,8 @@
 // Vue Flux atelier — schéma visuel machines connectées par dépendances de tâches
 App.views.flux = {
-  state: { projet: '', lieu: '', editMode: false, viewMode: 'canvas', zoom: '20j', canvasStyle: 'normal' },
+  state: { projet: '', lieu: '', editMode: false, viewMode: 'canvas', zoom: '20j', canvasStyle: 'normal',
+    heatmap: false, traceMode: false, simDay: null, simPlaying: false, showBottleneck: false },
+  _simTimer: null,
   _ZOOM_PRESETS: {
     '10j': { label: '10 j', pxDay: 55, BACK: 2, FWD:  8 },
     '20j': { label: '20 j', pxDay: 40, BACK: 3, FWD: 17 },
@@ -8,6 +10,7 @@ App.views.flux = {
   },
 
   render(root) {
+    if (this._simTimer) { clearInterval(this._simTimer); this._simTimer = null; }
     const s = DB.state;
     if (!s.fluxLayout) s.fluxLayout = {};
     const machines = this._filtered();
@@ -27,6 +30,12 @@ App.views.flux = {
         <option value="blueprint" ${this.state.canvasStyle==='blueprint'?'selected':''}>📐 Blueprint</option>
         <option value="plan" ${this.state.canvasStyle==='plan'?'selected':''}>🏭 Plan atelier</option>
       </select>
+      <span style="border-left:1px solid var(--border);margin:0 4px;height:20px;display:inline-block"></span>
+      <button class="btn-ghost${this.state.heatmap?' fx-view-active':''}" id="fx-heat" title="Heatmap charge 5 j ouvrés">🌡 Charge</button>
+      <button class="btn-ghost${this.state.showBottleneck?' fx-view-active':''}" id="fx-bottle" title="Identifier le goulot d'étranglement">🚨 Goulot</button>
+      <button class="btn-ghost${this.state.traceMode?' fx-view-active':''}" id="fx-trace" title="Tracer le fil d'une pièce (sélectionner un projet d'abord)">🔍 Tracer</button>
+      <button class="btn-ghost${this.state.simPlaying?' fx-view-active':''}" id="fx-sim" title="Simuler l'avancement dans le temps">${this.state.simPlaying?'⏸':'▶'} Sim</button>
+      ${this.state.simDay?`<span class="muted small" id="fx-simday" style="font-weight:600;color:#dc2626">📅 ${D.fmt(this.state.simDay)}</span>`:''}
     ` : '';
 
     const swimZoom = this.state.viewMode === 'swimlanes' ? `
@@ -81,11 +90,23 @@ App.views.flux = {
       if (sv) sv.onclick = () => { DB.save(); App.toast('Disposition sauvegardée', 'success'); };
       const styleEl = document.getElementById('fx-cstyle');
       if (styleEl) styleEl.onchange = e => { this.state.canvasStyle = e.target.value; this.render(root); };
+      const heatEl = document.getElementById('fx-heat');
+      if (heatEl) heatEl.onclick = () => { this.state.heatmap = !this.state.heatmap; this.render(root); };
+      const bottleEl = document.getElementById('fx-bottle');
+      if (bottleEl) bottleEl.onclick = () => { this.state.showBottleneck = !this.state.showBottleneck; this.render(root); };
+      const traceEl = document.getElementById('fx-trace');
+      if (traceEl) traceEl.onclick = () => {
+        if (!this.state.projet) { App.toast("Sélectionne d'abord un projet pour tracer son fil",'info'); return; }
+        this.state.traceMode = !this.state.traceMode; this.render(root);
+      };
+      const simEl = document.getElementById('fx-sim');
+      if (simEl) simEl.onclick = () => this._toggleSim(root, machines);
 
       if (!this.state.editMode) {
         root.querySelectorAll('.fx-block').forEach(el => {
           el.onclick = () => this._openPanel(el.dataset.mid);
         });
+        this._setupHover(machines);
       }
       this._drawArrows();
       if (this.state.editMode) this._setupDrag(root);
@@ -278,7 +299,7 @@ App.views.flux = {
   },
 
   _status(machineId) {
-    const today = D.today();
+    const today = this.state.simDay || D.today();
     const taches = (DB.state.taches || []).filter(t =>
       t.machineId === machineId && (!this.state.projet || t.projetId === this.state.projet)
     );
@@ -312,6 +333,8 @@ App.views.flux = {
       if (n.includes('montage') || n.includes('assembl')) return '🔩';
       return '🔧';
     };
+    const bottleneckId = this.state.showBottleneck ? this._findBottleneck(machines) : null;
+    const trace = (this.state.traceMode && this.state.projet) ? this._traceOrder(this.state.projet) : null;
     return machines.map((m, idx) => {
       const pos = layout[m.id];
       const st  = this._status(m.id);
@@ -319,9 +342,29 @@ App.views.flux = {
       const task = st.tasks[0];
       const badgeColor = st.code === 'libre' ? '#6b7280' : st.color;
       const iconHtml = cs !== 'normal' ? `<div class="fx-type-icon">${typeIcon(m)}</div>` : '';
+      let borderColor = st.color;
+      if (this.state.heatmap) {
+        const loads = this._computeLoad(m.id);
+        borderColor = this._heatColor(loads);
+      }
+      const isBottleneck = bottleneckId === m.id;
+      let opacity = '1';
+      let traceBadge = '';
+      if (trace) {
+        const step = trace[m.id];
+        if (step) {
+          traceBadge = `<div class="fx-trace-step" style="position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;background:#7c3aed;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(124,58,237,.5);z-index:2">${step}</div>`;
+        } else {
+          opacity = '0.25';
+        }
+      }
+      const goulotBadge = isBottleneck ? `<div class="fx-goulot-badge">⚠ GOULOT</div>` : '';
+      const extraBorder = isBottleneck ? 'box-shadow:0 0 0 3px #dc262644, 0 4px 12px rgba(220,38,38,.3);' : '';
       return `<div class="fx-block fx-block-${cs}${this.state.editMode ? ' fx-draggable' : ''}" data-mid="${m.id}"
-          style="left:${pos.x}px;top:${pos.y}px;border-top:3px solid ${st.color}">
+          style="left:${pos.x}px;top:${pos.y}px;border-top:3px solid ${borderColor};opacity:${opacity};${extraBorder}">
         <div class="fx-badge-num" style="background:${badgeColor}">${idx+1}</div>
+        ${traceBadge}
+        ${goulotBadge}
         ${iconHtml}
         <div class="fx-block-name">${m.nom}</div>
         ${lieu ? `<div class="fx-block-lieu">${lieu.nom}</div>` : ''}
@@ -340,9 +383,12 @@ App.views.flux = {
     if (!svg) return;
     const layout = DB.state.fluxLayout || {};
     const taches = DB.state.taches || [];
-    const today  = D.today();
+    const today  = this.state.simDay || D.today();
     const BW = 160, BH = 95;
     const cs = this.state.canvasStyle || 'normal';
+    const machines = this._filtered();
+    const bottleneckId = this.state.showBottleneck ? this._findBottleneck(machines) : null;
+    const trace = (this.state.traceMode && this.state.projet) ? this._traceOrder(this.state.projet) : null;
 
     const conns = new Map();
     taches.filter(t => !this.state.projet || t.projetId === this.state.projet).forEach(t => {
@@ -351,9 +397,10 @@ App.views.flux = {
         const dep = taches.find(x => x.id === depId);
         if (!dep || !dep.machineId || dep.machineId === t.machineId) return;
         const key = dep.machineId + '->' + t.machineId;
-        const ex  = conns.get(key) || { from: dep.machineId, to: t.machineId, active: false, retard: false };
+        const ex  = conns.get(key) || { from: dep.machineId, to: t.machineId, active: false, retard: false, projetIds: new Set() };
         if (t.debut <= today && t.fin >= today && t.avancement < 100) ex.active = true;
         if (t.fin < today && t.avancement < 100) ex.retard = true;
+        ex.projetIds.add(t.projetId);
         conns.set(key, ex);
       });
     });
@@ -389,6 +436,24 @@ App.views.flux = {
       const x2 = tp.x,      y2 = tp.y + BH / 2;
       const bend = Math.abs(x2 - x1) * 0.45 + 30;
       const d = `M${x1},${y1} C${x1+bend},${y1} ${x2-bend},${y2} ${x2},${y2}`;
+      // Trace mode : ne dessine que les connexions du projet tracé, en violet vif
+      if (trace) {
+        if (!c.projetIds.has(this.state.projet)) {
+          return `<path d="${d}" fill="none" stroke="#9ca3af" stroke-width="1" stroke-dasharray="3,4" opacity="0.15"/>`;
+        }
+        return `<path d="${d}" fill="none" stroke="#7c3aed" stroke-width="3.5"
+          stroke-dasharray="14,5" marker-end="url(#fxarr-active)" ${filterAttr}
+          style="animation:fxflow 1.2s linear infinite"/>
+          <path d="${d}" fill="none" stroke="#7c3aed" stroke-width="1.5" opacity="0.25" ${filterAttr}/>`;
+      }
+      // Bottleneck : flèches arrivant vers le goulot en rouge épais
+      const isToBottleneck = bottleneckId && c.to === bottleneckId;
+      if (isToBottleneck) {
+        return `<path d="${d}" fill="none" stroke="#dc2626" stroke-width="4"
+          stroke-dasharray="12,5" marker-end="url(#fxarr-retard)" ${filterAttr}
+          style="animation:fxflow-fast .7s linear infinite"/>
+          <path d="${d}" fill="none" stroke="#dc2626" stroke-width="1.5" opacity="0.25" ${filterAttr}/>`;
+      }
       if (c.retard) {
         return `<path d="${d}" fill="none" stroke="#f59e0b" stroke-width="2.5"
           stroke-dasharray="10,5" marker-end="url(#fxarr-retard)" ${filterAttr}
@@ -485,6 +550,17 @@ App.views.flux = {
     const done     = taches.filter(t => t.avancement >= 100).length;
     const lieu     = (DB.state.lieux||[]).find(l => l.id === m.lieuId);
 
+    const otherMachines = (DB.state.machines||[]).filter(x => x.id !== mid);
+    const transferUI = (t) => {
+      if (!App.can('edit')) return '';
+      return `<button class="btn-ghost small fx-transfer-btn" data-tid="${t.id}" title="Transférer cette tâche vers une autre machine" style="padding:1px 7px;font-size:12px;">⇄</button>
+        <div id="fx-transfer-sel-${t.id}" style="display:none;gap:5px;align-items:center;margin-top:5px;flex-wrap:wrap">
+          <select id="fx-transfer-mid-${t.id}" style="font-size:11px;padding:3px 6px;flex:1;min-width:140px">
+            ${otherMachines.map(x => `<option value="${x.id}">${x.nom}</option>`).join('')}
+          </select>
+          <button class="btn small fx-transfer-ok" data-tid="${t.id}" style="padding:2px 10px;font-size:11px">OK</button>
+        </div>`;
+    };
     const body = `
       <div style="font-size:13px">
         <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
@@ -501,8 +577,13 @@ App.views.flux = {
           ${active.length ? active.map(t => {
             const proj = (DB.state.projets||[]).find(p => p.id === t.projetId);
             return `<div class="card" style="padding:8px;margin-bottom:6px">
-              <div style="font-weight:600">${t.nom}</div>
-              <div class="muted small">${proj ? proj.code+' · ' : ''}${D.fmt(t.debut)} → ${D.fmt(t.fin)}</div>
+              <div style="display:flex;justify-content:space-between;align-items:start;gap:6px">
+                <div style="flex:1">
+                  <div style="font-weight:600">${t.nom}</div>
+                  <div class="muted small">${proj ? proj.code+' · ' : ''}${D.fmt(t.debut)} → ${D.fmt(t.fin)}</div>
+                </div>
+                ${transferUI(t)}
+              </div>
               <div style="height:4px;background:var(--border);border-radius:2px;margin-top:6px">
                 <div style="height:100%;width:${t.avancement||0}%;background:var(--primary);border-radius:2px"></div>
               </div>
@@ -512,9 +593,12 @@ App.views.flux = {
         </div>
         ${upcoming.length ? `<div style="margin-bottom:12px">
           <div class="muted small" style="font-weight:600;margin-bottom:6px">Prochaines tâches</div>
-          ${upcoming.map(t => `<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;justify-content:space-between;gap:8px">
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.nom}</span>
-            <span class="muted" style="flex-shrink:0">${D.fmt(t.debut)}</span>
+          ${upcoming.map(t => `<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;">
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${t.nom}</span>
+              <span class="muted" style="flex-shrink:0">${D.fmt(t.debut)}</span>
+              ${transferUI(t)}
+            </div>
           </div>`).join('')}
         </div>` : ''}
         ${done > 0 ? `<div class="muted small">✓ ${done} tâche(s) terminée(s) sur cette machine</div>` : ''}
@@ -525,5 +609,200 @@ App.views.flux = {
       <button class="btn btn-secondary" onclick="App.closeModal()">Fermer</button>
       <button class="btn" onclick="App.closeModal();App.navigate('machines')">Machines →</button>
     `);
+    // Wire up transfer buttons
+    document.querySelectorAll('.fx-transfer-btn').forEach(btn => {
+      btn.onclick = () => {
+        const tid = btn.dataset.tid;
+        const sel = document.getElementById('fx-transfer-sel-'+tid);
+        if (sel.style.display === 'none' || !sel.style.display) {
+          sel.style.display = 'flex';
+          btn.textContent = '✕';
+        } else {
+          sel.style.display = 'none';
+          btn.textContent = '⇄';
+        }
+      };
+    });
+    document.querySelectorAll('.fx-transfer-ok').forEach(btn => {
+      btn.onclick = () => {
+        if (!App.can('edit')) { App.toast('Lecture seule','error'); return; }
+        const tid = btn.dataset.tid;
+        const newMid = document.getElementById('fx-transfer-mid-'+tid).value;
+        if (!newMid) return;
+        const t = DB.tache(tid);
+        if (!t) return;
+        const oldMachine = DB.machine(t.machineId);
+        const newMachine = DB.machine(newMid);
+        t.machineId = newMid;
+        DB.logAudit('update','tache',tid,`Transfert ${oldMachine?.nom||'?'} → ${newMachine?.nom||'?'}`);
+        DB.save();
+        App.toast(`Tâche transférée vers ${newMachine?.nom||''}`,'success');
+        App.closeModal();
+        App.refresh();
+      };
+    });
+  },
+
+  // === Heatmap charge ===
+  _computeLoad(machineId) {
+    const today = this.state.simDay || D.today();
+    const days = Array.from({length:5}, (_, i) => D.addWorkdays(today, i));
+    return days.map(d =>
+      (DB.state.taches||[]).some(t => t.machineId === machineId && t.debut <= d && t.fin >= d && t.avancement < 100)
+    );
+  },
+  _heatColor(loads) {
+    const n = loads.filter(Boolean).length;
+    if (n === 0) return '#059669';
+    if (n === 1) return '#84cc16';
+    if (n === 2) return '#facc15';
+    if (n === 3) return '#f59e0b';
+    if (n === 4) return '#f97316';
+    return '#dc2626';
+  },
+
+  // === Goulot d'étranglement ===
+  _findBottleneck(machines) {
+    const today = this.state.simDay || D.today();
+    let maxLoad = 0, bottleneckId = null;
+    machines.forEach(m => {
+      const queue = (DB.state.taches||[]).filter(t =>
+        t.machineId === m.id && t.avancement < 100 && t.fin >= today &&
+        (!this.state.projet || t.projetId === this.state.projet)
+      );
+      const totalDays = queue.reduce((n, t) => n + Math.max(1, D.workdaysBetween(t.debut, t.fin)), 0);
+      if (totalDays > maxLoad) { maxLoad = totalDays; bottleneckId = m.id; }
+    });
+    return maxLoad >= 3 ? bottleneckId : null;
+  },
+
+  // === Fil d'Ariane (trace project order) ===
+  _traceOrder(projetId) {
+    const tasks = (DB.state.taches||[]).filter(t => t.projetId === projetId && t.machineId);
+    const order = {};
+    let step = 1;
+    const visited = new Set();
+    const visit = (t) => {
+      if (visited.has(t.id)) return;
+      visited.add(t.id);
+      (t.dependances||[]).forEach(depId => {
+        const dep = tasks.find(x => x.id === depId);
+        if (dep) visit(dep);
+      });
+      if (t.machineId && !order[t.machineId]) {
+        order[t.machineId] = step++;
+      }
+    };
+    tasks.slice().sort((a,b) => a.debut.localeCompare(b.debut)).forEach(visit);
+    return order;
+  },
+
+  // === Simulation temps réel ===
+  _toggleSim(root, machines) {
+    if (this.state.simPlaying) {
+      if (this._simTimer) { clearInterval(this._simTimer); this._simTimer = null; }
+      this.state.simPlaying = false;
+      this.state.simDay = null;
+      this.render(root);
+      return;
+    }
+    this.state.simDay = this.state.simDay || D.today();
+    this.state.simPlaying = true;
+    this.render(root);
+    this._simTimer = setInterval(() => {
+      this.state.simDay = D.addWorkdays(this.state.simDay, 1);
+      const blocksEl = document.getElementById('fx-blocks');
+      if (blocksEl) blocksEl.innerHTML = this._blocks(machines);
+      this._drawArrows();
+      const simDayEl = document.getElementById('fx-simday');
+      if (simDayEl) simDayEl.textContent = '📅 ' + D.fmt(this.state.simDay);
+      this._setupHover(machines);
+      // Re-bind block clicks
+      if (!this.state.editMode) {
+        document.querySelectorAll('.fx-block').forEach(el => {
+          el.onclick = () => this._openPanel(el.dataset.mid);
+        });
+      }
+      // Stop after 6 months
+      if (this.state.simDay > D.addDays(D.today(), 180)) {
+        if (this._simTimer) { clearInterval(this._simTimer); this._simTimer = null; }
+        this.state.simPlaying = false;
+        App.toast('Simulation terminée','info');
+        this.render(root);
+      }
+    }, 800);
+  },
+
+  // === Mini-Gantt tooltip on hover ===
+  _setupHover(machines) {
+    let tt = document.getElementById('fx-tt');
+    if (!tt) {
+      tt = document.createElement('div');
+      tt.id = 'fx-tt';
+      tt.className = 'fx-tt';
+      document.body.appendChild(tt);
+    }
+    document.querySelectorAll('.fx-block').forEach(el => {
+      el.addEventListener('mouseenter', () => {
+        if (this.state.editMode) return;
+        const mid = el.dataset.mid;
+        const m = (DB.state.machines||[]).find(x => x.id === mid);
+        if (!m) return;
+        const refDay = this.state.simDay || D.today();
+        const days = Array.from({length:10}, (_, i) => D.addWorkdays(refDay, i - 2));
+        const tasks = (DB.state.taches||[]).filter(t =>
+          t.machineId === mid &&
+          t.fin >= days[0] && t.debut <= days[days.length-1] &&
+          t.avancement < 100
+        ).slice(0, 5);
+        const bars = days.map(d => {
+          const task = tasks.find(t => t.debut <= d && t.fin >= d);
+          const proj = task ? DB.projet(task.projetId) : null;
+          const color = proj?.couleur || (task ? '#6b7280' : null);
+          const isToday = d === refDay;
+          const fill = task ? `background:${color}66;border:1px solid ${color}` : 'background:var(--border);';
+          const todayMark = isToday ? 'outline:2px solid #ef4444;outline-offset:-1px;' : '';
+          const tip = task ? `${task.nom} · ${D.fmt(d)}` : D.fmt(d);
+          return `<div class="fx-mini-bar-cell" style="${fill};${todayMark}" title="${tip}">
+            ${task && task.avancement ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${task.avancement}%;background:${color};opacity:.45;"></div>` : ''}
+          </div>`;
+        }).join('');
+        const dayLabels = days.map(d => {
+          const isToday = d === refDay;
+          return `<div class="fx-mini-day" style="${isToday?'color:#ef4444;font-weight:700':''}">${D.fmt(d).slice(0,5)}</div>`;
+        }).join('');
+        const loads = this._computeLoad(mid);
+        const loadPct = Math.round(loads.filter(Boolean).length / loads.length * 100);
+        tt.innerHTML = `
+          <div style="font-weight:700;margin-bottom:4px">${m.nom}</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Charge 5 j : <strong style="color:${this._heatColor(loads)}">${loadPct}%</strong> · ${tasks.length} tâche(s) à venir</div>
+          <div class="fx-mini-bar">${bars}</div>
+          <div class="fx-mini-bar" style="margin-bottom:0">${dayLabels}</div>
+          ${tasks.length ? `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px;max-height:80px;overflow-y:auto">
+            ${tasks.map(t => {
+              const proj = DB.projet(t.projetId);
+              return `<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:2px;font-size:10px">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${proj?proj.code+' · ':''}${t.nom}</span>
+                <span class="muted" style="flex-shrink:0">${D.fmt(t.debut)}→${D.fmt(t.fin)}</span>
+              </div>`;
+            }).join('')}
+          </div>` : ''}
+        `;
+        tt.style.display = 'block';
+        const rect = el.getBoundingClientRect();
+        const ttW = 250;
+        let left = rect.right + 10;
+        let top = rect.top;
+        if (left + ttW > window.innerWidth) left = rect.left - ttW - 10;
+        if (left < 8) left = 8;
+        if (top + 200 > window.innerHeight) top = window.innerHeight - 210;
+        tt.style.left = left + 'px';
+        tt.style.top = Math.max(8, top) + 'px';
+      });
+      el.addEventListener('mouseleave', () => {
+        const ttEl = document.getElementById('fx-tt');
+        if (ttEl) ttEl.style.display = 'none';
+      });
+    });
   },
 };
