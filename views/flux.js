@@ -19,6 +19,12 @@ App.views.flux = {
       `<button class="btn-ghost fx-view-btn${this.state.viewMode === v ? ' fx-view-active' : ''}" data-fxview="${v}">${l}</button>`
     ).join('');
 
+    const heatLegend = this.state.heatmap ? `
+      <div style="display:flex;align-items:center;gap:2px;font-size:9px;padding:2px 6px;background:var(--surface-2);border-radius:4px;border:1px solid var(--border)">
+        <span style="color:#059669">●</span><span style="color:var(--text-muted)">Libre</span>
+        <span style="display:inline-block;width:28px;height:7px;border-radius:2px;margin:0 2px;background:linear-gradient(to right,#84cc16,#facc15,#f97316,#dc2626)"></span>
+        <span style="color:var(--text-muted)">Saturé</span>
+      </div>` : '';
     const canvasControls = this.state.viewMode === 'canvas' ? `
       <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;user-select:none">
         <input type="checkbox" id="fx-edit" ${this.state.editMode ? 'checked' : ''}> Déplacer
@@ -31,10 +37,11 @@ App.views.flux = {
         <option value="plan" ${this.state.canvasStyle==='plan'?'selected':''}>🏭 Plan atelier</option>
       </select>
       <span style="border-left:1px solid var(--border);margin:0 4px;height:20px;display:inline-block"></span>
-      <button class="btn-ghost${this.state.heatmap?' fx-view-active':''}" id="fx-heat" title="Heatmap charge 5 j ouvrés">🌡 Charge</button>
+      <button class="btn-ghost${this.state.heatmap?' fx-view-active':''}" id="fx-heat" title="Heatmap charge J+5 : colore chaque machine selon sa charge sur les 5 prochains jours ouvrés (vert = libre, rouge = saturé)">🌡 Heatmap</button>
+      ${heatLegend}
       <button class="btn-ghost${this.state.showBottleneck?' fx-view-active':''}" id="fx-bottle" title="Identifier le goulot d'étranglement">🚨 Goulot</button>
       <button class="btn-ghost${this.state.traceMode?' fx-view-active':''}" id="fx-trace" title="Tracer le fil d'une pièce (sélectionner un projet d'abord)">🔍 Tracer</button>
-      <button class="btn-ghost${this.state.simPlaying?' fx-view-active':''}" id="fx-sim" title="Simuler l'avancement dans le temps">${this.state.simPlaying?'⏸':'▶'} Sim</button>
+      <button class="btn-ghost${this.state.simPlaying?' fx-view-active':''}" id="fx-sim" title="Simuler l'avancement dans le temps">${this.state.simPlaying?'⏸ Pause':'▶ Sim'}</button>
       ${this.state.simDay?`<span class="muted small" id="fx-simday" style="font-weight:600;color:#dc2626">📅 ${D.fmt(this.state.simDay)}</span>`:''}
     ` : '';
 
@@ -67,6 +74,7 @@ App.views.flux = {
           <div class="flux-canvas fx-bg-${this.state.canvasStyle||'normal'}" id="fx-canvas">
             ${this._renderBody(machines)}
           </div>
+          <div id="fx-sim-tl" class="fx-sim-tl" style="${this.state.simDay ? '' : 'display:none'}"></div>
         </div>
       </div>
     `;
@@ -109,6 +117,7 @@ App.views.flux = {
         this._setupHover(machines);
       }
       this._drawArrows();
+      this._drawTimeline(machines);
       if (this.state.editMode) this._setupDrag(root);
     } else {
       root.querySelectorAll('.fx-machine-card').forEach(el => {
@@ -765,6 +774,7 @@ App.views.flux = {
       const blocksEl = document.getElementById('fx-blocks');
       if (blocksEl) blocksEl.innerHTML = this._blocks(machines);
       this._drawArrows();
+      this._drawTimeline(machines);
       const simDayEl = document.getElementById('fx-simday');
       if (simDayEl) simDayEl.textContent = '📅 ' + D.fmt(this.state.simDay);
       this._setupHover(machines);
@@ -782,6 +792,95 @@ App.views.flux = {
         this.render(root);
       }
     }, 800);
+  },
+
+  // === Timeline verticale simulation ===
+  _drawTimeline(machines) {
+    const tl = document.getElementById('fx-sim-tl');
+    if (!tl) return;
+    if (!this.state.simDay) { tl.style.display = 'none'; return; }
+    tl.style.display = 'flex';
+
+    const today = this.state.simDay;
+    const taches = (DB.state.taches || []).filter(t =>
+      t.machineId && (!this.state.projet || t.projetId === this.state.projet)
+    );
+    if (!taches.length) {
+      tl.innerHTML = `<div style="padding:8px 4px;font-size:9px;color:var(--text-muted);text-align:center;writing-mode:vertical-lr">Aucune tâche</div>`;
+      return;
+    }
+
+    const minDate = taches.reduce((m, t) => t.debut < m ? t.debut : m, taches[0].debut);
+    const maxDate = taches.reduce((m, t) => t.fin > m ? t.fin : m, taches[0].fin);
+    const totalDays = Math.max(1, D.diffDays(minDate, maxDate));
+
+    const TL_W = 96;
+    const TL_H = tl.clientHeight || 500;
+    const LABEL_W = 32;
+    const BARS_W = TL_W - LABEL_W - 2;
+    const scale = TL_H / totalDays;
+
+    // Machine color lanes
+    const laneW = Math.max(2, Math.floor(BARS_W / Math.max(1, machines.length)));
+    const bars = machines.map((m, mi) => {
+      const mtaches = taches.filter(t => t.machineId === m.id);
+      return mtaches.map(t => {
+        const proj = DB.projet(t.projetId);
+        const color = proj?.couleur || '#6b7280';
+        const y = Math.round(D.diffDays(minDate, t.debut) * scale);
+        const h = Math.max(2, Math.round(D.diffDays(t.debut, t.fin) * scale));
+        const x = LABEL_W + mi * laneW;
+        const done = t.avancement >= 100;
+        const past = t.fin < today && !done;
+        return `<rect x="${x}" y="${y}" width="${laneW - 1}" height="${h}"
+          fill="${color}" opacity="${done ? '0.2' : past ? '0.4' : '0.75'}" rx="1"
+          stroke="${past ? '#dc2626' : 'none'}" stroke-width="${past ? 0.5 : 0}"/>`;
+      }).join('');
+    }).join('');
+
+    // Week ticks + labels
+    const ticks = [];
+    let d = minDate;
+    while (d <= maxDate) {
+      const y = Math.round(D.diffDays(minDate, d) * scale);
+      const isMonth = D.fmt(d).slice(3, 5) !== D.fmt(D.addDays(d, -1)).slice(3, 5);
+      ticks.push(`
+        <line x1="${LABEL_W - 4}" y1="${y}" x2="${TL_W}" y2="${y}"
+          stroke="var(--border)" stroke-width="${isMonth ? 1.5 : 0.5}" opacity="${isMonth ? 0.8 : 0.4}"/>
+        <text x="${LABEL_W - 5}" y="${y + 3}" font-size="7" text-anchor="end"
+          fill="${isMonth ? 'var(--text)' : 'var(--text-muted)'}"
+          font-weight="${isMonth ? '600' : '400'}">${D.fmt(d).slice(0, 5)}</text>
+      `);
+      d = D.addDays(d, 7);
+    }
+
+    // Today line
+    const todayY = Math.max(0, Math.min(TL_H - 2, Math.round(D.diffDays(minDate, today) * scale)));
+    const todayLine = `
+      <line x1="${LABEL_W - 2}" y1="${todayY}" x2="${TL_W}" y2="${todayY}"
+        stroke="#ef4444" stroke-width="2" opacity="0.95"/>
+      <polygon points="${LABEL_W - 2},${todayY - 4} ${LABEL_W + 6},${todayY} ${LABEL_W - 2},${todayY + 4}"
+        fill="#ef4444"/>
+    `;
+
+    // Progress shading (past zone)
+    const pastH = Math.max(0, Math.min(TL_H, todayY));
+    const pastShade = pastH > 0
+      ? `<rect x="${LABEL_W}" y="0" width="${BARS_W}" height="${pastH}" fill="#6b7280" opacity="0.06" rx="0"/>`
+      : '';
+
+    tl.innerHTML = `
+      <div style="padding:4px 2px 2px;font-size:9px;font-weight:700;color:var(--text-muted);text-align:center;border-bottom:1px solid var(--border);letter-spacing:.5px;flex-shrink:0">⏱ SIM</div>
+      <div style="flex:1;overflow:hidden;position:relative">
+        <svg width="${TL_W}" height="${TL_H}" viewBox="0 0 ${TL_W} ${TL_H}" style="display:block;overflow:visible">
+          ${pastShade}
+          ${ticks.join('')}
+          ${bars}
+          ${todayLine}
+        </svg>
+      </div>
+      <div style="padding:3px 2px;font-size:8px;text-align:center;color:#ef4444;font-weight:700;border-top:1px solid var(--border);flex-shrink:0">${D.fmt(today).slice(0,5)}</div>
+    `;
   },
 
   // === Mini-Gantt tooltip on hover ===
