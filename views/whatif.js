@@ -1,5 +1,6 @@
 App.views.whatif = {
   SNAP_KEY: 'atelier_plan_v3_snapshot',
+  HISTORY_KEY: 'atelier_plan_v3_validations',
   render(root) {
     const hasSnap = !!localStorage.getItem(this.SNAP_KEY);
     root.innerHTML = `
@@ -24,6 +25,7 @@ App.views.whatif = {
         ${hasSnap ? '<div class="badge warn" style="margin-top:10px">Simulation en cours. Snapshot pris le ' + new Date(JSON.parse(localStorage.getItem(this.SNAP_KEY))._snapDate || Date.now()).toLocaleString('fr-CH') + '</div>' : ''}
       </div>
       ${hasSnap ? '<div class="card" style="margin-top:14px"><h2>Différences</h2><div id="wi-diff"></div></div>' : ''}
+      ${this.renderHistory()}
     `;
     if (hasSnap) {
       this.drawDiff();
@@ -31,32 +33,66 @@ App.views.whatif = {
         if (!confirm('Rejeter toutes les modifications et revenir au snapshot ?')) return;
         const snap = JSON.parse(localStorage.getItem(this.SNAP_KEY));
         delete snap._snapDate;
-        DB.state = snap; DB.save();
+        DB.state = snap;
+        DB.save();
+        this.addToHistory({ action: 'reject', date: new Date().toISOString(), diff: document.getElementById('wi-diff')?.textContent });
         localStorage.removeItem(this.SNAP_KEY);
-        App.toast('Snapshot restauré','info'); App.refresh();
+        App.toast('Snapshot restauré','info');
+        App.refresh();
       };
       document.getElementById('wi-commit').onclick = () => {
         if (!confirm('Valider définitivement ces changements ?')) return;
+        this.addToHistory({ action: 'accept', date: new Date().toISOString(), diff: document.getElementById('wi-diff')?.textContent });
         localStorage.removeItem(this.SNAP_KEY);
-        App.toast('Changements validés','success'); App.refresh();
+        App.toast('Changements validés','success');
+        App.refresh();
       };
     } else {
       document.getElementById('wi-start').onclick = () => {
         const snap = JSON.parse(JSON.stringify(DB.state));
         snap._snapDate = new Date().toISOString();
         localStorage.setItem(this.SNAP_KEY, JSON.stringify(snap));
-        App.toast('Snapshot pris. Modifiez librement.','success'); App.refresh();
+        App.toast('Snapshot pris. Modifiez librement.','success');
+        App.refresh();
       };
+    }
+  },
+  renderHistory() {
+    const history = this.getHistory();
+    if (!history.length) return '';
+    return `<div class="card" style="margin-top:14px">
+      <h2>Historique des validations / rejets</h2>
+      <ul class="list">
+        ${history.slice().reverse().map(h => `
+          <li>
+            <span class="badge ${h.action === 'accept' ? 'good' : 'bad'}">${h.action === 'accept' ? '✓' : '↶'}</span>
+            <strong>${h.action === 'accept' ? 'Validé' : 'Rejeté'}</strong>
+            <span class="muted small" style="margin-left:8px">${new Date(h.date).toLocaleString('fr-CH')}</span>
+          </li>
+        `).join('')}
+      </ul>
+    </div>`;
+  },
+  addToHistory(entry) {
+    const history = this.getHistory();
+    history.push(entry);
+    localStorage.setItem(this.HISTORY_KEY, JSON.stringify(history));
+  },
+  getHistory() {
+    try {
+      return JSON.parse(localStorage.getItem(this.HISTORY_KEY) || '[]');
+    } catch {
+      return [];
     }
   },
   drawDiff() {
     const snap = JSON.parse(localStorage.getItem(this.SNAP_KEY));
     const cur = DB.state;
     const diff = {
-      taches: this.diffSet(snap.taches, cur.taches, 'id'),
-      commandes: this.diffSet(snap.commandes, cur.commandes, 'id'),
-      stock: this.diffSet(snap.stock, cur.stock, 'id'),
-      projets: this.diffSet(snap.projets, cur.projets, 'id'),
+      taches: this.diffSet(snap.taches || [], cur.taches || [], 'id'),
+      commandes: this.diffSet(snap.commandes || [], cur.commandes || [], 'id'),
+      stock: this.diffSet(snap.stock || [], cur.stock || [], 'id'),
+      projets: this.diffSet(snap.projets || [], cur.projets || [], 'id'),
     };
     const sections = Object.entries(diff).map(([k, d]) => {
       if (!d.added.length && !d.removed.length && !d.modified.length) return '';
@@ -70,10 +106,10 @@ App.views.whatif = {
     document.getElementById('wi-diff').innerHTML = sections || '<p class="muted">Aucune différence détectée.</p>';
   },
   diffSet(a, b, key) {
-    const ai = Object.fromEntries(a.map(x => [x[key], x]));
-    const bi = Object.fromEntries(b.map(x => [x[key], x]));
-    const added = b.filter(x => !ai[x[key]]);
-    const removed = a.filter(x => !bi[x[key]]);
+    const ai = Object.fromEntries((a || []).map(x => [x[key], x]));
+    const bi = Object.fromEntries((b || []).map(x => [x[key], x]));
+    const added = (b || []).filter(x => !ai[x[key]]);
+    const removed = (a || []).filter(x => !bi[x[key]]);
     const modified = [];
     for (const id in bi) {
       if (!ai[id]) continue;
