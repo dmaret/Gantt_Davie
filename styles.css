@@ -225,7 +225,7 @@ body {
 }
 .flux-canvas { flex: 1; position: relative; overflow: auto; background: var(--surface-2); }
 .fx-sim-tl {
-  width: 100px; flex-shrink: 0; border-left: 2px solid #ef444455;
+  width: 150px; flex-shrink: 0; border-left: 2px solid #ef444455;
   background: var(--surface); display: flex; flex-direction: column;
   overflow: hidden; transition: width .3s;
 }
