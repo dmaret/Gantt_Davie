@@ -305,7 +305,7 @@ App.views.modelesprojets = {
       etapes.forEach(e => {
         const depFins = (e.dependsDe || []).map(depId => finMap[depId]).filter(Boolean);
         const start = depFins.length
-          ? D.nextWorkday(D.addDays(depFins.sort().at(-1), 1))
+          ? D.nextWorkday(D.addDays(depFins.sort()[depFins.length - 1], 1))
           : D.nextWorkday(debut);
         const fin = e.jalon ? start : D.addWorkdays(start, Math.max(0, (e.duree || 1) - 1));
         finMap[e.id] = fin;

@@ -928,8 +928,8 @@ App.views.flux = {
           const isToday = d === refDay;
           return `<div class="fx-mini-day" style="${isToday?'color:#ef4444;font-weight:700':''}">${D.fmt(d).slice(0,5)}</div>`;
         }).join('');
-        const loads = this._computeLoad(mid);
-        const loadPct = Math.round(loads.filter(Boolean).length / loads.length * 100);
+        const loads = this._computeLoad(mid) || [];
+        const loadPct = loads.length ? Math.round(loads.filter(Boolean).length / loads.length * 100) : 0;
         tt.innerHTML = `
           <div style="font-weight:700;margin-bottom:4px">${m.nom}</div>
           <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Charge 5 j : <strong style="color:${this._heatColor(loads)}">${loadPct}%</strong> · ${tasks.length} tâche(s) à venir</div>

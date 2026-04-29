@@ -118,7 +118,7 @@ App.views.modeles = {
 
     const lastFinOfProject = pid => {
       const fins = s.taches.filter(t => t.projetId === pid && !t.jalon).map(t => t.fin);
-      return fins.length ? fins.sort().at(-1) : null;
+      return fins.length ? fins.sort()[fins.length - 1] : null;
     };
     const suggestDebut = pid => {
       const last = lastFinOfProject(pid);
