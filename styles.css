@@ -224,6 +224,11 @@ body {
   overflow-y: auto; padding: 12px; font-size: 12px;
 }
 .flux-canvas { flex: 1; position: relative; overflow: auto; background: var(--surface-2); }
+.fx-sim-tl {
+  width: 100px; flex-shrink: 0; border-left: 2px solid #ef444455;
+  background: var(--surface); display: flex; flex-direction: column;
+  overflow: hidden; transition: width .3s;
+}
 .fx-block {
   position: absolute; width: 160px;
   background: var(--surface); border: 1px solid var(--border);
