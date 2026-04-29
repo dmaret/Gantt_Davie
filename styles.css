@@ -247,6 +247,32 @@ body {
 .fx-sb-task-name { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fx-sb-task-sub { font-size: 10px; color: var(--text-muted); }
 
+/* Mini-Gantt tooltip + goulot badge */
+.fx-tt {
+  position: fixed; z-index: 9999; pointer-events: none;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.18);
+  min-width: 230px; max-width: 300px;
+  font-size: 11px; display: none; color: var(--text);
+}
+.fx-mini-bar { display: flex; gap: 2px; margin-bottom: 3px; }
+.fx-mini-bar-cell {
+  flex: 1; height: 28px; border-radius: 2px;
+  border: 1px solid transparent; position: relative; overflow: hidden;
+}
+.fx-mini-day { flex: 1; text-align: center; font-size: 8px; color: var(--text-muted); }
+.fx-goulot-badge {
+  position: absolute; top: -10px; right: -8px;
+  background: #dc2626; color: #fff;
+  font-size: 9px; font-weight: 700;
+  padding: 2px 6px; border-radius: 10px;
+  white-space: nowrap; z-index: 2;
+  box-shadow: 0 1px 4px rgba(220,38,38,.5);
+  animation: fx-pulse 1.4s ease-in-out infinite;
+}
+@keyframes fx-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+
 /* Flux canvas styles */
 @keyframes fxflow { to { stroke-dashoffset: -40; } }
 @keyframes fxflow-fast { to { stroke-dashoffset: -28; } }
