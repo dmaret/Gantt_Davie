@@ -44,6 +44,12 @@ const DB = {
     // v3.6 : modèles de projet (séquences d'étapes avec gestes)
     if (!this.state.modelesProjets) {
       this.state.modelesProjets = defaultModelesProjets();
+    } else {
+      // Injecter les modèles par défaut manquants (nouveaux ajouts)
+      const existingIds = new Set(this.state.modelesProjets.map(m => m.id));
+      defaultModelesProjets().forEach(dm => {
+        if (!existingIds.has(dm.id)) this.state.modelesProjets.push(dm);
+      });
     }
     // v3.7 : positions des blocs dans la vue Flux atelier
     if (!this.state.fluxLayout) this.state.fluxLayout = {};
@@ -687,10 +693,12 @@ DB.tempsGeste = code => {
 // ── Modèles de projet par défaut ──────────────────────────────────────────────
 function defaultModelesProjets() {
   return [
+    // ── GROUPE : LOGISTIQUE ──────────────────────────────────────────────────
     {
       id: 'MPRJ-001',
       nom: 'Logistique entrée-sortie complète',
       couleur: '#2c5fb3',
+      groupe: 'Logistique',
       description: 'Réception → Contrôle → Étiquetage → Assemblage/Reconditionnement → Emballage → Expédition → Facturation',
       etapes: [
         { id:'e1', nom:'Réception marchandise',       type:'appro',     duree:1, gestes:['REC-01','REC-02','REC-03','REC-04','REC-05'], dependsDe:[], notes:'Décharge, contrôle visuel palette et déballage' },
@@ -707,6 +715,7 @@ function defaultModelesProjets() {
       id: 'MPRJ-002',
       nom: 'Réception & mise en stock',
       couleur: '#059669',
+      groupe: 'Logistique',
       description: 'Flux court : réception → contrôle → rangement stock',
       etapes: [
         { id:'e1', nom:'Réception palette',           type:'appro',  duree:1, gestes:['REC-01','REC-02','REC-04','REC-05'], dependsDe:[], notes:'' },
@@ -719,6 +728,7 @@ function defaultModelesProjets() {
       id: 'MPRJ-003',
       nom: 'Préparation & expédition commande',
       couleur: '#f59e0b',
+      groupe: 'Logistique',
       description: 'Picking → conditionnement → contrôle → expédition',
       etapes: [
         { id:'e1', nom:'Préparation commande (picking)', type:'prod', duree:1, gestes:['PRE-01','PRE-02','STO-03'], dependsDe:[], notes:'Bon de préparation imprimé' },
@@ -726,6 +736,149 @@ function defaultModelesProjets() {
         { id:'e3', nom:'Contrôle expédition',         type:'etude',  duree:1, gestes:['CTR-03','ETI-02'], dependsDe:['e2'], notes:'' },
         { id:'e4', nom:'Expédition',                  type:'livraison', duree:1, gestes:['EXP-02','EXP-03','EXP-04'], dependsDe:['e3'], notes:'Filmer palette, remettre au transporteur' },
         { id:'e5', nom:'Expédié',                     type:'jalon',  duree:0, gestes:[], dependsDe:['e4'], notes:'Jalon : colis remis au transporteur', jalon:true },
+      ],
+    },
+    {
+      id: 'MPRJ-004',
+      nom: 'Inventaire & réorganisation stock',
+      couleur: '#0891b2',
+      groupe: 'Logistique',
+      description: 'Comptage physique → mise à jour stock → réorganisation FIFO',
+      etapes: [
+        { id:'e1', nom:'Préparation inventaire',      type:'etude',    duree:1, gestes:['PRE-01'], dependsDe:[], notes:'Impression listes de comptage par zone' },
+        { id:'e2', nom:'Comptage physique',           type:'prod',     duree:2, gestes:['STO-04','CTR-01'], dependsDe:['e1'], notes:'Comptage par zone, double comptage si écart' },
+        { id:'e3', nom:'Rapprochement & ajustements', type:'etude',    duree:1, gestes:[], dependsDe:['e2'], notes:'Comparaison stock théorique / physique, corrections' },
+        { id:'e4', nom:'Réorganisation stock',        type:'prod',     duree:1, gestes:['STO-01','STO-02'], dependsDe:['e3'], notes:'Remise en ordre FIFO, dégagement zones mortes' },
+        { id:'e5', nom:'Inventaire validé',           type:'jalon',    duree:0, gestes:[], dependsDe:['e4'], notes:'Jalon : stock certifié et à jour', jalon:true },
+      ],
+    },
+    {
+      id: 'MPRJ-005',
+      nom: 'Transfert inter-dépôts',
+      couleur: '#7c3aed',
+      groupe: 'Logistique',
+      description: 'Prélèvement → filmage → expédition → réception & rangement site destinataire',
+      etapes: [
+        { id:'e1', nom:'Préparation envoi',           type:'prod',     duree:1, gestes:['PRE-01','PRE-02','STO-03'], dependsDe:[], notes:'Bon de transfert, picking articles à transférer' },
+        { id:'e2', nom:'Filmage & étiquetage transport', type:'prod',  duree:1, gestes:['EXP-02','ETI-01','ETI-02'], dependsDe:['e1'], notes:'Palette filmée, étiquette transporteur apposée' },
+        { id:'e3', nom:'Chargement & départ',         type:'livraison',duree:1, gestes:['EXP-04'], dependsDe:['e2'], notes:'Remise au transporteur, émargement CMR' },
+        { id:'e4', nom:'Réception site destinataire', type:'appro',    duree:1, gestes:['REC-01','REC-02'], dependsDe:['e3'], notes:'Contrôle intégrité palette à réception' },
+        { id:'e5', nom:'Rangement stock destinataire',type:'prod',     duree:1, gestes:['STO-01','STO-02'], dependsDe:['e4'], notes:'FIFO, mise à jour stock' },
+        { id:'e6', nom:'Transfert complété',          type:'jalon',    duree:0, gestes:[], dependsDe:['e5'], notes:'Jalon : stock transféré et réceptionné', jalon:true },
+      ],
+    },
+    {
+      id: 'MPRJ-006',
+      nom: 'Retours & traitement SAV',
+      couleur: '#dc2626',
+      groupe: 'Logistique',
+      description: 'Réception retour → diagnostic → tri → reconditionnement ou élimination',
+      etapes: [
+        { id:'e1', nom:'Réception retour client',     type:'appro',    duree:1, gestes:['REC-01','REC-02','REC-03'], dependsDe:[], notes:'Vérifier bon de retour, état palette/colis' },
+        { id:'e2', nom:'Contrôle & diagnostic',       type:'etude',    duree:1, gestes:['CTR-01','CTR-02'], dependsDe:['e1'], notes:'Contrôle état produit, identification cause retour' },
+        { id:'e3', nom:'Tri (restock / rebut / répa)',type:'etude',    duree:1, gestes:['STO-02'], dependsDe:['e2'], notes:'Séparation physique des lots selon décision' },
+        { id:'e4', nom:'Reconditionnement réutilisable',type:'prod',   duree:2, gestes:['ETI-03','ASS-03','ASS-06','ETI-01'], dependsDe:['e3'], notes:'Retrait étiquettes, reconditionnement, ré-étiquetage' },
+        { id:'e5', nom:'Remise en stock ou élimination',type:'prod',   duree:1, gestes:['STO-02'], dependsDe:['e4'], notes:'Retour en stock conforme ou évacuation rebut' },
+        { id:'e6', nom:'Dossier SAV clôturé',         type:'jalon',    duree:0, gestes:[], dependsDe:['e5'], notes:'Jalon : dossier retour traité et clôturé', jalon:true },
+      ],
+    },
+
+    // ── GROUPE : EMBALLAGE ───────────────────────────────────────────────────
+    {
+      id: 'MPRJ-007',
+      nom: 'Étiquetage en série',
+      couleur: '#0d9488',
+      groupe: 'Emballage',
+      description: 'Réception articles → impression étiquettes → pose en série → contrôle → remise en stock',
+      etapes: [
+        { id:'e1', nom:'Réception articles à étiqueter', type:'appro', duree:1, gestes:['REC-03','REC-05'], dependsDe:[], notes:'Comptage et vérification des articles à traiter' },
+        { id:'e2', nom:'Préparation & impression étiquettes', type:'etude', duree:1, gestes:['ETI-01'], dependsDe:['e1'], notes:'Configuration imprimante, maquette validée' },
+        { id:'e3', nom:'Étiquetage en série',           type:'prod',   duree:2, gestes:['ETI-02','ETI-04','ETI-05'], dependsDe:['e2'], notes:'Collage étiquettes, orientation selon consignes' },
+        { id:'e4', nom:'Contrôle conformité',           type:'etude',  duree:1, gestes:['CTR-01'], dependsDe:['e3'], notes:'Vérification lisibilité code-barres, positionnement' },
+        { id:'e5', nom:'Reconditionnement & stock',     type:'prod',   duree:1, gestes:['STO-02'], dependsDe:['e4'], notes:'Remise en carton, rangement stock' },
+        { id:'e6', nom:'Lot étiqueté disponible',       type:'jalon',  duree:0, gestes:[], dependsDe:['e5'], notes:'Jalon : lot prêt à expédier', jalon:true },
+      ],
+    },
+    {
+      id: 'MPRJ-008',
+      nom: 'Kit promotionnel & display',
+      couleur: '#e11d48',
+      groupe: 'Emballage',
+      description: 'Réception composants → formage → kitting → étiquetage → mise en carton maître',
+      etapes: [
+        { id:'e1', nom:'Réception composants',         type:'appro',  duree:1, gestes:['REC-01','REC-02','REC-04','REC-05'], dependsDe:[], notes:'Contrôle des composants du kit à réception' },
+        { id:'e2', nom:'Contrôle composants',          type:'etude',  duree:1, gestes:['CTR-01','CTR-02'], dependsDe:['e1'], notes:'Conformité dimensions, états, quantités' },
+        { id:'e3', nom:'Formage étuis & étui-fourreau', type:'prod',  duree:2, gestes:['ASS-08','ASS-09','ASS-10','ASS-16'], dependsDe:['e2'], notes:'Montage étuis, fourreaux orientés' },
+        { id:'e4', nom:'Insertion & assemblage kit',   type:'prod',   duree:2, gestes:['ASS-12','ASS-14','ASS-05'], dependsDe:['e3'], notes:'Insertion composants, fermeture sachet si nécessaire' },
+        { id:'e5', nom:'Étiquetage final',             type:'prod',   duree:1, gestes:['ETI-01','ETI-02','ETI-04'], dependsDe:['e4'], notes:'Impression et collage étiquettes finales' },
+        { id:'e6', nom:'Contrôle final & filmage',     type:'etude',  duree:1, gestes:['CTR-03','ASS-06'], dependsDe:['e5'], notes:'Mise en conformité, filmage unitaire' },
+        { id:'e7', nom:'Mise en carton maître',        type:'prod',   duree:1, gestes:['ASS-04','ASS-09'], dependsDe:['e6'], notes:'Calage, fermeture carton maître' },
+        { id:'e8', nom:'Kit prêt à expédier',          type:'jalon',  duree:0, gestes:[], dependsDe:['e7'], notes:'Jalon : production kit terminée', jalon:true },
+      ],
+    },
+    {
+      id: 'MPRJ-009',
+      nom: 'Reconditionnement palette complète',
+      couleur: '#92400e',
+      groupe: 'Emballage',
+      description: 'Dépalettisation → retrait étiquettes → reconditionnement unitaire → ré-étiquetage → reformation palette',
+      etapes: [
+        { id:'e1', nom:'Réception palette à reconditionner', type:'appro', duree:1, gestes:['REC-01','REC-02'], dependsDe:[], notes:'Contrôle état palette, comptage articles' },
+        { id:'e2', nom:'Dépalettisation & contrôle état',    type:'prod',  duree:1, gestes:['REC-03','CTR-01'], dependsDe:['e1'], notes:'Dépose article par article, tri selon état' },
+        { id:'e3', nom:'Retrait anciennes étiquettes',        type:'prod',  duree:1, gestes:['ETI-03'], dependsDe:['e2'], notes:'Décapeur thermique si nécessaire' },
+        { id:'e4', nom:'Reconditionnement unitaire',          type:'prod',  duree:2, gestes:['ASS-06','ASS-07','ASS-09','ASS-16'], dependsDe:['e3'], notes:'Filmage, bandage, remise en étui selon besoin' },
+        { id:'e5', nom:'Ré-étiquetage',                       type:'prod',  duree:1, gestes:['ETI-01','ETI-02'], dependsDe:['e4'], notes:'Nouvelles étiquettes, orientation correcte' },
+        { id:'e6', nom:'Reformation palette',                  type:'prod',  duree:1, gestes:['STO-01','EXP-02'], dependsDe:['e5'], notes:'Palettisation, filmage palette finale' },
+        { id:'e7', nom:'Palette reconditionnée validée',      type:'jalon', duree:0, gestes:[], dependsDe:['e6'], notes:'Jalon : palette prête pour expédition', jalon:true },
+      ],
+    },
+
+    // ── GROUPE : ASSEMBLAGE ──────────────────────────────────────────────────
+    {
+      id: 'MPRJ-010',
+      nom: 'Assemblage kit 2 pièces',
+      couleur: '#2563eb',
+      groupe: 'Assemblage',
+      description: 'Appro composants → assemblage simple → contrôle → conditionnement → stock produit fini',
+      etapes: [
+        { id:'e1', nom:'Appro & prélèvement composants', type:'appro', duree:1, gestes:['PRE-01','PRE-02','STO-03'], dependsDe:[], notes:'Bon de travail, prélèvement selon BOM' },
+        { id:'e2', nom:'Assemblage kit 2 pièces',         type:'prod',  duree:2, gestes:['ASS-01','ASS-14'], dependsDe:['e1'], notes:'Assemblage selon fiche technique, contrôle visuel' },
+        { id:'e3', nom:'Contrôle assemblage',             type:'etude', duree:1, gestes:['CTR-01'], dependsDe:['e2'], notes:'Vérification fonctionnelle et esthétique' },
+        { id:'e4', nom:'Conditionnement final',           type:'prod',  duree:1, gestes:['ASS-09','ETI-02','EXP-01'], dependsDe:['e3'], notes:'Mise en étui, étiquetage, pesée' },
+        { id:'e5', nom:'Produit fini en stock',           type:'jalon', duree:0, gestes:[], dependsDe:['e4'], notes:'Jalon : produit disponible en stock', jalon:true },
+      ],
+    },
+    {
+      id: 'MPRJ-011',
+      nom: 'Assemblage kit multi-composants',
+      couleur: '#7c3aed',
+      groupe: 'Assemblage',
+      description: 'Appro → contrôle composants → assemblage complexe → CQ → emballage → expédition',
+      etapes: [
+        { id:'e1', nom:'Appro & réception composants',   type:'appro', duree:1, gestes:['REC-04','REC-05','PRE-02'], dependsDe:[], notes:'Réception et comptage de tous les composants' },
+        { id:'e2', nom:'Contrôle entrée composants',      type:'etude', duree:1, gestes:['CTR-01','CTR-02'], dependsDe:['e1'], notes:'Vérification conformité chaque référence' },
+        { id:'e3', nom:'Préparation poste de travail',    type:'prod',  duree:1, gestes:['PRE-01'], dependsDe:['e2'], notes:'Mise en place outillage, fiches de travail' },
+        { id:'e4', nom:'Assemblage kit 3-5 pièces',       type:'prod',  duree:3, gestes:['ASS-02','ASS-12','ASS-14'], dependsDe:['e3'], notes:'Assemblage complexe selon fiche technique, contrôle intermédiaire' },
+        { id:'e5', nom:'Contrôle qualité assemblage',     type:'etude', duree:1, gestes:['CTR-02','CTR-03'], dependsDe:['e4'], notes:'Contrôle final assemblage avant emballage' },
+        { id:'e6', nom:'Emballage & protection',          type:'prod',  duree:1, gestes:['ASS-03','ASS-05','ASS-06'], dependsDe:['e5'], notes:'Film bulles, sachet, filmage unitaire' },
+        { id:'e7', nom:'Étiquetage & identification',     type:'prod',  duree:1, gestes:['ETI-01','ETI-02'], dependsDe:['e6'], notes:'Étiquette produit fini et étiquette carton' },
+        { id:'e8', nom:'Produit fini validé',             type:'jalon', duree:0, gestes:[], dependsDe:['e7'], notes:'Jalon : kit assemblé, contrôlé et conditionné', jalon:true },
+      ],
+    },
+    {
+      id: 'MPRJ-012',
+      nom: 'Assemblage avec protection renforcée',
+      couleur: '#0f766e',
+      groupe: 'Assemblage',
+      description: 'Appro → pliage/formage → assemblage avec calage → protection multicouche → banderolage → expédition',
+      etapes: [
+        { id:'e1', nom:'Appro matières & composants',    type:'appro', duree:1, gestes:['PRE-02','STO-03'], dependsDe:[], notes:'Prélèvement selon BOM, vérification référence' },
+        { id:'e2', nom:'Pliage & formage composants',    type:'prod',  duree:2, gestes:['ASS-15','ASS-16','ASS-08'], dependsDe:['e1'], notes:'Pliage complexe, formage étuis et fourreaux' },
+        { id:'e3', nom:'Assemblage avec calage',         type:'prod',  duree:2, gestes:['ASS-04','ASS-01','ASS-07'], dependsDe:['e2'], notes:'Assemblage, mise en place calage carton' },
+        { id:'e4', nom:'Protection film bulles',         type:'prod',  duree:1, gestes:['ASS-03','ASS-06'], dependsDe:['e3'], notes:'Enroulage film bulles, filmage unitaire renforcé' },
+        { id:'e5', nom:'Cerclage & banderolage final',   type:'prod',  duree:1, gestes:['ASS-07','ASS-11'], dependsDe:['e4'], notes:'Banderolage et groupage avec élastique si nécessaire' },
+        { id:'e6', nom:'Pesée & étiquetage transport',   type:'prod',  duree:1, gestes:['EXP-01','ETI-01','ETI-02'], dependsDe:['e5'], notes:'Pesée précision, étiquettes transport et client' },
+        { id:'e7', nom:'Prêt à expédier',                type:'jalon', duree:0, gestes:[], dependsDe:['e6'], notes:'Jalon : produit protégé, pesé et étiqueté', jalon:true },
       ],
     },
   ];
