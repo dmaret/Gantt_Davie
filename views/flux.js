@@ -814,11 +814,12 @@ App.views.flux = {
     const maxDate = taches.reduce((m, t) => t.fin > m ? t.fin : m, taches[0].fin);
     const totalDays = Math.max(1, D.diffDays(minDate, maxDate));
 
-    const TL_W = 96;
-    const TL_H = tl.clientHeight || 500;
-    const LABEL_W = 32;
+    const TL_W = 140;
+    const LABEL_W = 40;
     const BARS_W = TL_W - LABEL_W - 2;
-    const scale = TL_H / totalDays;
+    const SVG_H = Math.max(800, totalDays * 4);
+    const TL_H = tl.clientHeight || 500;
+    const scale = SVG_H / totalDays;
 
     // Machine color lanes
     const laneW = Math.max(2, Math.floor(BARS_W / Math.max(1, machines.length)));
@@ -838,7 +839,7 @@ App.views.flux = {
       }).join('');
     }).join('');
 
-    // Week ticks + labels
+    // Ticks tous les 7 jours, labels tous les 28 jours
     const ticks = [];
     let d = minDate;
     while (d <= maxDate) {
@@ -847,40 +848,46 @@ App.views.flux = {
       ticks.push(`
         <line x1="${LABEL_W - 4}" y1="${y}" x2="${TL_W}" y2="${y}"
           stroke="var(--border)" stroke-width="${isMonth ? 1.5 : 0.5}" opacity="${isMonth ? 0.8 : 0.4}"/>
-        <text x="${LABEL_W - 5}" y="${y + 3}" font-size="7" text-anchor="end"
-          fill="${isMonth ? 'var(--text)' : 'var(--text-muted)'}"
-          font-weight="${isMonth ? '600' : '400'}">${D.fmt(d).slice(0, 5)}</text>
+        ${isMonth ? `<text x="${LABEL_W - 5}" y="${y + 3}" font-size="7" text-anchor="end"
+          fill="var(--text)" font-weight="600">${D.fmt(d).slice(0, 5)}</text>` : ''}
       `);
       d = D.addDays(d, 7);
     }
 
     // Today line
-    const todayY = Math.max(0, Math.min(TL_H - 2, Math.round(D.diffDays(minDate, today) * scale)));
+    const todayY = Math.round(D.diffDays(minDate, today) * scale);
     const todayLine = `
       <line x1="${LABEL_W - 2}" y1="${todayY}" x2="${TL_W}" y2="${todayY}"
-        stroke="#ef4444" stroke-width="2" opacity="0.95"/>
-      <polygon points="${LABEL_W - 2},${todayY - 4} ${LABEL_W + 6},${todayY} ${LABEL_W - 2},${todayY + 4}"
+        stroke="#ef4444" stroke-width="2.5" opacity="0.95"/>
+      <polygon points="${LABEL_W - 2},${todayY - 5} ${LABEL_W + 8},${todayY} ${LABEL_W - 2},${todayY + 5}"
         fill="#ef4444"/>
     `;
 
     // Progress shading (past zone)
-    const pastH = Math.max(0, Math.min(TL_H, todayY));
-    const pastShade = pastH > 0
-      ? `<rect x="${LABEL_W}" y="0" width="${BARS_W}" height="${pastH}" fill="#6b7280" opacity="0.06" rx="0"/>`
-      : '';
+    const pastShade = `<rect x="${LABEL_W}" y="0" width="${BARS_W}" height="${todayY}" fill="#6b7280" opacity="0.06" rx="0"/>`;
+
+    // SVG container wrapper
+    const svgHtml = `<svg width="${TL_W}" height="${SVG_H}" viewBox="0 0 ${TL_W} ${SVG_H}" style="display:block">
+      ${pastShade}
+      ${ticks.join('')}
+      ${bars}
+      ${todayLine}
+    </svg>`;
 
     tl.innerHTML = `
       <div style="padding:4px 2px 2px;font-size:9px;font-weight:700;color:var(--text-muted);text-align:center;border-bottom:1px solid var(--border);letter-spacing:.5px;flex-shrink:0">⏱ SIM</div>
-      <div style="flex:1;overflow:hidden;position:relative">
-        <svg width="${TL_W}" height="${TL_H}" viewBox="0 0 ${TL_W} ${TL_H}" style="display:block;overflow:visible">
-          ${pastShade}
-          ${ticks.join('')}
-          ${bars}
-          ${todayLine}
-        </svg>
-      </div>
+      <div id="fx-tl-scroll" style="flex:1;overflow-y:scroll;overflow-x:hidden;position:relative">${svgHtml}</div>
       <div style="padding:3px 2px;font-size:8px;text-align:center;color:#ef4444;font-weight:700;border-top:1px solid var(--border);flex-shrink:0">${D.fmt(today).slice(0,5)}</div>
     `;
+
+    // Auto-scroll pour garder le jour courant visible au centre
+    setTimeout(() => {
+      const scrollEl = tl.querySelector('#fx-tl-scroll');
+      if (scrollEl) {
+        const scrollTop = Math.max(0, todayY - TL_H / 2);
+        scrollEl.scrollTop = scrollTop;
+      }
+    }, 0);
   },
 
   // === Mini-Gantt tooltip on hover ===
