@@ -215,11 +215,11 @@ App.views.projets = {
     };
     const taches = id ? DB.tachesDuProjet(id) : [];
     const canEdit = App.can('edit');
-    const linkedModels = (!isNew && p.groupe) ? (s.modelesProjets||[]).filter(mp => mp.groupe === p.groupe) : [];
+    const linkedModels = isNew ? (s.modelesProjets||[]) : (p.groupe ? (s.modelesProjets||[]).filter(mp => mp.groupe === p.groupe) : []);
     const linkedModelsHtml = linkedModels.length ? `
       <div style="margin-top:14px;padding:10px 12px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <span style="font-size:13px;font-weight:600">🗂 Modèles pour <span class="badge" style="background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb)">${p.groupe}</span></span>
+          <span style="font-size:13px;font-weight:600">🗂 ${isNew ? 'Modèles disponibles' : 'Modèles pour <span class="badge" style="background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb)">' + p.groupe + '</span>'}</span>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
           ${linkedModels.map(mp => `
@@ -306,13 +306,34 @@ App.views.projets = {
       else DB.logAudit('update','projet',p.id,`${p.code} · ${p.nom}`);
       DB.save(); App.closeModal(); App.refresh();
     };
-    if (!isNew) {
-      document.querySelectorAll('.pf-use-modele').forEach(b => {
-        b.onclick = () => {
-          App.closeModal();
-          App.views.modelesprojets.instancier(b.dataset.mpid, p.id);
+    document.querySelectorAll('.pf-use-modele').forEach(b => {
+      b.onclick = () => {
+        const mpid = b.dataset.mpid;
+        const saveForm = () => {
+          p.code = document.getElementById('pf-code').value.trim();
+          p.nom = document.getElementById('pf-nom').value.trim();
+          p.client = document.getElementById('pf-client').value.trim();
+          p.couleur = document.getElementById('pf-color').value;
+          p.etage = document.getElementById('pf-etage').value;
+          p.debut = document.getElementById('pf-debut').value;
+          p.fin = document.getElementById('pf-fin').value;
+          p.priorite = document.getElementById('pf-prio').value;
+          p.statut = document.getElementById('pf-statut').value;
+          p.sequencementStrict = document.getElementById('pf-strict').checked;
+          p.groupe = document.getElementById('pf-groupe').value.trim();
+          if (!p.nom || !p.code) { App.toast('Code et nom requis','error'); return false; }
+          if (isNew) { s.projets.push(p); DB.logAudit('create','projet',p.id,`${p.code} · ${p.nom}`); }
+          else DB.logAudit('update','projet',p.id,`${p.code} · ${p.nom}`);
+          DB.save();
+          return true;
         };
-      });
+        if (saveForm()) {
+          App.closeModal();
+          App.views.modelesprojets.instancier(mpid, p.id);
+        }
+      };
+    });
+    if (!isNew) {
       document.getElementById('pf-del').onclick = () => {
         if (!confirm('Supprimer ce projet et toutes ses tâches ?')) return;
         s.projets = s.projets.filter(x => x.id !== p.id);
