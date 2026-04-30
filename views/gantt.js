@@ -451,6 +451,7 @@ App.views.gantt = {
             <option value="jour">Zoom : jour</option>
             <option value="semaine">Zoom : semaine</option>
             <option value="mois">Zoom : mois</option>
+            <option value="heure">Zoom : heure</option>
           </select>
           <button class="btn-ghost" id="g-next">▶</button>
           <button class="btn-ghost" id="g-today">Aujourd'hui</button>
@@ -489,7 +490,7 @@ App.views.gantt = {
     document.getElementById('g-start').onchange = e => { st.rangeStart = e.target.value; this.draw(); };
     document.getElementById('g-days').onchange = e => { st.rangeDays = +e.target.value; this._savePersistedState(); this.draw(); };
     document.getElementById('g-zoom').onchange = e => { st.zoom = e.target.value; this._savePersistedState(); this.draw(); };
-    const zoomStep = () => st.zoom === 'mois' ? 30 : st.zoom === 'semaine' ? 7 : 14;
+    const zoomStep = () => st.zoom === 'mois' ? 30 : st.zoom === 'semaine' ? 7 : st.zoom === 'heure' ? 1 : 14;
     document.getElementById('g-prev').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, -zoomStep()); this.draw(); };
     document.getElementById('g-next').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, zoomStep()); this.draw(); };
     document.getElementById('g-today').onclick = () => { st.rangeStart = D.addDays(D.today(), -7); this.draw(); };
@@ -563,7 +564,14 @@ App.views.gantt = {
     // Build groups
     const groups = this.buildGroups();
     const zoom = st.zoom || 'jour';
-    const CELL_W = zoom === 'mois' ? 4 : zoom === 'semaine' ? 9 : 28;
+    const CELL_W = zoom === 'mois' ? 4 : zoom === 'semaine' ? 9 : zoom === 'heure' ? 30 : 28;
+    const isHourMode = zoom === 'heure';
+    const HOURS_PER_DAY = 9;   // 08h–16h
+    const WORK_START_H  = 8;
+    const totalCols = isHourMode ? days * HOURS_PER_DAY : days;
+    const colToDay  = i => isHourMode ? Math.floor(i / HOURS_PER_DAY) : i;
+    const colToHour = i => isHourMode ? (i % HOURS_PER_DAY) + WORK_START_H : null;
+    const colToDate = i => D.addDays(start, colToDay(i));
     const LABEL_W = 220;
     const dowLetters = ['D','L','M','M','J','V','S']; // dim=0, lun=1, …, sam=6
     const isoWeekNum = iso => { const d = D.parse(iso); const thu = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 4 - (d.getUTCDay()||7))); return Math.ceil(((thu - new Date(Date.UTC(thu.getUTCFullYear(),0,1)))/864e5+1)/7); };
@@ -581,23 +589,30 @@ App.views.gantt = {
     // Header (une cellule par jour, contenu adapté au zoom)
     const headerCells = [];
     headerCells.push(`<div class="gantt-cell head label">Élément</div>`);
-    for (let i=0; i<days; i++) {
-      const d = D.addDays(start, i);
-      const dt = D.parse(d);
+    for (let i = 0; i < totalCols; i++) {
+      const d   = colToDate(i);
+      const dt  = D.parse(d);
       const dow = dt.getUTCDay();
       const dayNum = dt.getUTCDate();
       const firstOfMonth = dayNum === 1;
-      const showMonth = firstOfMonth || i === 0;
+      const showMonth = firstOfMonth || (isHourMode ? i % HOURS_PER_DAY === 0 && (i === 0 || colToDay(i) !== colToDay(i-1)) : i === 0);
       const monthName = showMonth ? dt.toLocaleDateString('fr-CH', { month: 'short', timeZone: 'UTC' }) : '';
       let content = '';
-      if (zoom === 'jour') {
+      if (isHourMode) {
+        const hour = colToHour(i);
+        const isFirstHourOfDay = i % HOURS_PER_DAY === 0;
+        content = `${isFirstHourOfDay ? `<div class="day-month-name" style="font-size:8px">${dt.getUTCDate()}/${dt.toLocaleDateString('fr-CH',{month:'short',timeZone:'UTC'})}</div>` : ''}<div class="day-num" style="font-size:9px">${hour}h</div>`;
+      } else if (zoom === 'jour') {
         content = `${showMonth ? `<div class="day-month-name">${monthName}</div>` : ''}<div class="day-num">${showMonth ? '' : dayNum}</div><div class="day-dow">${dowLetters[dow]}</div>`;
       } else if (zoom === 'semaine') {
         content = dow === 1 ? `<div class="day-month-name" style="font-size:9px">S${isoWeekNum(d)}</div>` : (showMonth ? `<div class="day-month-name" style="font-size:8px">${monthName}</div>` : '');
-      } else { // mois
-        content = showMonth ? `<div class="day-month-name" style="font-size:8px;writing-mode:horizontal-tb">${monthName}${firstOfMonth?'':''}</div>` : '';
+      } else {
+        content = showMonth ? `<div class="day-month-name" style="font-size:8px;writing-mode:horizontal-tb">${monthName}</div>` : '';
       }
-      headerCells.push(`<div class="gantt-cell head day-cell ${dayClasses(d)}">${content}</div>`);
+      const isWeekend = dow === 0 || dow === 6;
+      const isToday   = d === D.today();
+      const extraCls  = isHourMode ? (isWeekend ? 'day-weekend' : isToday ? 'day-today' : '') : dayClasses(d);
+      headerCells.push(`<div class="gantt-cell head day-cell ${extraCls}">${content}</div>`);
     }
 
     // Body rows
@@ -609,12 +624,12 @@ App.views.gantt = {
 
       // entête de groupe
       rows.push(`<div class="gantt-cell label group ${groupRowClass}" style="grid-column:1/span 1;background:${isProjectGroup?'var(--bg-project-group)':'transparent'}">${g.label} <span style="font-size:10px;font-weight:400;opacity:.6">(${g.items.length})</span></div>`);
-      for (let i=0; i<days; i++) rows.push(`<div class="gantt-cell group ${groupRowClass} ${dayClasses(D.addDays(start,i))}" style="background:${isProjectGroup?'var(--bg-project-group)':'transparent'}"></div>`);
+      for (let i=0; i<totalCols; i++) rows.push(`<div class="gantt-cell group ${groupRowClass} ${dayClasses(colToDate(i))}" style="background:${isProjectGroup?'var(--bg-project-group)':'transparent'}"></div>`);
 
       g.items.forEach(it => {
         const t = it.tache;
         const rowCells = [`<div class="gantt-cell label" title="${t.nom}">${t.nom}</div>`];
-        for (let i=0; i<days; i++) rowCells.push(`<div class="gantt-cell ${dayClasses(D.addDays(start,i))}"></div>`);
+        for (let i=0; i<totalCols; i++) rowCells.push(`<div class="gantt-cell ${dayClasses(colToDate(i))}"></div>`);
         rows.push(...rowCells);
 
         // Placement de la barre par overlay position-absolute dans le label row : on va utiliser le premier cell de ligne comme conteneur sticky mais les barres comme éléments absolus à l'intérieur de la grille globale via un wrap. Simplification : on injecte la barre dans la 2e cellule (premier jour visible) en position absolue relative au .gantt-table.
@@ -622,7 +637,7 @@ App.views.gantt = {
     });
 
     table.style.display = 'grid';
-    table.style.gridTemplateColumns = `${LABEL_W}px repeat(${days}, ${CELL_W}px)`;
+    table.style.gridTemplateColumns = `${LABEL_W}px repeat(${totalCols}, ${CELL_W}px)`;
     table.style.position = 'relative';
     table.innerHTML = headerCells.join('') + rows.join('');
 
@@ -640,11 +655,21 @@ App.views.gantt = {
       g.items.forEach(it => {
         const t = it.tache;
         const prj = DB.projet(t.projetId);
-        const offsetDays = Math.max(0, D.diffDays(start, t.debut));
-        const endDays = Math.min(days-1, D.diffDays(start, t.fin));
-        if (endDays < 0 || offsetDays > days-1) { rowIdx++; return; }
-        const left = LABEL_W + offsetDays * CELL_W + 2;
-        const width = Math.max(CELL_W - 4, (endDays - offsetDays + 1) * CELL_W - 4);
+        let offsetCols, endCols;
+        if (isHourMode) {
+          const dStart = Math.max(0, D.diffDays(start, t.debut));
+          const dEnd   = Math.min(days - 1, D.diffDays(start, t.fin));
+          const hS = t.heureDebut !== undefined ? Math.max(0, t.heureDebut - WORK_START_H) : 0;
+          const hE = t.heureFin   !== undefined ? Math.min(HOURS_PER_DAY - 1, t.heureFin - WORK_START_H) : HOURS_PER_DAY - 1;
+          offsetCols = Math.max(0, dStart * HOURS_PER_DAY + hS);
+          endCols    = Math.min(totalCols - 1, dEnd * HOURS_PER_DAY + hE);
+        } else {
+          offsetCols = Math.max(0, D.diffDays(start, t.debut));
+          endCols    = Math.min(days - 1, D.diffDays(start, t.fin));
+        }
+        if (endCols < 0 || offsetCols > totalCols - 1) { rowIdx++; return; }
+        const left = LABEL_W + offsetCols * CELL_W + 2;
+        const width = Math.max(CELL_W - 4, (endCols - offsetCols + 1) * CELL_W - 4);
         const top = rowIdx * 30 + 3;
         const isConflict = confPersons.has(t.id) || confMachines.has(t.id);
         const crit = isCritical(t);
@@ -688,12 +713,14 @@ App.views.gantt = {
     });
 
     // SVG : ligne aujourd'hui + flèches de dépendances
-    const totalW = LABEL_W + days * CELL_W;
+    const totalW = LABEL_W + totalCols * CELL_W;
     const totalH = (rowIdx + 2) * 30;
     const paths = [];
     // Ligne verticale "aujourd'hui" (toujours affichée)
-    const todayOffset = D.diffDays(start, D.today());
-    if (todayOffset >= 0 && todayOffset < days) {
+    const todayOffset = isHourMode
+      ? D.diffDays(start, D.today()) * HOURS_PER_DAY + Math.max(0, new Date().getHours() - WORK_START_H)
+      : D.diffDays(start, D.today());
+    if (todayOffset >= 0 && todayOffset < totalCols) {
       const todayX = LABEL_W + todayOffset * CELL_W + Math.floor(CELL_W / 2);
       paths.push(`<line x1="${todayX}" y1="0" x2="${todayX}" y2="${totalH}" class="today-line"/>`);
       const lblW = 64, lblH = 17;
