@@ -192,7 +192,7 @@ App.views.modelesprojets = {
       <button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>
       <button class="btn" id="mpf-save">${isNew ? 'Créer' : 'Enregistrer'}</button>
     `;
-    App.openModal(isNew ? 'Nouveau modèle de projet' : mp.nom, body, foot);
+    App.openModal(isNew ? 'Nouveau modèle de projet' : App.escapeHTML(mp.nom), body, foot);
 
     const rebind = () => {
       document.getElementById('mpf-etapes').innerHTML = renderEtapes();

@@ -84,7 +84,7 @@ App.views.modeles = {
     const foot = `${!isNew?'<button class="btn btn-danger" id="mf-del">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>
       <button class="btn" id="mf-save">${isNew?'Créer':'Enregistrer'}</button>`;
-    App.openModal(isNew?'Nouveau modèle':m.nom, body, foot);
+    App.openModal(isNew?'Nouveau modèle':App.escapeHTML(m.nom), body, foot);
     document.getElementById('mf-save').onclick = () => {
       m.nom = document.getElementById('mf-nom').value.trim();
       m.couleur = document.getElementById('mf-col').value;

@@ -145,7 +145,7 @@ App.views.lieux = {
     const foot = `${!isNew?'<button class="btn btn-danger" id="lf-del">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="lf-cancel">Annuler</button>
       <button class="btn" id="lf-save">${isNew?'Créer':'Enregistrer'}</button>`;
-    App.openModal(isNew?'Nouveau lieu':l.nom, body, foot);
+    App.openModal(isNew?'Nouveau lieu':App.escapeHTML(l.nom), body, foot);
     document.getElementById('lf-cancel').onclick = () => App.closeModal();
     document.getElementById('lf-save').onclick = () => {
       l.nom = document.getElementById('lf-nom').value.trim();

@@ -287,7 +287,7 @@ App.views.projets = {
     const foot = `${!isNew?'<button class="btn btn-danger" id="pf-del">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="pf-cancel">Annuler</button>
       <button class="btn" id="pf-save">${isNew?'Créer':'Enregistrer'}</button>`;
-    App.openModal(isNew?'Nouveau projet':p.code+' — '+p.nom, body, foot);
+    App.openModal(isNew?'Nouveau projet':App.escapeHTML(p.code)+' — '+App.escapeHTML(p.nom), body, foot);
     document.getElementById('pf-cancel').onclick = () => App.closeModal();
     document.getElementById('pf-save').onclick = () => {
       p.code = document.getElementById('pf-code').value.trim();

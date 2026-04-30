@@ -239,7 +239,7 @@ App.views.machines = {
     const foot = `${!isNew?'<button class="btn btn-danger" id="mf-del">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="mf-cancel">Annuler</button>
       <button class="btn" id="mf-save">${isNew?'Créer':'Enregistrer'}</button>`;
-    App.openModal(isNew?'Nouvelle machine':m.nom, body, foot);
+    App.openModal(isNew?'Nouvelle machine':App.escapeHTML(m.nom), body, foot);
 
     // ⏩ Décaler : déplace la tâche pour qu'elle commence juste après l'autre
     document.querySelectorAll('.conf-shift').forEach(btn => {

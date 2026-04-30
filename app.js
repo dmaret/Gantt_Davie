@@ -33,6 +33,14 @@ const App = {
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
   },
 
+  // Échappe les caractères HTML pour prévenir XSS
+  escapeHTML(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  },
+
   isAuthed() {
     const id = sessionStorage.getItem('atelier_authed');
     if (!id) return false;
@@ -222,6 +230,14 @@ const App = {
     const u = this.currentUser();
     const g = (DB.state.groupes || {})[u.groupe] || { perms:{} };
     return !!g.perms[action];
+  },
+  // Enforce permission check at function entry point (not just UI hiding)
+  requirePerm(action) {
+    if (!this.can(action)) {
+      this.toast('Accès refusé. Vous n\'avez pas la permission : ' + action, 'error');
+      return false;
+    }
+    return true;
   },
   canView(viewName) {
     if (!viewName) return true;
@@ -871,10 +887,10 @@ const App = {
     return out;
   },
 
-  // Utilitaires d'affichage
-  personneLabel(p) { return p ? (p.prenom + ' ' + p.nom) : '—'; },
-  lieuLabel(l) { return l ? l.nom : '—'; },
-  projetLabel(p) { return p ? p.code + ' — ' + p.nom : '—'; },
+  // Utilitaires d'affichage (with HTML escaping for safety)
+  personneLabel(p) { return p ? (this.escapeHTML(p.prenom) + ' ' + this.escapeHTML(p.nom)) : '—'; },
+  lieuLabel(l) { return l ? this.escapeHTML(l.nom) : '—'; },
+  projetLabel(p) { return p ? (this.escapeHTML(p.code) + ' — ' + this.escapeHTML(p.nom)) : '—'; },
 
   // Build <option>/<optgroup> HTML for project selects; selectedId = currently selected project id
   projetsOptions(selectedId = '', emptyLabel = '— Aucun projet (tâche libre)') {

@@ -250,7 +250,7 @@ App.views.equipes = {
     const foot = `${!isNew?'<button class="btn btn-danger" id="ef-del">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="ef-cancel">Annuler</button>
       <button class="btn" id="ef-save">${isNew?'Créer':'Enregistrer'}</button>`;
-    App.openModal(isNew?'Nouvelle équipe':eq.nom, body, foot);
+    App.openModal(isNew?'Nouvelle équipe':App.escapeHTML(eq.nom), body, foot);
 
     // Alerte si le nom existe déjà
     const nomInput = document.getElementById('ef-nom');
