@@ -821,7 +821,10 @@ table.data tr:hover td { background: var(--surface-2); }
   overflow: hidden;
 }
 .gantt-header { display: flex; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); gap: 10px; flex-wrap: wrap; }
-.gantt-scroll { overflow: auto; max-height: calc(100vh - 240px); }
+.gantt-body-wrap { display: flex; overflow: hidden; max-height: calc(100vh - 240px); }
+.gantt-labels-col { width: 220px; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; border-right: 1px solid var(--border); z-index: 3; background: var(--surface); }
+.gantt-labels-col::-webkit-scrollbar { display: none; }
+.gantt-scroll { overflow: auto; position: relative; }
 .gantt-table { display: grid; position: relative; font-size: 12px; min-width: 100%; grid-auto-rows: 30px; }
 .gantt-row { display: contents; }
 .gantt-cell { border-bottom: 1px solid var(--border); padding: 6px 10px; background: var(--surface); position: relative; height: 30px; box-sizing: border-box; overflow: hidden; }
