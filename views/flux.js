@@ -839,19 +839,22 @@ App.views.flux = {
       }).join('');
     }).join('');
 
-    // Ticks tous les 7 jours, labels tous les 28 jours
+    // Ticks toutes les semaines avec date
     const ticks = [];
     let d = minDate;
+    let tickIdx = 0;
     while (d <= maxDate) {
       const y = Math.round(D.diffDays(minDate, d) * scale);
       const isMonth = D.fmt(d).slice(3, 5) !== D.fmt(D.addDays(d, -1)).slice(3, 5);
+      const label = D.fmt(d).slice(0, 5);
       ticks.push(`
         <line x1="${LABEL_W - 4}" y1="${y}" x2="${TL_W}" y2="${y}"
-          stroke="var(--border)" stroke-width="${isMonth ? 1.5 : 0.5}" opacity="${isMonth ? 0.8 : 0.4}"/>
-        ${isMonth ? `<text x="${LABEL_W - 5}" y="${y + 3}" font-size="7" text-anchor="end"
-          fill="var(--text)" font-weight="600">${D.fmt(d).slice(0, 5)}</text>` : ''}
+          stroke="var(--border)" stroke-width="${isMonth ? 1.5 : 0.5}" opacity="${isMonth ? 0.8 : 0.35}"/>
+        <text x="${LABEL_W - 5}" y="${y + 3}" font-size="${isMonth ? 8 : 7}" text-anchor="end"
+          fill="${isMonth ? 'var(--primary)' : 'var(--text-muted)'}" font-weight="${isMonth ? '700' : '400'}">${label}</text>
       `);
       d = D.addDays(d, 7);
+      tickIdx++;
     }
 
     // Today line

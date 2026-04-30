@@ -473,7 +473,7 @@ App.views.gantt = {
           <select id="g-bl-sel" title="Comparer avec une baseline sauvegardée"><option value="">— Comparer —</option></select>
           <button class="btn" id="g-add">+ Nouvelle tâche</button>
         </div>
-        <div class="gantt-scroll"><div id="g-table"></div></div>
+        <div class="gantt-body-wrap"><div id="gantt-labels" class="gantt-labels-col"></div><div class="gantt-scroll"><div id="g-table"></div></div></div>
       </div>
     `;
 
@@ -540,15 +540,17 @@ App.views.gantt = {
     blSel.onchange = e => { st.baselineId = e.target.value || null; this.draw(); };
 
     this.draw();
-    // Scroll to today on initial render
+    // Scroll to today on initial render + sync labels scroll
     const scroll = document.querySelector('.gantt-scroll');
+    const labelsCol = document.getElementById('gantt-labels');
     if (scroll) {
       const zoom = st.zoom || 'jour';
       const cellW = zoom === 'mois' ? 4 : zoom === 'semaine' ? 9 : zoom === 'heure' ? 30 : 28;
       const todayIdx = zoom === 'heure' ? D.diffDays(st.rangeStart, D.today()) * 9 : D.diffDays(st.rangeStart, D.today());
       if (todayIdx >= 0 && todayIdx < (zoom === 'heure' ? st.rangeDays * 9 : st.rangeDays)) {
-        scroll.scrollLeft = Math.max(0, 220 + todayIdx * cellW - scroll.clientWidth / 2);
+        scroll.scrollLeft = Math.max(0, todayIdx * cellW - scroll.clientWidth / 2);
       }
+      if (labelsCol) scroll.addEventListener('scroll', () => { labelsCol.scrollTop = scroll.scrollTop; });
     }
   },
 
@@ -615,31 +617,32 @@ App.views.gantt = {
       headerCells.push(`<div class="gantt-cell head day-cell ${extraCls}">${content}</div>`);
     }
 
-    // Body rows
-    const rows = [];
+    // Body rows — labels séparés des cellules jour
+    const labelRows = [];
+    const dayRows = [];
     groups.forEach(g => {
-      // Determine if this is a project group (starts with PRJ-)
       const isProjectGroup = g.label && g.label.match(/^PRJ-/);
       const groupRowClass = isProjectGroup ? 'group-project' : 'group-other';
 
-      // entête de groupe
-      rows.push(`<div class="gantt-cell label group ${groupRowClass}">${g.label} <span style="font-size:10px;font-weight:400;opacity:.6">(${g.items.length})</span></div>`);
-      for (let i=0; i<totalCols; i++) rows.push(`<div class="gantt-cell group ${groupRowClass} ${dayClasses(colToDate(i))}"></div>`);
+      labelRows.push(`<div class="gantt-cell label group ${groupRowClass}">${g.label} <span style="font-size:10px;font-weight:400;opacity:.6">(${g.items.length})</span></div>`);
+      for (let i=0; i<totalCols; i++) dayRows.push(`<div class="gantt-cell group ${groupRowClass} ${dayClasses(colToDate(i))}"></div>`);
 
       g.items.forEach(it => {
         const t = it.tache;
-        const rowCells = [`<div class="gantt-cell label" title="${t.nom}">${t.nom}</div>`];
-        for (let i=0; i<totalCols; i++) rowCells.push(`<div class="gantt-cell ${dayClasses(colToDate(i))}"></div>`);
-        rows.push(...rowCells);
-
-        // Placement de la barre par overlay position-absolute dans le label row : on va utiliser le premier cell de ligne comme conteneur sticky mais les barres comme éléments absolus à l'intérieur de la grille globale via un wrap. Simplification : on injecte la barre dans la 2e cellule (premier jour visible) en position absolue relative au .gantt-table.
+        labelRows.push(`<div class="gantt-cell label" title="${t.nom}">${t.nom}</div>`);
+        for (let i=0; i<totalCols; i++) dayRows.push(`<div class="gantt-cell ${dayClasses(colToDate(i))}"></div>`);
       });
     });
 
+    const labelEl = document.getElementById('gantt-labels');
+    if (labelEl) {
+      labelEl.style.cssText += 'display:grid;grid-auto-rows:30px;align-content:start;';
+      labelEl.innerHTML = headerCells[0] + labelRows.join('');
+    }
     table.style.display = 'grid';
-    table.style.gridTemplateColumns = `${LABEL_W}px repeat(${totalCols}, ${CELL_W}px)`;
+    table.style.gridTemplateColumns = `repeat(${totalCols}, ${CELL_W}px)`;
     table.style.position = 'relative';
-    table.innerHTML = headerCells.join('') + rows.join('');
+    table.innerHTML = headerCells.slice(1).join('') + dayRows.join('');
 
     // Chemin critique par projet (si mode projet et option active)
     const criticalByProj = {};
@@ -668,7 +671,7 @@ App.views.gantt = {
           endCols    = Math.min(days - 1, D.diffDays(start, t.fin));
         }
         if (endCols < 0 || offsetCols > totalCols - 1) { rowIdx++; return; }
-        const left = LABEL_W + offsetCols * CELL_W + 2;
+        const left = offsetCols * CELL_W + 2;
         const width = Math.max(CELL_W - 4, (endCols - offsetCols + 1) * CELL_W - 4);
         const top = rowIdx * 30 + 3;
         const isConflict = confPersons.has(t.id) || confMachines.has(t.id);
@@ -684,7 +687,7 @@ App.views.gantt = {
             const snOff = Math.max(0, D.diffDays(start, snap.debut));
             const snEnd = Math.min(days-1, D.diffDays(start, snap.fin));
             if (snEnd >= 0 && snOff <= days-1) {
-              const snL = LABEL_W + snOff * CELL_W + 2;
+              const snL = snOff * CELL_W + 2;
               const snW = Math.max(CELL_W-4, (snEnd-snOff+1)*CELL_W-4);
               bars.push(`<div class="gantt-bar-ghost" style="left:${snL}px;width:${snW}px;top:${top+2}px;height:18px;background:${color}" title="Baseline : ${D.fmt(snap.debut)} → ${D.fmt(snap.fin)}"></div>`);
             }
@@ -713,7 +716,7 @@ App.views.gantt = {
     });
 
     // SVG : ligne aujourd'hui + flèches de dépendances
-    const totalW = LABEL_W + totalCols * CELL_W;
+    const totalW = totalCols * CELL_W;
     const totalH = (rowIdx + 2) * 30;
     const paths = [];
     // Ligne verticale "aujourd'hui" (toujours affichée)
@@ -721,7 +724,7 @@ App.views.gantt = {
       ? D.diffDays(start, D.today()) * HOURS_PER_DAY + Math.max(0, new Date().getHours() - WORK_START_H)
       : D.diffDays(start, D.today());
     if (todayOffset >= 0 && todayOffset < totalCols) {
-      const todayX = LABEL_W + todayOffset * CELL_W + Math.floor(CELL_W / 2);
+      const todayX = todayOffset * CELL_W + Math.floor(CELL_W / 2);
       paths.push(`<line x1="${todayX}" y1="0" x2="${todayX}" y2="${totalH}" class="today-line"/>`);
       const lblW = 64, lblH = 17;
       const lblX = todayX + lblW + 4 < totalW ? todayX + 2 : todayX - lblW - 2;
@@ -839,7 +842,7 @@ App.views.gantt = {
         const rect = table.getBoundingClientRect();
         const scrollLeft = scrollWrap ? scrollWrap.scrollLeft : 0;
         const x = e.clientX - rect.left + scrollLeft;
-        if (x < LABEL_W) return;
+        if (x < 0) return;
         dragStart = { x, y: e.clientY };
         dragGhost = document.createElement('div');
         dragGhost.id = 'drag-ghost';
@@ -862,8 +865,8 @@ App.views.gantt = {
         const rect = table.getBoundingClientRect();
         const scrollLeft = scrollWrap ? scrollWrap.scrollLeft : 0;
         const x = e.clientX - rect.left + scrollLeft;
-        const x1 = Math.min(dragStart.x, x) - LABEL_W;
-        const x2 = Math.max(dragStart.x, x) - LABEL_W;
+        const x1 = Math.min(dragStart.x, x);
+        const x2 = Math.max(dragStart.x, x);
         dragGhost.remove(); dragGhost = null; dragStart = null;
         const dayStart = Math.max(0, Math.floor(x1 / CELL_W));
         const dayEnd = Math.max(dayStart, Math.floor(x2 / CELL_W));
