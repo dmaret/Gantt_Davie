@@ -301,6 +301,136 @@ views/
 
 **Dates en UTC** : toutes les manipulations de date passent par `D.parse`, `D.iso`, `D.addDays`, etc. qui utilisent `Date.UTC()` et `getUTCDate()`. Cela évite les décalages d'un jour lors d'un changement d'heure ou d'un fuseau non-UTC (bug historique en CEST/Zurich).
 
+## Flux d'utilisation
+
+### 1 — Connexion & démarrage
+
+```mermaid
+flowchart TD
+    A([Ouvrir l'app]) --> B{Session active?}
+    B -- Non --> C[Écran de login]
+    C --> D[Choisir utilisateur]
+    D --> E{Mot de passe?}
+    E -- Non --> G[Accès direct]
+    E -- Oui --> F[Saisir mot de passe]
+    F --> G
+    G --> H[Tableau de bord]
+    B -- Oui --> H
+    H --> I{Première visite?}
+    I -- Oui --> J[Tutoriel 8 étapes 🎓]
+    I -- Non --> K[Navigation libre]
+    J --> K
+```
+
+---
+
+### 2 — Planifier un projet
+
+```mermaid
+flowchart TD
+    A([Vue Projets J]) --> B[Créer un projet\ncode · nom · couleur · dates]
+    B --> C[Vue Gantt G]
+    C --> D[+ Nouvelle tâche]
+    D --> E[Renseigner\nnorn · dates · type]
+    E --> F[Affecter des personnes\nscore compétence + charge]
+    F --> G[Lier des dépendances]
+    G --> H{Conflit machine\nou personne?}
+    H -- Oui --> I[Résoudre\ndécaler / changer machine]
+    H -- Non --> J[Tâche planifiée ✓]
+    I --> J
+    J --> K{Autre tâche?}
+    K -- Oui --> D
+    K -- Non --> L[Chemin critique\ncalculé automatiquement]
+```
+
+---
+
+### 3 — Gérer les ressources humaines
+
+```mermaid
+flowchart TD
+    A([Vue Personnes P]) --> B[Consulter charge\n4 semaines glissantes]
+    B --> C{Surcharge détectée\n≥ 96%?}
+    C -- Oui --> D[Cliquer sur la semaine\nvoir le détail]
+    D --> E[Vue Ressources R\nmatrice jours × demi-journées]
+    E --> F[Équilibrer via\ngantt ou ressources]
+    C -- Non --> G[OK ✓]
+    F --> G
+    G --> H[Définir horaires\nclic matin/après-midi]
+    H --> I[Saisir absences\nvue Absences F]
+    I --> J[Impact auto sur\ndispos & affectations]
+```
+
+---
+
+### 4 — Workflow commande 4A
+
+```mermaid
+flowchart TD
+    A([Vue Commandes O]) --> B[Créer commande\nréf · fournisseur · lignes · HT/TVA]
+    B --> C[Statut : En attente]
+    C --> D{4 axes validés?}
+    D -- Non --> E[A1 Chef de projet\nsigne si autorisé]
+    E --> F[A2 Logistique]
+    F --> G[A3 Direction tech]
+    G --> H[A4 Contrôle budget]
+    H --> D
+    D -- Oui --> I[Bouton Engager\ndéverrouillé ✓]
+    I --> J[Commande engagée\nhorodatage + signataires]
+```
+
+---
+
+### 5 — Simulation What-if
+
+```mermaid
+flowchart TD
+    A([Vue What-if W]) --> B[Prendre un snapshot\nétat actuel sauvegardé]
+    B --> C[Modifier librement\nGantt · stock · commandes…]
+    C --> D[Revenir sur What-if]
+    D --> E[Consulter le diff\najouts · suppressions · modifs]
+    E --> F{Résultat satisfaisant?}
+    F -- Oui --> G[✓ Valider\nchangements définitifs]
+    F -- Non --> H[↶ Rejeter\nretour au snapshot]
+    G --> I[Historique mis à jour]
+    H --> I
+```
+
+---
+
+### 6 — Gestion stock & BOM
+
+```mermaid
+flowchart TD
+    A([Vue Stock S]) --> B[Consulter les articles\nseuils d'alerte]
+    B --> C{Article sous le seuil?}
+    C -- Oui --> D[Alerte 🔔 déclenchée]
+    D --> E[Vue BOM B\nbesoin projet ↔ solde]
+    C -- Non --> E
+    E --> F{Rupture prévue?}
+    F -- Oui --> G[Créer une commande\nvue Commandes O]
+    G --> H[Workflow 4A]
+    F -- Non --> I[Stock OK ✓]
+    H --> I
+```
+
+---
+
+### 7 — Modèle de projet réutilisable
+
+```mermaid
+flowchart TD
+    A([Vue Modèles projet]) --> B[Choisir un modèle\nlogistique · emballage · assemblage]
+    B --> C[Cliquer Instancier]
+    C --> D[Choisir le projet cible]
+    D --> E[Choisir la date de début]
+    E --> F[Toutes les étapes créées\navec dépendances auto]
+    F --> G[Vue Gantt G\najuster si besoin]
+    G --> H[Planning prêt ✓]
+```
+
+---
+
 ## Utilisation & contact
 
 | | |
