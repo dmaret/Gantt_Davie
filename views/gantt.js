@@ -545,7 +545,7 @@ App.views.gantt = {
     const labelsCol = document.getElementById('gantt-labels');
     if (scroll) {
       const zoom = st.zoom || 'jour';
-      const cellW = zoom === 'mois' ? 4 : zoom === 'semaine' ? 9 : zoom === 'heure' ? 30 : 28;
+      const cellW = zoom === 'mois' ? 4 : zoom === 'semaine' ? 9 : zoom === 'heure' ? 30 : 35;
       const todayIdx = zoom === 'heure' ? D.diffDays(st.rangeStart, D.today()) * 9 : D.diffDays(st.rangeStart, D.today());
       if (todayIdx >= 0 && todayIdx < (zoom === 'heure' ? st.rangeDays * 9 : st.rangeDays)) {
         scroll.scrollLeft = Math.max(0, todayIdx * cellW - scroll.clientWidth / 2);
@@ -566,7 +566,7 @@ App.views.gantt = {
     // Build groups
     const groups = this.buildGroups();
     const zoom = st.zoom || 'jour';
-    const CELL_W = zoom === 'mois' ? 4 : zoom === 'semaine' ? 9 : zoom === 'heure' ? 30 : 28;
+    const CELL_W = zoom === 'mois' ? 4 : zoom === 'semaine' ? 9 : zoom === 'heure' ? 30 : 35;
     const isHourMode = zoom === 'heure';
     const HOURS_PER_DAY = 9;   // 08h–16h
     const WORK_START_H  = 8;
