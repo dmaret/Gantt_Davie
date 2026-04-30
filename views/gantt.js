@@ -1079,7 +1079,7 @@ App.views.gantt = {
           <td><button class="btn" data-assign="${x.p.id}" style="padding:2px 10px">Affecter</button></td>
         </tr>`).join('')}</tbody>
       </table>`;
-    App.openModal('Suggestions pour : ' + t.nom, body, `<button class="btn btn-secondary" onclick="App.closeModal()">Fermer</button>`);
+    App.openModal('Suggestions pour : ' + App.escapeHTML(t.nom), body, `<button class="btn btn-secondary" onclick="App.closeModal()">Fermer</button>`);
     document.querySelectorAll('.link-to-person').forEach(a => a.onclick = (e) => {
       e.preventDefault();
       App.closeModal();
@@ -1395,7 +1395,7 @@ App.views.gantt = {
       <button class="btn btn-secondary" id="f-cancel">Annuler</button>
       <button class="btn" id="f-save">${isNew?'Créer':'Enregistrer'}</button>
     `;
-    App.openModal(isNew ? 'Nouvelle tâche' : 'Tâche — ' + t.nom, body, foot);
+    App.openModal(isNew ? 'Nouvelle tâche' : 'Tâche — ' + App.escapeHTML(t.nom), body, foot);
 
     // Assignés — toggle chips/checkbox list + chip remove
     const refreshChips = () => {

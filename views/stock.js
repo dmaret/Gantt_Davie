@@ -120,7 +120,7 @@ App.views.stock = {
     const foot = `${!isNew?'<button class="btn btn-danger" id="xf-del">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="xf-cancel">Annuler</button>
       <button class="btn" id="xf-save">${isNew?'Créer':'Enregistrer'}</button>`;
-    App.openModal(isNew?'Nouvel article':x.ref+' — '+x.nom, body, foot);
+    App.openModal(isNew?'Nouvel article':App.escapeHTML(x.ref)+' — '+App.escapeHTML(x.nom), body, foot);
     document.getElementById('xf-cancel').onclick = () => App.closeModal();
     document.getElementById('xf-save').onclick = () => {
       x.ref = document.getElementById('xf-ref').value.trim();

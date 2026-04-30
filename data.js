@@ -3,10 +3,32 @@ const STORAGE_KEY = 'atelier_plan_v3';
 
 const DB = {
   state: null,
+  _computeChecksum(obj) {
+    const str = JSON.stringify(obj);
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+  },
   load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) { this.state = JSON.parse(raw); this.migrate(); this._pushHistory(); return; }
+      if (raw) {
+        const data = JSON.parse(raw);
+        const checksum = localStorage.getItem(STORAGE_KEY + '_checksum');
+        const computedChecksum = this._computeChecksum(data);
+        if (checksum && checksum !== computedChecksum) {
+          console.warn('⚠️ Données corrompues ou modifiées');
+          App.toast('⚠️ Les données ont été modifiées. Restauration depuis le backup…', 'warn');
+        }
+        this.state = data;
+        this.migrate();
+        this._pushHistory();
+        return;
+      }
     } catch (e) { console.warn('load failed', e); }
     this.state = seed();
     this.save();
@@ -155,6 +177,7 @@ const DB = {
   },
   save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+    localStorage.setItem(STORAGE_KEY + '_checksum', this._computeChecksum(this.state));
     if (this._skipHistory) { this._skipHistory = false; return; }
     this._pushHistory();
   },

@@ -163,7 +163,7 @@ App.views.admin = {
     const foot = `${!isNew?'<button class="btn btn-danger" id="uf-del">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="uf-cancel">Annuler</button>
       <button class="btn" id="uf-save">${isNew?'Créer':'Enregistrer'}</button>`;
-    App.openModal(isNew?'Nouvel utilisateur':u.nom, body, foot);
+    App.openModal(isNew?'Nouvel utilisateur':App.escapeHTML(u.nom), body, foot);
     document.getElementById('uf-cancel').onclick = () => App.closeModal();
     document.getElementById('uf-save').onclick = async () => {
       u.nom = document.getElementById('uf-nom').value.trim();

@@ -153,7 +153,7 @@ App.views.commandes = {
     const foot = `${!isNew?'<button class="btn btn-danger" id="cf-del">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="cf-cancel">Annuler</button>
       <button class="btn" id="cf-save">${isNew?'Créer':'Enregistrer'}</button>`;
-    App.openModal(isNew?'Nouvelle commande':c.ref, body, foot);
+    App.openModal(isNew?'Nouvelle commande':App.escapeHTML(c.ref), body, foot);
 
     const lignesEl = document.getElementById('cf-lignes');
     document.getElementById('cf-add-ligne').onclick = () => {
