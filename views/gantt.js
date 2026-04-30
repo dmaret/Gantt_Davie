@@ -623,8 +623,8 @@ App.views.gantt = {
       const groupRowClass = isProjectGroup ? 'group-project' : 'group-other';
 
       // entête de groupe
-      rows.push(`<div class="gantt-cell label group ${groupRowClass}" style="grid-column:1/span 1;background:${isProjectGroup?'var(--bg-project-group)':'transparent'}">${g.label} <span style="font-size:10px;font-weight:400;opacity:.6">(${g.items.length})</span></div>`);
-      for (let i=0; i<totalCols; i++) rows.push(`<div class="gantt-cell group ${groupRowClass} ${dayClasses(colToDate(i))}" style="background:${isProjectGroup?'var(--bg-project-group)':'transparent'}"></div>`);
+      rows.push(`<div class="gantt-cell label group ${groupRowClass}">${g.label} <span style="font-size:10px;font-weight:400;opacity:.6">(${g.items.length})</span></div>`);
+      for (let i=0; i<totalCols; i++) rows.push(`<div class="gantt-cell group ${groupRowClass} ${dayClasses(colToDate(i))}"></div>`);
 
       g.items.forEach(it => {
         const t = it.tache;

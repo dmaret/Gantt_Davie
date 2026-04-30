@@ -827,6 +827,10 @@ table.data tr:hover td { background: var(--surface-2); }
 .gantt-cell { border-bottom: 1px solid var(--border); padding: 6px 10px; background: var(--surface); position: relative; height: 30px; box-sizing: border-box; overflow: hidden; }
 .gantt-cell.label { position: sticky; left: 0; background: var(--surface); border-right: 1px solid var(--border); z-index: 2; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; line-height: 18px; }
 .gantt-cell.label.group { background: var(--surface-2); font-weight: 600; }
+/* Tint PRJ- group rows via pseudo-element so day highlights (weekend, today) show through */
+.gantt-cell.group-project:not(.label)::before { content:''; position:absolute; inset:0; background:var(--bg-project-group); pointer-events:none; }
+.gantt-cell.label.group-project { border-left:3px solid rgba(44,95,179,.45); }
+body.dark .gantt-cell.label.group-project { border-left-color:rgba(110,163,255,.55); }
 .gantt-cell.head { background: var(--surface-2); font-weight: 600; color: var(--text-muted); position: sticky; top: 0; z-index: 3; border-bottom: 1px solid var(--border); }
 .gantt-cell.head.label { z-index: 4; }
 .gantt-cell.day-weekend { background: repeating-linear-gradient(45deg, var(--surface-2) 0 4px, transparent 4px 8px), var(--surface-2); }
