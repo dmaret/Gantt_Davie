@@ -544,9 +544,9 @@ App.views.gantt = {
     const scroll = document.querySelector('.gantt-scroll');
     if (scroll) {
       const zoom = st.zoom || 'jour';
-      const cellW = zoom === 'mois' ? 4 : zoom === 'semaine' ? 9 : 28;
-      const todayIdx = D.diffDays(st.rangeStart, D.today());
-      if (todayIdx >= 0 && todayIdx < st.rangeDays) {
+      const cellW = zoom === 'mois' ? 4 : zoom === 'semaine' ? 9 : zoom === 'heure' ? 30 : 28;
+      const todayIdx = zoom === 'heure' ? D.diffDays(st.rangeStart, D.today()) * 9 : D.diffDays(st.rangeStart, D.today());
+      if (todayIdx >= 0 && todayIdx < (zoom === 'heure' ? st.rangeDays * 9 : st.rangeDays)) {
         scroll.scrollLeft = Math.max(0, 220 + todayIdx * cellW - scroll.clientWidth / 2);
       }
     }
