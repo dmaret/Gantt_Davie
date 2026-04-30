@@ -1281,7 +1281,67 @@ App.views.gantt = {
       </div>
       ${sel.length ? `<div class="muted small f-geste-est" style="margin-top:4px">⏱ Estimation : ${fmtT(totalSec)} / pièce · ${sel.length} geste(s) sélectionné(s)</div>` : ''}`;
     };
+
+    const GABARITS_FLUX = {
+      logistique: {
+        label:'Logistique', couleur:'#2c5fb3',
+        stations: ['Décharge & réception palette','Contrôle entrée (scan)','Déconditionnement','Tri & rangement stock (FIFO)','Picking commande','Filmage palette','Étiquetage transport','Expédition quai'],
+      },
+      emballage: {
+        label:'Emballage', couleur:'#059669',
+        stations: ['Réception articles à emballer','Déconditionnement & tri','Reconditionnement','Étiquetage automatique','Contrôle qualité (scan)','Banderollage','Filmage palette','Pesée & étiquette transport'],
+      },
+      conditionnement: {
+        label:'Conditionnement', couleur:'#7c3aed',
+        stations: ['Appro & prélèvement (BOM)','Contrôle composants','Assemblage pièces','Callage & protection mousse','Film bulles','Emballage carton & fermeture','Banderollage sécurisation','Pesée & étiquetage final'],
+      },
+    };
+    let _gabaritKey = '';
+    const renderGabaritPanel = (key) => {
+      const g = GABARITS_FLUX[key];
+      const panel = document.getElementById('gabarit-panel');
+      if (!panel) return;
+      if (!g) { panel.innerHTML = ''; return; }
+      panel.innerHTML = `<div style="margin-top:8px;padding:8px 10px;border-radius:6px;border:1.5px solid ${g.couleur}55;background:${g.couleur}0d">
+        <div style="font-size:11px;font-weight:600;color:${g.couleur};margin-bottom:6px">Stations ${g.label}</div>
+        <div id="gabarit-items" style="display:flex;flex-direction:column;gap:3px">
+          ${g.stations.map((st,i) => `<label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;padding:2px 4px;border-radius:4px">
+            <input type="checkbox" class="gabarit-cb" checked style="flex-shrink:0"> <span>${st}</span>
+          </label>`).join('')}
+        </div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <input type="text" id="gabarit-add-input" placeholder="+ Ajouter une station…" style="flex:1;font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface)">
+          <button type="button" id="gabarit-add-btn" class="btn btn-secondary" style="font-size:11px;padding:3px 8px">+</button>
+        </div>
+      </div>`;
+      const addInput = document.getElementById('gabarit-add-input');
+      const addBtn = document.getElementById('gabarit-add-btn');
+      const addStation = () => {
+        const txt = addInput.value.trim();
+        if (!txt) return;
+        const items = document.getElementById('gabarit-items');
+        const lbl = document.createElement('label');
+        lbl.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;padding:2px 4px;border-radius:4px';
+        lbl.innerHTML = `<input type="checkbox" class="gabarit-cb" checked style="flex-shrink:0"> <span>${txt}</span>`;
+        items.appendChild(lbl);
+        addInput.value = '';
+        addInput.focus();
+      };
+      addBtn.onclick = addStation;
+      addInput.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); addStation(); } };
+    };
+
     const body = `
+      ${isNew ? `<div class="field" style="margin-bottom:2px">
+        <label style="font-weight:600;font-size:12px">Gabarit de flux <span class="muted small" style="font-weight:400">(optionnel — pré-remplit les stations de travail)</span></label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px">
+          ${Object.entries(GABARITS_FLUX).map(([key,g]) => `
+            <button type="button" class="gabarit-btn" data-key="${key}" style="padding:4px 14px;border-radius:20px;border:1.5px solid ${g.couleur};background:transparent;color:${g.couleur};font-size:11px;font-weight:600;cursor:pointer">${g.label}</button>
+          `).join('')}
+          <button type="button" class="gabarit-btn" data-key="" style="padding:4px 12px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--text-muted);font-size:11px;cursor:pointer">✕ Sans gabarit</button>
+        </div>
+        <div id="gabarit-panel"></div>
+      </div>` : ''}
       <div class="field"><label>Nom</label><input id="f-nom" value="${t.nom||''}"></div>
       <div class="row">
         <div class="field"><label>Projet</label>
@@ -1400,6 +1460,28 @@ App.views.gantt = {
       <button class="btn" id="f-save">${isNew?'Créer':'Enregistrer'}</button>
     `;
     App.openModal(isNew ? 'Nouvelle tâche' : 'Tâche — ' + App.escapeHTML(t.nom), body, foot);
+
+    // Gabarits de flux — boutons + panel dynamique
+    if (isNew) {
+      document.querySelectorAll('.gabarit-btn').forEach(btn => {
+        btn.onclick = () => {
+          _gabaritKey = btn.dataset.key;
+          document.querySelectorAll('.gabarit-btn').forEach(b => {
+            const gk = b.dataset.key;
+            const g = GABARITS_FLUX[gk];
+            b.style.background = b.dataset.key === _gabaritKey ? (g ? g.couleur : 'var(--surface-2)') : 'transparent';
+            b.style.color      = b.dataset.key === _gabaritKey ? '#fff' : (g ? g.couleur : 'var(--text-muted)');
+          });
+          renderGabaritPanel(_gabaritKey);
+          // Pré-remplir le champ nom si vide
+          const nomEl = document.getElementById('f-nom');
+          if (nomEl && !nomEl.value && GABARITS_FLUX[_gabaritKey]) {
+            nomEl.value = 'Tâche ' + GABARITS_FLUX[_gabaritKey].label;
+            nomEl.focus(); nomEl.select();
+          }
+        };
+      });
+    }
 
     // Assignés — toggle chips/checkbox list + chip remove
     const refreshChips = () => {
@@ -1746,6 +1828,14 @@ App.views.gantt = {
       t.dependances = Array.from(document.getElementById('f-deps').selectedOptions).map(o => o.value);
       t.notes = document.getElementById('f-notes').value;
       t.gestes = Array.from(document.querySelectorAll('#f-gestes-wrap .f-geste-cb:checked')).map(cb => cb.dataset.code);
+      // Injecter les stations du gabarit dans la checklist (nouvelles tâches uniquement)
+      if (isNew && _gabaritKey && GABARITS_FLUX[_gabaritKey]) {
+        const stationsChecked = Array.from(document.querySelectorAll('#gabarit-items .gabarit-cb:checked'));
+        stationsChecked.forEach(cb => {
+          const txt = cb.parentElement.querySelector('span')?.textContent?.trim();
+          if (txt) localCL.push({ id: DB.uid('CL'), texte: txt, done: false });
+        });
+      }
       t.checklist = localCL;
       if (!t.nom) { App.toast('Nom requis','error'); return; }
 
