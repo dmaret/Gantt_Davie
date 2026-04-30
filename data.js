@@ -457,42 +457,37 @@ function seed() {
   const today = D.today();
   const start = D.addDays(today, -7);
 
-  // 7 lieux de production
+  // Lieux d'emballage/logistique/conditionnement
   const lieux = [
-    { id: 'L_ATEL_2A', nom: 'Atelier 2A', etage: '2e', type: 'production', capacite: 8 },
-    { id: 'L_ATEL_2B', nom: 'Atelier 2B', etage: '2e', type: 'production', capacite: 6 },
-    { id: 'L_ATEL_1A', nom: 'Atelier 1A', etage: '1er', type: 'production', capacite: 10 },
-    { id: 'L_ATEL_1B', nom: 'Atelier 1B', etage: '1er', type: 'production', capacite: 8 },
-    { id: 'L_MONT_1',  nom: 'Montage 1',  etage: '1er', type: 'production', capacite: 12 },
-    { id: 'L_FINI',    nom: 'Finition',   etage: 'Rez', type: 'production', capacite: 6 },
-    { id: 'L_LIVR',    nom: 'Expédition', etage: 'Rez', type: 'production', capacite: 4 },
-    // 12 stockages
-    { id: 'S_REZ_ARR', nom: 'Rez · Arrivages',     etage: 'Rez', type: 'stockage', capacite: 100 },
-    { id: 'S_REZ_EXP', nom: 'Rez · Quai expé',     etage: 'Rez', type: 'stockage', capacite: 60  },
-    { id: 'S_SS_T1',   nom: 'SS · Tampon 1',       etage: 'S-sol', type: 'stockage', capacite: 200 },
-    { id: 'S_SS_T2',   nom: 'SS · Tampon 2',       etage: 'S-sol', type: 'stockage', capacite: 200 },
-    { id: 'S_SS_ARCH', nom: 'SS · Archives',       etage: 'S-sol', type: 'stockage', capacite: 80  },
-    { id: 'S_1_MAT',   nom: '1er · Matières',      etage: '1er', type: 'stockage', capacite: 120 },
-    { id: 'S_1_CONS',  nom: '1er · Consommables',  etage: '1er', type: 'stockage', capacite: 80  },
-    { id: 'S_1_OUT',   nom: '1er · Outillage',     etage: '1er', type: 'stockage', capacite: 60  },
-    { id: 'S_2_MAT',   nom: '2e · Matières',       etage: '2e', type: 'stockage', capacite: 80  },
-    { id: 'S_2_CONS',  nom: '2e · Consommables',   etage: '2e', type: 'stockage', capacite: 60  },
-    { id: 'S_2_PROTO', nom: '2e · Prototypes',     etage: '2e', type: 'stockage', capacite: 40  },
-    { id: 'S_REZ_CHIM',nom: 'Rez · Produits chim.',etage: 'Rez', type: 'stockage', capacite: 30  },
+    { id: 'L_ENTREE',      nom: 'Réception entrée',       etage: 'Rez', type: 'production', capacite: 6 },
+    { id: 'L_DECONDI',     nom: 'Zone déconditionnement', etage: 'Rez', type: 'production', capacite: 8 },
+    { id: 'L_ASSEMB',      nom: 'Poste assemblage',       etage: 'Rez', type: 'production', capacite: 10 },
+    { id: 'L_CALLAGE',     nom: 'Callage & protection',   etage: 'Rez', type: 'production', capacite: 6 },
+    { id: 'L_RECONDI',     nom: 'Reconditionnement',      etage: 'Rez', type: 'production', capacite: 12 },
+    { id: 'L_VALMONT',     nom: 'Salle Valmont',          etage: 'Rez', type: 'production', capacite: 8 },
+    { id: 'L_BANDERO',     nom: 'Banderollage',           etage: 'Rez', type: 'production', capacite: 4 },
+    { id: 'L_FILM',        nom: 'Filmage palette',        etage: 'Rez', type: 'production', capacite: 4 },
+    { id: 'L_CONTROLE',    nom: 'Contrôle qualité',       etage: 'Rez', type: 'production', capacite: 3 },
+    { id: 'L_EXPEDITION',  nom: 'Quai expédition',        etage: 'Rez', type: 'production', capacite: 4 },
+    // Stockages
+    { id: 'S_ARRIVAGE',    nom: 'Stock · Arrivages',      etage: 'Rez', type: 'stockage', capacite: 150 },
+    { id: 'S_DECOND',      nom: 'Stock · Pièces déconditionnées', etage: 'Rez', type: 'stockage', capacite: 120 },
+    { id: 'S_EN_COURS',    nom: 'Stock · En cours',       etage: 'Rez', type: 'stockage', capacite: 200 },
+    { id: 'S_EMBALLAGE',   nom: 'Stock · Matériaux emballage', etage: 'Rez', type: 'stockage', capacite: 100 },
+    { id: 'S_CONSOMMABLES',nom: 'Stock · Consommables',   etage: 'Rez', type: 'stockage', capacite: 80 },
+    { id: 'S_PALETTES',    nom: 'Stock · Palettes',       etage: 'Rez', type: 'stockage', capacite: 300 },
+    { id: 'S_OUTILLAGE',   nom: 'Stock · Outillage',      etage: 'Rez', type: 'stockage', capacite: 60 },
+    { id: 'S_FINAL',       nom: 'Stock · Produits finis', etage: 'Rez', type: 'stockage', capacite: 200 },
   ];
 
-  // Machines par lieu de production
+  // Machines d'emballage/logistique
   const machines = [
-    { id:'M_CNC1', nom:'CNC 1',         lieuId:'L_ATEL_2A', type:'CNC', capaciteJour:8 },
-    { id:'M_CNC2', nom:'CNC 2',         lieuId:'L_ATEL_2A', type:'CNC', capaciteJour:8 },
-    { id:'M_LASER',nom:'Découpe laser', lieuId:'L_ATEL_2B', type:'Laser', capaciteJour:8 },
-    { id:'M_PLI1', nom:'Plieuse 1',     lieuId:'L_ATEL_1A', type:'Pliage', capaciteJour:8 },
-    { id:'M_PLI2', nom:'Plieuse 2',     lieuId:'L_ATEL_1A', type:'Pliage', capaciteJour:8 },
-    { id:'M_SOUD1',nom:'Poste soudure 1',lieuId:'L_ATEL_1B',type:'Soudure',capaciteJour:8 },
-    { id:'M_SOUD2',nom:'Poste soudure 2',lieuId:'L_ATEL_1B',type:'Soudure',capaciteJour:8 },
-    { id:'M_PEINT',nom:'Cabine peinture',lieuId:'L_FINI',  type:'Peinture',capaciteJour:8 },
-    { id:'M_MONT', nom:'Ligne montage', lieuId:'L_MONT_1', type:'Montage', capaciteJour:16 },
-    { id:'M_TEST', nom:'Banc test',     lieuId:'L_MONT_1', type:'Contrôle',capaciteJour:8 },
+    { id:'M_BANDEROLE', nom:'Banderoleuse automatique', lieuId:'L_BANDERO', type:'Emballage', capaciteJour:12 },
+    { id:'M_FILM1', nom:'Filmeuse palette 1',     lieuId:'L_FILM', type:'Emballage', capaciteJour:8 },
+    { id:'M_FILM2', nom:'Filmeuse palette 2',     lieuId:'L_FILM', type:'Emballage', capaciteJour:8 },
+    { id:'M_ETIQUETTE', nom:'Étiqueteuse',        lieuId:'L_RECONDI', type:'Conditionnement', capaciteJour:10 },
+    { id:'M_BALANCE', nom:'Balance de pesée',     lieuId:'L_FILM', type:'Pesée', capaciteJour:16 },
+    { id:'M_SCANNER', nom:'Lecteur code-barres',  lieuId:'L_CONTROLE', type:'Contrôle', capaciteJour:20 },
   ];
 
   // 70 personnes
@@ -511,10 +506,10 @@ function seed() {
     'Masson','Sanchez','Gérard','Nguyen','Boyer','Denis','Lemoine','Dufour','Meyer','Blanchard',
     'Marchand','Guillaume','Peltier','Perrot','Lucas','Royer','Hubert','Weber','Fernandez','Schneider'];
 
-  const roles = ['Chef·fe de projet','Technicien·ne','Opérateur·rice','Soudeur·se','Monteur·se',
-                 'Peintre','Contrôleur·se','Logisticien·ne','Designer','Ingénieur·e'];
-  const competences = ['CNC','Laser','Pliage','Soudure','Peinture','Montage','Contrôle',
-                       'Élec','CAO','Logistique','Management','Qualité'];
+  const roles = ['Chef·fe de projet','Opérateur·rice emballage','Logisticien·ne','Contrôleur·se qualité',
+                 'Responsable entrepôt','Coordinateur·rice','Manutentionnaire','Chef d\'équipe'];
+  const competences = ['Emballage','Logistique','Conditionnement','Contrôle','Étiquetage',
+                       'Manutention','Filmage','Banderollage','Callage','Management'];
 
   const personnes = [];
   for (let i=0; i<70; i++) {
@@ -534,31 +529,31 @@ function seed() {
     });
   }
 
-  // 6 projets actifs — clients suisses, durées en jours ouvrés
+  // Projets emballage/logistique
   const startWD = D.nextWorkday(start);
   const projets = [
-    { id:'PRJ_A', code:'PRJ-A', nom:'Châssis série A',      client:'Migros Industrie SA', couleur:'#2c5fb3', debut: startWD,                      fin: D.addWorkdays(startWD, 39), etage:'1er', priorite:'haute', statut:'en-cours'},
-    { id:'PRJ_B', code:'PRJ-B', nom:'Prototype B-Quantum',  client:'CERN',                couleur:'#7c3aed', debut: D.addWorkdays(startWD, 4),    fin: D.addWorkdays(startWD, 27), etage:'2e',  priorite:'haute', statut:'en-cours'},
-    { id:'PRJ_C', code:'PRJ-C', nom:'Refonte ligne C',      client:'Interne',             couleur:'#1f8a4c', debut: D.nextWorkday(D.addDays(startWD,-3)), fin: D.addWorkdays(startWD, 32), etage:'1er', priorite:'moyenne', statut:'en-cours'},
-    { id:'PRJ_D', code:'PRJ-D', nom:'Série D — Export',     client:'CFF SA',              couleur:'#c47800', debut: D.addWorkdays(startWD, 7),    fin: D.addWorkdays(startWD, 43), etage:'2e',  priorite:'haute', statut:'planifié'},
-    { id:'PRJ_E', code:'PRJ-E', nom:'Maintenance E',        client:'Interne',             couleur:'#c43b3b', debut: D.addWorkdays(startWD, 14),   fin: D.addWorkdays(startWD, 24), etage:'1er', priorite:'basse', statut:'planifié'},
-    { id:'PRJ_F', code:'PRJ-F', nom:'Étude F — Nouveau',    client:'Nestlé R&D',          couleur:'#0ea5b7', debut: D.addWorkdays(startWD, 18),   fin: D.addWorkdays(startWD, 50), etage:'2e',  priorite:'moyenne', statut:'planifié'},
+    { id:'PRJ_A', code:'PRJ-LOG-001', nom:'Commande Migros — Emballage cartons', client:'Migros Distribution', couleur:'#2c5fb3', debut: startWD, fin: D.addWorkdays(startWD, 5), etage:'Rez', groupe:'Logistique', priorite:'haute', statut:'en-cours'},
+    { id:'PRJ_B', code:'PRJ-EMB-001', nom:'Reconditionnement produits COOP', client:'COOP Suisse', couleur:'#7c3aed', debut: D.addWorkdays(startWD, 1), fin: D.addWorkdays(startWD, 8), etage:'Rez', groupe:'Emballage', priorite:'haute', statut:'en-cours'},
+    { id:'PRJ_C', code:'PRJ-COND-001', nom:'Conditionnement kits montage', client:'Interne', couleur:'#1f8a4c', debut: D.nextWorkday(D.addDays(startWD,-3)), fin: D.addWorkdays(startWD, 10), etage:'Rez', groupe:'Conditionnement', priorite:'moyenne', statut:'en-cours'},
+    { id:'PRJ_D', code:'PRJ-LOG-002', nom:'Tri & réexpédition retours', client:'Nestlé CH', couleur:'#c47800', debut: D.addWorkdays(startWD, 3), fin: D.addWorkdays(startWD, 12), etage:'Rez', groupe:'Logistique', priorite:'moyenne', statut:'planifié'},
+    { id:'PRJ_E', code:'PRJ-EMB-002', nom:'Packaging premium Lindt', client:'Lindt & Sprüngli', couleur:'#c43b3b', debut: D.addWorkdays(startWD, 5), fin: D.addWorkdays(startWD, 15), etage:'Rez', groupe:'Emballage', priorite:'haute', statut:'planifié'},
+    { id:'PRJ_F', code:'PRJ-COND-002', nom:'Assemblage et callage mécanique', client:'Interne', couleur:'#0ea5b7', debut: D.addWorkdays(startWD, 7), fin: D.addWorkdays(startWD, 20), etage:'Rez', groupe:'Conditionnement', priorite:'basse', statut:'planifié'},
   ];
 
-  // Tâches pour chaque projet, affectations et machines/lieux
+  // Tâches pour chaque projet (flux emballage/logistique)
   const taches = [];
   let tCount = 0;
   const tpl = [
-    { nom:'Études & plans',    duree:5,  comp:'CAO',     machine:null,      lieu:null,        type:'etude' },
-    { nom:'Approvisionnement', duree:4,  comp:'Logistique', machine:null,   lieu:'S_REZ_ARR', type:'appro' },
-    { nom:'Découpe',           duree:6,  comp:'Laser',   machine:'M_LASER', lieu:'L_ATEL_2B', type:'prod' },
-    { nom:'Usinage CNC',       duree:7,  comp:'CNC',     machine:'M_CNC1',  lieu:'L_ATEL_2A', type:'prod' },
-    { nom:'Pliage',            duree:4,  comp:'Pliage',  machine:'M_PLI1',  lieu:'L_ATEL_1A', type:'prod' },
-    { nom:'Soudure',           duree:6,  comp:'Soudure', machine:'M_SOUD1', lieu:'L_ATEL_1B', type:'prod' },
-    { nom:'Peinture',          duree:3,  comp:'Peinture',machine:'M_PEINT', lieu:'L_FINI',    type:'prod' },
-    { nom:'Montage',           duree:7,  comp:'Montage', machine:'M_MONT',  lieu:'L_MONT_1',  type:'prod' },
-    { nom:'Contrôle qualité',  duree:2,  comp:'Contrôle',machine:'M_TEST',  lieu:'L_MONT_1',  type:'prod' },
-    { nom:'Expédition',        duree:1,  comp:'Logistique',machine:null,    lieu:'L_LIVR',    type:'livraison' },
+    { nom:'Réception marchandise',    duree:1,  comp:'Logistique', machine:null,          lieu:'L_ENTREE',    type:'appro' },
+    { nom:'Contrôle entrée',          duree:1,  comp:'Contrôle',   machine:'M_SCANNER',   lieu:'L_CONTROLE',  type:'etude' },
+    { nom:'Déconditionnement',        duree:2,  comp:'Conditionnement', machine:null,    lieu:'L_DECONDI',   type:'prod' },
+    { nom:'Assemblage/kits',          duree:2,  comp:'Conditionnement', machine:null,    lieu:'L_ASSEMB',    type:'prod' },
+    { nom:'Callage & protection',     duree:1,  comp:'Logistique', machine:null,         lieu:'L_CALLAGE',   type:'prod' },
+    { nom:'Reconditionnement',        duree:2,  comp:'Conditionnement', machine:'M_ETIQUETTE', lieu:'L_RECONDI', type:'prod' },
+    { nom:'Banderollage',             duree:1,  comp:'Emballage',  machine:'M_BANDEROLE', lieu:'L_BANDERO',   type:'prod' },
+    { nom:'Filmage & pesée',          duree:1,  comp:'Emballage',  machine:'M_FILM1',     lieu:'L_FILM',      type:'prod' },
+    { nom:'Contrôle final',           duree:1,  comp:'Contrôle',   machine:'M_SCANNER',   lieu:'L_CONTROLE',  type:'etude' },
+    { nom:'Expédition',               duree:1,  comp:'Logistique', machine:null,          lieu:'L_EXPEDITION',type:'livraison' },
   ];
 
   projets.forEach((prj, pi) => {
@@ -602,39 +597,39 @@ function seed() {
     });
   });
 
-  // Stock (articles)
+  // Stock (articles d'emballage/logistique)
   const stock = [
-    { id:'ART001', ref:'ACI-3mm-1250', nom:'Tôle acier 3mm 1250x2500', unite:'pl', quantite:42, seuilAlerte:20, lieuId:'S_1_MAT', projetsLies:['PRJ_A','PRJ_D']},
-    { id:'ART002', ref:'ACI-5mm-1250', nom:'Tôle acier 5mm 1250x2500', unite:'pl', quantite:8,  seuilAlerte:15, lieuId:'S_1_MAT', projetsLies:['PRJ_A']},
-    { id:'ART003', ref:'INOX-2mm',     nom:'Tôle inox 2mm',            unite:'pl', quantite:30, seuilAlerte:10, lieuId:'S_1_MAT', projetsLies:['PRJ_B']},
-    { id:'ART004', ref:'ALU-PROFIL-40',nom:'Profilé alu 40x40',        unite:'m',  quantite:120,seuilAlerte:50, lieuId:'S_2_MAT', projetsLies:['PRJ_B','PRJ_F']},
-    { id:'ART005', ref:'ELEC-V2',      nom:'Électrode soudure V2',     unite:'kg', quantite:14, seuilAlerte:8,  lieuId:'S_1_CONS',projetsLies:['PRJ_A','PRJ_C']},
-    { id:'ART006', ref:'PEINT-RAL-9005',nom:'Peinture RAL 9005',       unite:'L',  quantite:22, seuilAlerte:10, lieuId:'S_REZ_CHIM',projetsLies:['PRJ_A','PRJ_D','PRJ_C']},
-    { id:'ART007', ref:'VIS-M8',       nom:'Visserie M8 (boîte 500)',  unite:'bo', quantite:18, seuilAlerte:6,  lieuId:'S_1_CONS',projetsLies:['PRJ_A','PRJ_B','PRJ_C','PRJ_D']},
-    { id:'ART008', ref:'JOINT-EPDM',   nom:'Joint EPDM 10mm',          unite:'m',  quantite:4,  seuilAlerte:20, lieuId:'S_SS_T1', projetsLies:['PRJ_C']},
-    { id:'ART009', ref:'ROUL-6204',    nom:'Roulement 6204',           unite:'p',  quantite:60, seuilAlerte:20, lieuId:'S_1_OUT', projetsLies:['PRJ_A','PRJ_D']},
-    { id:'ART010', ref:'PROTO-CARTE',  nom:'Carte proto révision 4',   unite:'p',  quantite:3,  seuilAlerte:5,  lieuId:'S_2_PROTO',projetsLies:['PRJ_B','PRJ_F']},
-    { id:'ART011', ref:'EMB-CAISSE-L', nom:'Caisse bois L',            unite:'p',  quantite:15, seuilAlerte:8,  lieuId:'S_REZ_EXP',projetsLies:['PRJ_A','PRJ_D']},
-    { id:'ART012', ref:'PRODUIT-NETT', nom:'Solvant nettoyage',        unite:'L',  quantite:38, seuilAlerte:15, lieuId:'S_REZ_CHIM',projetsLies:[]},
+    { id:'ART001', ref:'CARTON-L',     nom:'Cartons ondulés L',        unite:'pce', quantite:250, seuilAlerte:100, lieuId:'S_EMBALLAGE', projetsLies:['PRJ_A']},
+    { id:'ART002', ref:'CARTON-M',     nom:'Cartons ondulés M',        unite:'pce', quantite:180, seuilAlerte:80,  lieuId:'S_EMBALLAGE', projetsLies:['PRJ_B']},
+    { id:'ART003', ref:'CARTON-S',     nom:'Cartons ondulés S',        unite:'pce', quantite:320, seuilAlerte:150, lieuId:'S_EMBALLAGE', projetsLies:['PRJ_C']},
+    { id:'ART004', ref:'FILM-BULLE',   nom:'Film à bulles 50cm',       unite:'rouleau', quantite:12, seuilAlerte:5, lieuId:'S_EMBALLAGE', projetsLies:['PRJ_A','PRJ_D']},
+    { id:'ART005', ref:'FILM-ETIRE',   nom:'Film étirable 500mm',      unite:'rouleau', quantite:8, seuilAlerte:4,  lieuId:'S_EMBALLAGE', projetsLies:['PRJ_B','PRJ_E']},
+    { id:'ART006', ref:'BANDEAU-ADHESIF', nom:'Bandeaux adhésif 50mm',  unite:'rouleau', quantite:15, seuilAlerte:8, lieuId:'S_EMBALLAGE', projetsLies:['PRJ_A','PRJ_B']},
+    { id:'ART007', ref:'ETIQUETTE-STANDARD', nom:'Étiquettes standard',  unite:'pack', quantite:50, seuilAlerte:20, lieuId:'S_CONSOMMABLES',projetsLies:['PRJ_A','PRJ_B','PRJ_C']},
+    { id:'ART008', ref:'PALETTE-EUR',  nom:'Palettes EUR 1200x800',    unite:'pce', quantite:45, seuilAlerte:20, lieuId:'S_PALETTES', projetsLies:['PRJ_D']},
+    { id:'ART009', ref:'CALAGE-MOUSSE',nom:'Mousse de calage',         unite:'m3', quantite:12, seuilAlerte:5,   lieuId:'S_CONSOMMABLES', projetsLies:['PRJ_C','PRJ_F']},
+    { id:'ART010', ref:'PAPIER-PROTECTION', nom:'Papier protection blanc', unite:'rouleau', quantite:20, seuilAlerte:8, lieuId:'S_CONSOMMABLES', projetsLies:['PRJ_A','PRJ_D']},
+    { id:'ART011', ref:'ADHÉSIF-KRAFT', nom:'Adhésif kraft 50mm',      unite:'rouleau', quantite:10, seuilAlerte:5, lieuId:'S_CONSOMMABLES', projetsLies:['PRJ_B','PRJ_C']},
+    { id:'ART012', ref:'SUPPORT-VERRE', nom:'Support en verre',        unite:'pce', quantite:60, seuilAlerte:25, lieuId:'S_CONSOMMABLES', projetsLies:['PRJ_F']},
   ];
 
   // Déplacements prévus (dates sur jours ouvrés)
   const deplacements = [
-    { id:'DEP001', date: D.addWorkdays(today, 2), personneId:'P001', origineId:'L_ATEL_2A', destinationId:'L_ATEL_1A', motif:'Installation machine', projetId:'PRJ_A', duree:'2h'},
-    { id:'DEP002', date: D.addWorkdays(today, 3), personneId:'P010', origineId:'L_MONT_1',  destinationId:'L_FINI',    motif:'Transfert pièces',     projetId:'PRJ_C', duree:'1h'},
-    { id:'DEP003', date: D.addWorkdays(today, 5), personneId:'P020', origineId:'L_ATEL_2B', destinationId:'L_ATEL_1B', motif:'Entretien',            projetId:null,    duree:'3h'},
-    { id:'DEP004', date: D.addWorkdays(today, 7), personneId:'P003', origineId:'L_FINI',    destinationId:'L_LIVR',    motif:'Livraison interne',    projetId:'PRJ_A', duree:'30min'},
+    { id:'DEP001', date: D.addWorkdays(today, 1), personneId:'P001', origineId:'L_ENTREE', destinationId:'L_DECONDI', motif:'Réception Migros', projetId:'PRJ_A', duree:'1h'},
+    { id:'DEP002', date: D.addWorkdays(today, 2), personneId:'P010', origineId:'L_RECONDI', destinationId:'L_BANDERO', motif:'Préparation banderollage', projetId:'PRJ_B', duree:'30min'},
+    { id:'DEP003', date: D.addWorkdays(today, 3), personneId:'P020', origineId:'S_PALETTES', destinationId:'L_FILM', motif:'Préparation palettes', projetId:null, duree:'1h'},
+    { id:'DEP004', date: D.addWorkdays(today, 4), personneId:'P003', origineId:'L_FILM', destinationId:'L_EXPEDITION', motif:'Livraison quai', projetId:'PRJ_C', duree:'30min'},
   ];
 
   // Commandes (avec workflow "4A") — montants en CHF, TVA suisse 8,1 %
   // Règle: une commande doit être validée par 4 axes/rôles avant engagement:
-  // A1 Chef de projet, A2 Logistique, A3 Direction technique, A4 Contrôle budget.
+  // A1 Chef de projet, A2 Logistique, A3 Responsable entrepôt, A4 Contrôle budget.
   const TVA = 8.1;
   const commandes = [
-    { id:'CMD001', ref:'CMD-2026-001', fournisseur:'Acier Romand SA', projetId:'PRJ_A', montantHT:  8400, tauxTVA: TVA, dateDemande: D.addWorkdays(today,-5), validations:{A1:true,A2:true,A3:true,A4:true},  statut:'engagée',   lignes:[{articleId:'ART001',qte:20}]},
-    { id:'CMD002', ref:'CMD-2026-002', fournisseur:'SoudElec SA',     projetId:'PRJ_C', montantHT:  1200, tauxTVA: TVA, dateDemande: D.addWorkdays(today,-3), validations:{A1:true,A2:true,A3:false,A4:false},statut:'en-attente',lignes:[{articleId:'ART005',qte:10}]},
-    { id:'CMD003', ref:'CMD-2026-003', fournisseur:'Peinture Vaud',   projetId:'PRJ_D', montantHT:  3600, tauxTVA: TVA, dateDemande: D.addWorkdays(today,-2), validations:{A1:true,A2:false,A3:false,A4:false},statut:'en-attente',lignes:[{articleId:'ART006',qte:30}]},
-    { id:'CMD004', ref:'CMD-2026-004', fournisseur:'Joints Helvetia', projetId:'PRJ_C', montantHT:   640, tauxTVA: TVA, dateDemande: D.addWorkdays(today,-1), validations:{A1:false,A2:false,A3:false,A4:false},statut:'brouillon', lignes:[{articleId:'ART008',qte:40}]},
+    { id:'CMD001', ref:'CMD-2026-001', fournisseur:'Emballages Suisse SA', projetId:'PRJ_A', montantHT:  2400, tauxTVA: TVA, dateDemande: D.addWorkdays(today,-5), validations:{A1:true,A2:true,A3:true,A4:true},  statut:'engagée',   lignes:[{articleId:'ART001',qte:100}]},
+    { id:'CMD002', ref:'CMD-2026-002', fournisseur:'Films Plastiques Romand', projetId:'PRJ_B', montantHT:  850, tauxTVA: TVA, dateDemande: D.addWorkdays(today,-3), validations:{A1:true,A2:true,A3:false,A4:false},statut:'en-attente',lignes:[{articleId:'ART004',qte:5}]},
+    { id:'CMD003', ref:'CMD-2026-003', fournisseur:'Cartonages Vaud',   projetId:'PRJ_C', montantHT:  1200, tauxTVA: TVA, dateDemande: D.addWorkdays(today,-2), validations:{A1:true,A2:false,A3:false,A4:false},statut:'en-attente',lignes:[{articleId:'ART003',qte:150}]},
+    { id:'CMD004', ref:'CMD-2026-004', fournisseur:'Palettes Helvetia', projetId:'PRJ_D', montantHT:   950, tauxTVA: TVA, dateDemande: D.addWorkdays(today,-1), validations:{A1:false,A2:false,A3:false,A4:false},statut:'brouillon', lignes:[{articleId:'ART008',qte:20}]},
   ];
 
   return {
@@ -719,189 +714,183 @@ function defaultModelesProjets() {
     // ── GROUPE : LOGISTIQUE ──────────────────────────────────────────────────
     {
       id: 'MPRJ-001',
-      nom: 'Logistique entrée-sortie complète',
+      nom: 'Réception complète & rangement',
       couleur: '#2c5fb3',
       groupe: 'Logistique',
-      description: 'Réception → Contrôle → Étiquetage → Assemblage/Reconditionnement → Emballage → Expédition → Facturation',
+      description: 'Décharge → Contrôle → Déconditionnement → Rangement FIFO',
       etapes: [
-        { id:'e1', nom:'Réception marchandise',       type:'appro',     duree:1, gestes:['REC-01','REC-02','REC-03','REC-04','REC-05'], dependsDe:[], notes:'Décharge, contrôle visuel palette et déballage' },
-        { id:'e2', nom:'Contrôle qualité entrée',     type:'etude',     duree:1, gestes:['CTR-01','CTR-02'], dependsDe:['e1'], notes:'Contrôle visuel unitaire et conformité' },
-        { id:'e3', nom:'Identification & étiquetage', type:'prod',      duree:1, gestes:['ETI-01','ETI-05','ETI-06'], dependsDe:['e2'], notes:'Impression et collage des étiquettes' },
-        { id:'e4', nom:'Assemblage & reconditionnement', type:'prod',   duree:2, gestes:['PRE-01','PRE-02','PRE-03','ASS-01','ASS-06'], dependsDe:['e3'], notes:'Picking, reconditionnement, assemblage kits' },
-        { id:'e5', nom:'Contrôle final avant expédition', type:'etude', duree:1, gestes:['CTR-03'], dependsDe:['e4'], notes:'Mise en conformité caisse/carton' },
-        { id:'e6', nom:'Emballage & filmage',         type:'prod',      duree:1, gestes:['ASS-03','ASS-06','EXP-01','EXP-02'], dependsDe:['e5'], notes:'Film bulles, filmage palette, pesée' },
-        { id:'e7', nom:'Mise à disposition / Expédition', type:'livraison', duree:1, gestes:['EXP-03','EXP-04'], dependsDe:['e6'], notes:'Remise au transporteur ou dépôt Poste' },
-        { id:'e8', nom:'Facturation & clôture projet',type:'jalon',     duree:0, gestes:[], dependsDe:['e7'], notes:'Jalon de fin — édition de la facture', jalon:true },
+        { id:'e1', nom:'Décharge palette',                type:'appro',     duree:1, lieuId:'L_ENTREE', machineId:null, notes:'Décharge palette, comptage articles' },
+        { id:'e2', nom:'Contrôle réception (scan)',       type:'etude',     duree:1, lieuId:'L_CONTROLE', machineId:'M_SCANNER', notes:'Scan codes-barres, vérification conformité' },
+        { id:'e3', nom:'Déconditionnement si nécessaire', type:'prod',      duree:1, lieuId:'L_DECONDI', machineId:null, notes:'Ouverture cartons, tri par référence' },
+        { id:'e4', nom:'Rangement stock (FIFO)',          type:'prod',      duree:1, lieuId:'S_EN_COURS', machineId:null, notes:'Mise en place selon règle FIFO' },
+        { id:'e5', nom:'Stock rangé et disponible',       type:'jalon',     duree:0, lieuId:'S_FINAL', machineId:null, notes:'Jalon : articles prêts pour préparation', jalon:true },
       ],
     },
     {
       id: 'MPRJ-002',
-      nom: 'Réception & mise en stock',
-      couleur: '#059669',
+      nom: 'Réception courte & rangement direct',
+      couleur: '#0284c7',
       groupe: 'Logistique',
-      description: 'Flux court : réception → contrôle → rangement stock',
+      description: 'Flux rapide : réception → scan → rangement direct',
       etapes: [
-        { id:'e1', nom:'Réception palette',           type:'appro',  duree:1, gestes:['REC-01','REC-02','REC-04','REC-05'], dependsDe:[], notes:'' },
-        { id:'e2', nom:'Contrôle & identification',   type:'etude',  duree:1, gestes:['CTR-01','ETI-01','ETI-05'], dependsDe:['e1'], notes:'' },
-        { id:'e3', nom:'Rangement stock',             type:'prod',   duree:1, gestes:['STO-01','STO-02'], dependsDe:['e2'], notes:'FIFO respecté' },
-        { id:'e4', nom:'Stock disponible',            type:'jalon',  duree:0, gestes:[], dependsDe:['e3'], notes:'Jalon : articles disponibles à la préparation', jalon:true },
+        { id:'e1', nom:'Réception et comptage',          type:'appro',  duree:1, lieuId:'L_ENTREE', machineId:null, notes:'Vérification palette, comptage rapide' },
+        { id:'e2', nom:'Identification étiquette',       type:'etude',  duree:0.5, lieuId:'L_CONTROLE', machineId:'M_SCANNER', notes:'Lecture code-barres de la palette' },
+        { id:'e3', nom:'Rangement direct en stock',      type:'prod',   duree:1, lieuId:'S_ARRIVAGE', machineId:null, notes:'Rangement direct sans décondi' },
+        { id:'e4', nom:'Stock prêt à prélever',          type:'jalon',  duree:0, lieuId:'S_ARRIVAGE', machineId:null, notes:'Jalon : articles en stock', jalon:true },
       ],
     },
     {
       id: 'MPRJ-003',
-      nom: 'Préparation & expédition commande',
-      couleur: '#f59e0b',
+      nom: 'Préparation commande & expédition',
+      couleur: '#059669',
       groupe: 'Logistique',
-      description: 'Picking → conditionnement → contrôle → expédition',
+      description: 'Picking → Filmage palette → Contrôle → Expédition',
       etapes: [
-        { id:'e1', nom:'Préparation commande (picking)', type:'prod', duree:1, gestes:['PRE-01','PRE-02','STO-03'], dependsDe:[], notes:'Bon de préparation imprimé' },
-        { id:'e2', nom:'Conditionnement & filmage',   type:'prod',   duree:1, gestes:['ASS-09','ASS-06','EXP-01'], dependsDe:['e1'], notes:'' },
-        { id:'e3', nom:'Contrôle expédition',         type:'etude',  duree:1, gestes:['CTR-03','ETI-02'], dependsDe:['e2'], notes:'' },
-        { id:'e4', nom:'Expédition',                  type:'livraison', duree:1, gestes:['EXP-02','EXP-03','EXP-04'], dependsDe:['e3'], notes:'Filmer palette, remettre au transporteur' },
-        { id:'e5', nom:'Expédié',                     type:'jalon',  duree:0, gestes:[], dependsDe:['e4'], notes:'Jalon : colis remis au transporteur', jalon:true },
+        { id:'e1', nom:'Picking commande',                type:'prod', duree:1, lieuId:'S_ARRIVAGE', machineId:null, notes:'Sélection articles selon bon de commande' },
+        { id:'e2', nom:'Contrôle commande préparée',     type:'etude', duree:1, lieuId:'L_CONTROLE', machineId:'M_SCANNER', notes:'Vérification quantités et références' },
+        { id:'e3', nom:'Palettisation & filmage',        type:'prod',   duree:1, lieuId:'L_FILM', machineId:'M_FILM1', notes:'Mise en palette, filmage et pesée' },
+        { id:'e4', nom:'Expédition quai',                type:'livraison', duree:1, lieuId:'L_EXPEDITION', machineId:null, notes:'Préparation enlèvement transporteur' },
+        { id:'e5', nom:'Commande expédiée',              type:'jalon',  duree:0, lieuId:'L_EXPEDITION', machineId:null, notes:'Jalon : marchandise remise', jalon:true },
       ],
     },
     {
       id: 'MPRJ-004',
-      nom: 'Inventaire & réorganisation stock',
-      couleur: '#0891b2',
+      nom: 'Tri & réexpédition retours',
+      couleur: '#7c3aed',
       groupe: 'Logistique',
-      description: 'Comptage physique → mise à jour stock → réorganisation FIFO',
+      description: 'Réception retours → Tri/Diagnostic → Reconditionnement → Réexpédition',
       etapes: [
-        { id:'e1', nom:'Préparation inventaire',      type:'etude',    duree:1, gestes:['PRE-01'], dependsDe:[], notes:'Impression listes de comptage par zone' },
-        { id:'e2', nom:'Comptage physique',           type:'prod',     duree:2, gestes:['STO-04','CTR-01'], dependsDe:['e1'], notes:'Comptage par zone, double comptage si écart' },
-        { id:'e3', nom:'Rapprochement & ajustements', type:'etude',    duree:1, gestes:[], dependsDe:['e2'], notes:'Comparaison stock théorique / physique, corrections' },
-        { id:'e4', nom:'Réorganisation stock',        type:'prod',     duree:1, gestes:['STO-01','STO-02'], dependsDe:['e3'], notes:'Remise en ordre FIFO, dégagement zones mortes' },
-        { id:'e5', nom:'Inventaire validé',           type:'jalon',    duree:0, gestes:[], dependsDe:['e4'], notes:'Jalon : stock certifié et à jour', jalon:true },
+        { id:'e1', nom:'Réception articles retour',      type:'appro',    duree:1, lieuId:'L_ENTREE', machineId:null, notes:'Décharge palette retours, vérification bon' },
+        { id:'e2', nom:'Contrôle & diagnostic',          type:'etude',    duree:1, lieuId:'L_CONTROLE', machineId:'M_SCANNER', notes:'Contrôle état produit, identification cause' },
+        { id:'e3', nom:'Tri physique (bon/rebut)',        type:'etude',    duree:1, lieuId:'L_DECONDI', machineId:null, notes:'Séparation lots conformes / non-conformes' },
+        { id:'e4', nom:'Reconditionnement si nécessaire', type:'prod',   duree:2, lieuId:'L_RECONDI', machineId:'M_ETIQUETTE', notes:'Retrait anciennes étiquettes, ré-étiquetage' },
+        { id:'e5', nom:'Filmage & mise à disposition',   type:'prod',   duree:1, lieuId:'L_FILM', machineId:'M_FILM2', notes:'Filmage palette, préparation enlèvement' },
+        { id:'e6', nom:'Retours traités',                type:'jalon',   duree:0, lieuId:'L_EXPEDITION', machineId:null, notes:'Jalon : dossier retour clôturé', jalon:true },
       ],
     },
     {
       id: 'MPRJ-005',
-      nom: 'Transfert inter-dépôts',
-      couleur: '#7c3aed',
+      nom: 'Inventaire physique & réorganisation',
+      couleur: '#f59e0b',
       groupe: 'Logistique',
-      description: 'Prélèvement → filmage → expédition → réception & rangement site destinataire',
+      description: 'Préparation → Comptage zones → Rapprochement → Réorganisation FIFO',
       etapes: [
-        { id:'e1', nom:'Préparation envoi',           type:'prod',     duree:1, gestes:['PRE-01','PRE-02','STO-03'], dependsDe:[], notes:'Bon de transfert, picking articles à transférer' },
-        { id:'e2', nom:'Filmage & étiquetage transport', type:'prod',  duree:1, gestes:['EXP-02','ETI-01','ETI-02'], dependsDe:['e1'], notes:'Palette filmée, étiquette transporteur apposée' },
-        { id:'e3', nom:'Chargement & départ',         type:'livraison',duree:1, gestes:['EXP-04'], dependsDe:['e2'], notes:'Remise au transporteur, émargement CMR' },
-        { id:'e4', nom:'Réception site destinataire', type:'appro',    duree:1, gestes:['REC-01','REC-02'], dependsDe:['e3'], notes:'Contrôle intégrité palette à réception' },
-        { id:'e5', nom:'Rangement stock destinataire',type:'prod',     duree:1, gestes:['STO-01','STO-02'], dependsDe:['e4'], notes:'FIFO, mise à jour stock' },
-        { id:'e6', nom:'Transfert complété',          type:'jalon',    duree:0, gestes:[], dependsDe:['e5'], notes:'Jalon : stock transféré et réceptionné', jalon:true },
+        { id:'e1', nom:'Préparation inventaire',         type:'etude',    duree:1, lieuId:'S_ARRIVAGE', machineId:null, notes:'Impression listes comptage, balisage zones' },
+        { id:'e2', nom:'Comptage physique détaillé',     type:'prod',     duree:2, lieuId:'S_EN_COURS', machineId:'M_SCANNER', notes:'Comptage par zone, double vérification si écart' },
+        { id:'e3', nom:'Rapprochement théorique/physique', type:'etude',  duree:1, lieuId:'L_CONTROLE', machineId:null, notes:'Comparaison et corrections stock informatisé' },
+        { id:'e4', nom:'Réorganisation FIFO',            type:'prod',     duree:1, lieuId:'S_EN_COURS', machineId:null, notes:'Remise en ordre, dégagement zones mortes' },
+        { id:'e5', nom:'Inventaire validé & stock à jour', type:'jalon', duree:0, lieuId:'S_FINAL', machineId:null, notes:'Jalon : stock certifié exact', jalon:true },
       ],
     },
     {
       id: 'MPRJ-006',
-      nom: 'Retours & traitement SAV',
-      couleur: '#dc2626',
+      nom: 'Transfert inter-sites & palettisation',
+      couleur: '#e11d48',
       groupe: 'Logistique',
-      description: 'Réception retour → diagnostic → tri → reconditionnement ou élimination',
+      description: 'Picking transfert → Palettisation → Filmage & étiquetage → Transport',
       etapes: [
-        { id:'e1', nom:'Réception retour client',     type:'appro',    duree:1, gestes:['REC-01','REC-02','REC-03'], dependsDe:[], notes:'Vérifier bon de retour, état palette/colis' },
-        { id:'e2', nom:'Contrôle & diagnostic',       type:'etude',    duree:1, gestes:['CTR-01','CTR-02'], dependsDe:['e1'], notes:'Contrôle état produit, identification cause retour' },
-        { id:'e3', nom:'Tri (restock / rebut / répa)',type:'etude',    duree:1, gestes:['STO-02'], dependsDe:['e2'], notes:'Séparation physique des lots selon décision' },
-        { id:'e4', nom:'Reconditionnement réutilisable',type:'prod',   duree:2, gestes:['ETI-03','ASS-03','ASS-06','ETI-01'], dependsDe:['e3'], notes:'Retrait étiquettes, reconditionnement, ré-étiquetage' },
-        { id:'e5', nom:'Remise en stock ou élimination',type:'prod',   duree:1, gestes:['STO-02'], dependsDe:['e4'], notes:'Retour en stock conforme ou évacuation rebut' },
-        { id:'e6', nom:'Dossier SAV clôturé',         type:'jalon',    duree:0, gestes:[], dependsDe:['e5'], notes:'Jalon : dossier retour traité et clôturé', jalon:true },
+        { id:'e1', nom:'Préparation transfert',          type:'prod',     duree:1, lieuId:'S_ARRIVAGE', machineId:null, notes:'Picking articles à transférer selon bon' },
+        { id:'e2', nom:'Palettisation & équilibrage',    type:'prod',     duree:1, lieuId:'S_PALETTES', machineId:null, notes:'Construction palette stable, répartition masses' },
+        { id:'e3', nom:'Filmage palette & étiquetage',   type:'prod',     duree:1, lieuId:'L_FILM', machineId:'M_FILM1', notes:'Filmage renforcé, étiquette transporteur apposée' },
+        { id:'e4', nom:'Pesée & documentation transport', type:'prod',    duree:1, lieuId:'L_EXPEDITION', machineId:'M_BALANCE', notes:'Pesée, édition lettre de transport' },
+        { id:'e5', nom:'Transfert complété',             type:'jalon',    duree:0, lieuId:'L_EXPEDITION', machineId:null, notes:'Jalon : palette prête enlèvement', jalon:true },
       ],
     },
 
     // ── GROUPE : EMBALLAGE ───────────────────────────────────────────────────
     {
       id: 'MPRJ-007',
-      nom: 'Étiquetage en série',
+      nom: 'Étiquetage en série cartons',
       couleur: '#0d9488',
       groupe: 'Emballage',
-      description: 'Réception articles → impression étiquettes → pose en série → contrôle → remise en stock',
+      description: 'Réception cartons → Impression étiquettes → Pose en série → Contrôle',
       etapes: [
-        { id:'e1', nom:'Réception articles à étiqueter', type:'appro', duree:1, gestes:['REC-03','REC-05'], dependsDe:[], notes:'Comptage et vérification des articles à traiter' },
-        { id:'e2', nom:'Préparation & impression étiquettes', type:'etude', duree:1, gestes:['ETI-01'], dependsDe:['e1'], notes:'Configuration imprimante, maquette validée' },
-        { id:'e3', nom:'Étiquetage en série',           type:'prod',   duree:2, gestes:['ETI-02','ETI-04','ETI-05'], dependsDe:['e2'], notes:'Collage étiquettes, orientation selon consignes' },
-        { id:'e4', nom:'Contrôle conformité',           type:'etude',  duree:1, gestes:['CTR-01'], dependsDe:['e3'], notes:'Vérification lisibilité code-barres, positionnement' },
-        { id:'e5', nom:'Reconditionnement & stock',     type:'prod',   duree:1, gestes:['STO-02'], dependsDe:['e4'], notes:'Remise en carton, rangement stock' },
-        { id:'e6', nom:'Lot étiqueté disponible',       type:'jalon',  duree:0, gestes:[], dependsDe:['e5'], notes:'Jalon : lot prêt à expédier', jalon:true },
+        { id:'e1', nom:'Réception cartons à étiqueter',   type:'appro', duree:1, lieuId:'L_ENTREE', machineId:null, notes:'Décharge palette, tri par référence' },
+        { id:'e2', nom:'Configuration & impression étiquettes', type:'etude', duree:1, lieuId:'L_VALMONT', machineId:null, notes:'Test impression, validation maquette' },
+        { id:'e3', nom:'Étiquetage automatique en série', type:'prod',   duree:2, lieuId:'L_RECONDI', machineId:'M_ETIQUETTE', notes:'Passage à l\'étiqueteuse, contrôle positionnement' },
+        { id:'e4', nom:'Contrôle conformité étiquettes',  type:'etude',  duree:1, lieuId:'L_CONTROLE', machineId:'M_SCANNER', notes:'Scan codes-barres, vérification lisibilité' },
+        { id:'e5', nom:'Palettisation & film',           type:'prod',   duree:1, lieuId:'L_FILM', machineId:'M_FILM1', notes:'Remise en palette, filmage, pesée' },
+        { id:'e6', nom:'Lot étiqueté prêt',              type:'jalon',  duree:0, lieuId:'S_FINAL', machineId:null, notes:'Jalon : lot prêt expédition', jalon:true },
       ],
     },
     {
       id: 'MPRJ-008',
-      nom: 'Kit promotionnel & display',
-      couleur: '#e11d48',
+      nom: 'Emballage premium & reconditionnement',
+      couleur: '#dc2626',
       groupe: 'Emballage',
-      description: 'Réception composants → formage → kitting → étiquetage → mise en carton maître',
+      description: 'Déconditionnement → Reconditionnement premium → Étiquetage → Palettisation',
       etapes: [
-        { id:'e1', nom:'Réception composants',         type:'appro',  duree:1, gestes:['REC-01','REC-02','REC-04','REC-05'], dependsDe:[], notes:'Contrôle des composants du kit à réception' },
-        { id:'e2', nom:'Contrôle composants',          type:'etude',  duree:1, gestes:['CTR-01','CTR-02'], dependsDe:['e1'], notes:'Conformité dimensions, états, quantités' },
-        { id:'e3', nom:'Formage étuis & étui-fourreau', type:'prod',  duree:2, gestes:['ASS-08','ASS-09','ASS-10','ASS-16'], dependsDe:['e2'], notes:'Montage étuis, fourreaux orientés' },
-        { id:'e4', nom:'Insertion & assemblage kit',   type:'prod',   duree:2, gestes:['ASS-12','ASS-14','ASS-05'], dependsDe:['e3'], notes:'Insertion composants, fermeture sachet si nécessaire' },
-        { id:'e5', nom:'Étiquetage final',             type:'prod',   duree:1, gestes:['ETI-01','ETI-02','ETI-04'], dependsDe:['e4'], notes:'Impression et collage étiquettes finales' },
-        { id:'e6', nom:'Contrôle final & filmage',     type:'etude',  duree:1, gestes:['CTR-03','ASS-06'], dependsDe:['e5'], notes:'Mise en conformité, filmage unitaire' },
-        { id:'e7', nom:'Mise en carton maître',        type:'prod',   duree:1, gestes:['ASS-04','ASS-09'], dependsDe:['e6'], notes:'Calage, fermeture carton maître' },
-        { id:'e8', nom:'Kit prêt à expédier',          type:'jalon',  duree:0, gestes:[], dependsDe:['e7'], notes:'Jalon : production kit terminée', jalon:true },
+        { id:'e1', nom:'Réception marchandise à reconditionner', type:'appro', duree:1, lieuId:'L_ENTREE', machineId:null, notes:'Décharge, tri par type d\'article' },
+        { id:'e2', nom:'Déconditionnement & tri',               type:'prod',  duree:1, lieuId:'L_DECONDI', machineId:null, notes:'Ouverture cartons, retrait protections' },
+        { id:'e3', nom:'Reconditionnement premium',            type:'prod',  duree:2, lieuId:'L_RECONDI', machineId:null, notes:'Mise en étui premium, film bulles, calage' },
+        { id:'e4', nom:'Étiquetage articles',                  type:'prod',  duree:1, lieuId:'L_VALMONT', machineId:'M_ETIQUETTE', notes:'Application étiquettes client spécifiques' },
+        { id:'e5', nom:'Filmage & pesée palette',             type:'prod',  duree:1, lieuId:'L_FILM', machineId:'M_FILM1', notes:'Mise palette, filmage renforcé, pesée' },
+        { id:'e6', nom:'Packaging premium validé',            type:'jalon', duree:0, lieuId:'S_FINAL', machineId:null, notes:'Jalon : produit prêt client premium', jalon:true },
       ],
     },
     {
       id: 'MPRJ-009',
-      nom: 'Reconditionnement palette complète',
-      couleur: '#92400e',
+      nom: 'Banderollage & emballage palettes',
+      couleur: '#fb7185',
       groupe: 'Emballage',
-      description: 'Dépalettisation → retrait étiquettes → reconditionnement unitaire → ré-étiquetage → reformation palette',
+      description: 'Préparation palette → Banderollage → Contrôle → Étiquetage transport',
       etapes: [
-        { id:'e1', nom:'Réception palette à reconditionner', type:'appro', duree:1, gestes:['REC-01','REC-02'], dependsDe:[], notes:'Contrôle état palette, comptage articles' },
-        { id:'e2', nom:'Dépalettisation & contrôle état',    type:'prod',  duree:1, gestes:['REC-03','CTR-01'], dependsDe:['e1'], notes:'Dépose article par article, tri selon état' },
-        { id:'e3', nom:'Retrait anciennes étiquettes',        type:'prod',  duree:1, gestes:['ETI-03'], dependsDe:['e2'], notes:'Décapeur thermique si nécessaire' },
-        { id:'e4', nom:'Reconditionnement unitaire',          type:'prod',  duree:2, gestes:['ASS-06','ASS-07','ASS-09','ASS-16'], dependsDe:['e3'], notes:'Filmage, bandage, remise en étui selon besoin' },
-        { id:'e5', nom:'Ré-étiquetage',                       type:'prod',  duree:1, gestes:['ETI-01','ETI-02'], dependsDe:['e4'], notes:'Nouvelles étiquettes, orientation correcte' },
-        { id:'e6', nom:'Reformation palette',                  type:'prod',  duree:1, gestes:['STO-01','EXP-02'], dependsDe:['e5'], notes:'Palettisation, filmage palette finale' },
-        { id:'e7', nom:'Palette reconditionnée validée',      type:'jalon', duree:0, gestes:[], dependsDe:['e6'], notes:'Jalon : palette prête pour expédition', jalon:true },
+        { id:'e1', nom:'Préparation articles pour banderollage', type:'prod', duree:1, lieuId:'L_ASSEMB', machineId:null, notes:'Regroupement articles, disposition optimale' },
+        { id:'e2', nom:'Banderollage automatique',              type:'prod',  duree:1, lieuId:'L_BANDERO', machineId:'M_BANDEROLE', notes:'Passage à la banderoleuse, vérif serrage' },
+        { id:'e3', nom:'Contrôle serrage & aspect',            type:'etude', duree:1, lieuId:'L_CONTROLE', machineId:null, notes:'Vérification bandeau, absence traces' },
+        { id:'e4', nom:'Filmage palette complète',             type:'prod',  duree:1, lieuId:'L_FILM', machineId:'M_FILM1', notes:'Filmage pour protection transport' },
+        { id:'e5', nom:'Étiquetage & pesée finale',            type:'prod',  duree:1, lieuId:'L_FILM', machineId:'M_BALANCE', notes:'Poids total, étiquette code-barres palette' },
+        { id:'e6', nom:'Palette banderollée prête',            type:'jalon', duree:0, lieuId:'L_EXPEDITION', machineId:null, notes:'Jalon : palette prête enlèvement', jalon:true },
       ],
     },
 
-    // ── GROUPE : ASSEMBLAGE ──────────────────────────────────────────────────
+    // ── GROUPE : CONDITIONNEMENT ─────────────────────────────────────────────
     {
       id: 'MPRJ-010',
-      nom: 'Assemblage kit 2 pièces',
+      nom: 'Assemblage simple (2 pièces)',
       couleur: '#2563eb',
-      groupe: 'Assemblage',
-      description: 'Appro composants → assemblage simple → contrôle → conditionnement → stock produit fini',
+      groupe: 'Conditionnement',
+      description: 'Appro composants → Assemblage simple → Contrôle → Etiquetage → Stock',
       etapes: [
-        { id:'e1', nom:'Appro & prélèvement composants', type:'appro', duree:1, gestes:['PRE-01','PRE-02','STO-03'], dependsDe:[], notes:'Bon de travail, prélèvement selon BOM' },
-        { id:'e2', nom:'Assemblage kit 2 pièces',         type:'prod',  duree:2, gestes:['ASS-01','ASS-14'], dependsDe:['e1'], notes:'Assemblage selon fiche technique, contrôle visuel' },
-        { id:'e3', nom:'Contrôle assemblage',             type:'etude', duree:1, gestes:['CTR-01'], dependsDe:['e2'], notes:'Vérification fonctionnelle et esthétique' },
-        { id:'e4', nom:'Conditionnement final',           type:'prod',  duree:1, gestes:['ASS-09','ETI-02','EXP-01'], dependsDe:['e3'], notes:'Mise en étui, étiquetage, pesée' },
-        { id:'e5', nom:'Produit fini en stock',           type:'jalon', duree:0, gestes:[], dependsDe:['e4'], notes:'Jalon : produit disponible en stock', jalon:true },
+        { id:'e1', nom:'Prélèvement composants (BOM)',    type:'appro', duree:1, lieuId:'S_ARRIVAGE', machineId:null, notes:'Picking selon bon de travail, tri références' },
+        { id:'e2', nom:'Assemblage 2 pièces',             type:'prod',  duree:1, lieuId:'L_ASSEMB', machineId:null, notes:'Montage selon fiche technique, contrôle visuel' },
+        { id:'e3', nom:'Contrôle assemblage',             type:'etude', duree:1, lieuId:'L_CONTROLE', machineId:'M_SCANNER', notes:'Vérification fonctionnelle et esthétique' },
+        { id:'e4', nom:'Étiquetage & conditionnement',   type:'prod',  duree:1, lieuId:'L_RECONDI', machineId:'M_ETIQUETTE', notes:'Mise en étui, étiquette code-barres' },
+        { id:'e5', nom:'Produit fini en stock',           type:'jalon', duree:0, lieuId:'S_FINAL', machineId:null, notes:'Jalon : articles disponibles', jalon:true },
       ],
     },
     {
       id: 'MPRJ-011',
-      nom: 'Assemblage kit multi-composants',
-      couleur: '#7c3aed',
-      groupe: 'Assemblage',
-      description: 'Appro → contrôle composants → assemblage complexe → CQ → emballage → expédition',
+      nom: 'Assemblage complexe multi-pièces',
+      couleur: '#6366f1',
+      groupe: 'Conditionnement',
+      description: 'Appro → Contrôle composants → Assemblage 5+ pièces → QC → Emballage premium',
       etapes: [
-        { id:'e1', nom:'Appro & réception composants',   type:'appro', duree:1, gestes:['REC-04','REC-05','PRE-02'], dependsDe:[], notes:'Réception et comptage de tous les composants' },
-        { id:'e2', nom:'Contrôle entrée composants',      type:'etude', duree:1, gestes:['CTR-01','CTR-02'], dependsDe:['e1'], notes:'Vérification conformité chaque référence' },
-        { id:'e3', nom:'Préparation poste de travail',    type:'prod',  duree:1, gestes:['PRE-01'], dependsDe:['e2'], notes:'Mise en place outillage, fiches de travail' },
-        { id:'e4', nom:'Assemblage kit 3-5 pièces',       type:'prod',  duree:3, gestes:['ASS-02','ASS-12','ASS-14'], dependsDe:['e3'], notes:'Assemblage complexe selon fiche technique, contrôle intermédiaire' },
-        { id:'e5', nom:'Contrôle qualité assemblage',     type:'etude', duree:1, gestes:['CTR-02','CTR-03'], dependsDe:['e4'], notes:'Contrôle final assemblage avant emballage' },
-        { id:'e6', nom:'Emballage & protection',          type:'prod',  duree:1, gestes:['ASS-03','ASS-05','ASS-06'], dependsDe:['e5'], notes:'Film bulles, sachet, filmage unitaire' },
-        { id:'e7', nom:'Étiquetage & identification',     type:'prod',  duree:1, gestes:['ETI-01','ETI-02'], dependsDe:['e6'], notes:'Étiquette produit fini et étiquette carton' },
-        { id:'e8', nom:'Produit fini validé',             type:'jalon', duree:0, gestes:[], dependsDe:['e7'], notes:'Jalon : kit assemblé, contrôlé et conditionné', jalon:true },
+        { id:'e1', nom:'Réception & déstockage composants', type:'appro', duree:1, lieuId:'L_ENTREE', machineId:null, notes:'Prise en charge du kit de composants' },
+        { id:'e2', nom:'Contrôle qualité composants',      type:'etude', duree:1, lieuId:'L_CONTROLE', machineId:'M_SCANNER', notes:'Vérification conforme tous composants' },
+        { id:'e3', nom:'Préparation poste de travail',     type:'prod',  duree:1, lieuId:'L_ASSEMB', machineId:null, notes:'Mise en place outillage, fiches assemblage' },
+        { id:'e4', nom:'Assemblage complexe 5+ pièces',    type:'prod',  duree:3, lieuId:'L_ASSEMB', machineId:null, notes:'Montage séquentiel, contrôle intermédiaire' },
+        { id:'e5', nom:'Contrôle qualité final',          type:'etude', duree:1, lieuId:'L_CONTROLE', machineId:null, notes:'Contrôle fonctionnel complet avant emballage' },
+        { id:'e6', nom:'Emballage & calage premium',      type:'prod',  duree:1, lieuId:'L_RECONDI', machineId:null, notes:'Film bulles, calage carton, étui renforcé' },
+        { id:'e7', nom:'Étiquetage & identification',     type:'prod',  duree:1, lieuId:'L_VALMONT', machineId:'M_ETIQUETTE', notes:'Étiquette produit et étiquette carton' },
+        { id:'e8', nom:'Kit assemblé validé',             type:'jalon', duree:0, lieuId:'S_FINAL', machineId:null, notes:'Jalon : assemblage terminé et validé', jalon:true },
       ],
     },
     {
       id: 'MPRJ-012',
-      nom: 'Assemblage avec protection renforcée',
-      couleur: '#0f766e',
-      groupe: 'Assemblage',
-      description: 'Appro → pliage/formage → assemblage avec calage → protection multicouche → banderolage → expédition',
+      nom: 'Assemblage avec callage renforcé',
+      couleur: '#3b82f6',
+      groupe: 'Conditionnement',
+      description: 'Appro → Assemblage → Callage mousse → Protection multicouche → Banderollage → Expédition',
       etapes: [
-        { id:'e1', nom:'Appro matières & composants',    type:'appro', duree:1, gestes:['PRE-02','STO-03'], dependsDe:[], notes:'Prélèvement selon BOM, vérification référence' },
-        { id:'e2', nom:'Pliage & formage composants',    type:'prod',  duree:2, gestes:['ASS-15','ASS-16','ASS-08'], dependsDe:['e1'], notes:'Pliage complexe, formage étuis et fourreaux' },
-        { id:'e3', nom:'Assemblage avec calage',         type:'prod',  duree:2, gestes:['ASS-04','ASS-01','ASS-07'], dependsDe:['e2'], notes:'Assemblage, mise en place calage carton' },
-        { id:'e4', nom:'Protection film bulles',         type:'prod',  duree:1, gestes:['ASS-03','ASS-06'], dependsDe:['e3'], notes:'Enroulage film bulles, filmage unitaire renforcé' },
-        { id:'e5', nom:'Cerclage & banderolage final',   type:'prod',  duree:1, gestes:['ASS-07','ASS-11'], dependsDe:['e4'], notes:'Banderolage et groupage avec élastique si nécessaire' },
-        { id:'e6', nom:'Pesée & étiquetage transport',   type:'prod',  duree:1, gestes:['EXP-01','ETI-01','ETI-02'], dependsDe:['e5'], notes:'Pesée précision, étiquettes transport et client' },
-        { id:'e7', nom:'Prêt à expédier',                type:'jalon', duree:0, gestes:[], dependsDe:['e6'], notes:'Jalon : produit protégé, pesé et étiqueté', jalon:true },
+        { id:'e1', nom:'Appro matières & composants',     type:'appro', duree:1, lieuId:'L_ENTREE', machineId:null, notes:'Décharge palette, tri par type' },
+        { id:'e2', nom:'Assemblage avec contrôle',        type:'prod',  duree:2, lieuId:'L_ASSEMB', machineId:null, notes:'Montage mécanique, contrôles intermédiaires' },
+        { id:'e3', nom:'Callage mousse & support',        type:'prod',  duree:1, lieuId:'L_CALLAGE', machineId:null, notes:'Mise en place mousse, supports, protection' },
+        { id:'e4', nom:'Emballage film bulles',           type:'prod',  duree:1, lieuId:'L_RECONDI', machineId:null, notes:'Enroulage film protection renforcée' },
+        { id:'e5', nom:'Mise en carton & fermeture',      type:'prod',  duree:1, lieuId:'L_RECONDI', machineId:null, notes:'Carton fermé, scotch, renforts' },
+        { id:'e6', nom:'Banderollage & sécurisation',     type:'prod',  duree:1, lieuId:'L_BANDERO', machineId:'M_BANDEROLE', notes:'Bandeaux renforcés, vérification serrage' },
+        { id:'e7', nom:'Étiquetage transport & pesée',    type:'prod',  duree:1, lieuId:'L_FILM', machineId:'M_BALANCE', notes:'Étiquettes code-barres transport, pesée' },
+        { id:'e8', nom:'Prêt expédition sécurisé',        type:'jalon', duree:0, lieuId:'L_EXPEDITION', machineId:null, notes:'Jalon : produit robuste et assuré', jalon:true },
       ],
     },
   ];
