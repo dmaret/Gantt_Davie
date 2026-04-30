@@ -603,9 +603,13 @@ App.views.gantt = {
     // Body rows
     const rows = [];
     groups.forEach(g => {
+      // Determine if this is a project group (starts with PRJ-)
+      const isProjectGroup = g.label && g.label.match(/^PRJ-/);
+      const groupRowClass = isProjectGroup ? 'group-project' : 'group-other';
+
       // entête de groupe
-      rows.push(`<div class="gantt-cell label group" style="grid-column:1/span 1">${g.label} <span style="font-size:10px;font-weight:400;opacity:.6">(${g.items.length})</span></div>`);
-      for (let i=0; i<days; i++) rows.push(`<div class="gantt-cell group ${dayClasses(D.addDays(start,i))}"></div>`);
+      rows.push(`<div class="gantt-cell label group ${groupRowClass}" style="grid-column:1/span 1;background:${isProjectGroup?'var(--bg-project-group)':'transparent'}">${g.label} <span style="font-size:10px;font-weight:400;opacity:.6">(${g.items.length})</span></div>`);
+      for (let i=0; i<days; i++) rows.push(`<div class="gantt-cell group ${groupRowClass} ${dayClasses(D.addDays(start,i))}" style="background:${isProjectGroup?'var(--bg-project-group)':'transparent'}"></div>`);
 
       g.items.forEach(it => {
         const t = it.tache;
