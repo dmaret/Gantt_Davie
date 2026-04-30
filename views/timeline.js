@@ -83,6 +83,7 @@ App.views.timeline = {
       const isToday = d === today;
       const dayNum = dt.getUTCDate();
       const letter = dowLetters[dow];
+      const monthShort = dt.toLocaleDateString('fr-CH', { month: 'short', timeZone: 'UTC' });
 
       headerHTML += `<div style="
         display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -91,6 +92,7 @@ App.views.timeline = {
         color:${isToday ? '#fff' : isWE ? 'var(--text-muted)' : 'var(--text)'};
         border-right:1px solid var(--border);
         ${i === 0 ? '' : ''}">
+        <span style="font-size:8px;opacity:.7">${monthShort}</span>
         <span style="font-weight:${isToday ? '700' : '500'}">${dayNum}</span>
         <span style="opacity:.75">${letter}</span>
       </div>`;
