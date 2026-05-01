@@ -26,13 +26,13 @@ App.views.lieux = {
             <thead><tr><th>Nom</th><th>Étage</th><th>Capacité</th><th>Machines</th><th>Tâches en cours</th></tr></thead>
             <tbody>
               ${prod.map(l => {
-                const machines = s.machines.filter(m => m.lieuId === l.id).map(m => `<span class="chip">${m.nom}</span>`).join('') || '<span class="muted small">—</span>';
+                const machines = s.machines.filter(m => m.lieuId === l.id).map(m => `<span class="chip">${App.escapeHTML(m.nom)}</span>`).join('') || '<span class="muted small">—</span>';
                 const tasks = s.taches.filter(t => t.lieuId === l.id && t.fin >= today && t.debut <= horizon && !t.jalon);
                 const n = tasks.length;
                 const cell = n === 0
                   ? '<span class="muted">0</span>'
                   : `<button class="btn-link lieu-tasks" data-lieu="${l.id}" title="${n===1?'Ouvrir cette tâche':'Choisir une tâche parmi '+n}">${n} <span class="alert-arrow">›</span></button>`;
-                return `<tr data-id="${l.id}" style="cursor:pointer"><td><strong>${l.nom}</strong></td><td>${l.etage}</td><td>${l.capacite}</td><td>${machines}</td><td class="cell-tasks">${cell}</td></tr>`;
+                return `<tr data-id="${l.id}" style="cursor:pointer"><td><strong>${App.escapeHTML(l.nom)}</strong></td><td>${App.escapeHTML(l.etage)}</td><td>${l.capacite}</td><td>${machines}</td><td class="cell-tasks">${cell}</td></tr>`;
               }).join('')}
             </tbody>
           </table>
@@ -48,7 +48,7 @@ App.views.lieux = {
                     const totalQty = articles.reduce((n,x) => n + x.quantite, 0);
                     const alerts = articles.filter(x => x.quantite < x.seuilAlerte).length;
                     return `<li data-id="${l.id}" style="cursor:pointer">
-                      <strong>${l.nom}</strong>
+                      <strong>${App.escapeHTML(l.nom)}</strong>
                       <span class="muted small"> · cap. ${l.capacite} · ${articles.length} article(s) · ${totalQty} u.</span>
                       ${alerts ? `<span class="badge bad">${alerts} alerte(s)</span>` : ''}
                     </li>`;
@@ -104,9 +104,9 @@ App.views.lieux = {
           return `<li class="alert-row" data-tid="${t.id}" role="button" tabindex="0">
             <div style="flex:1">
               <div>
-                <strong>${t.nom}</strong>
+                <strong>${App.escapeHTML(t.nom)}</strong>
                 ${enCours ? '<span class="badge good">en cours</span>' : '<span class="badge muted">à venir</span>'}
-                <span class="badge" style="background:${prj?prj.couleur+'33':''};color:${prj?prj.couleur:''}">${prj?prj.code:''}</span>
+                <span class="badge" style="background:${prj?App.safeColor(prj.couleur)+'33':''};color:${prj?App.safeColor(prj.couleur):''}">${prj?App.escapeHTML(prj.code):''}</span>
               </div>
               <div class="small muted">${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${t.avancement||0}% · ${assigns||'—'}</div>
             </div>
@@ -128,7 +128,7 @@ App.views.lieux = {
     const s = DB.state;
     const l = id ? DB.lieu(id) : { id: DB.uid('L'), nom:'', etage:'Rez', type:'production', capacite:10 };
     const body = `
-      <div class="field"><label>Nom</label><input id="lf-nom" value="${l.nom||''}"></div>
+      <div class="field"><label>Nom</label><input id="lf-nom" value="${App.escapeHTML(l.nom||'')}"></div>
       <div class="row">
         <div class="field"><label>Étage</label>
           <select id="lf-etage">${['Rez','S-sol','1er','2e','3e'].map(e=>`<option ${e===l.etage?'selected':''}>${e}</option>`).join('')}</select>
@@ -205,7 +205,7 @@ App.views.lieux = {
         if (!parsed.length) { App.toast('Aucun lieu à importer','warn'); return; }
         const body = `<p class="muted small">${parsed.filter(r=>!r.existing&&!r.errors.length).length} à créer · ${parsed.filter(r=>r.existing).length} à mettre à jour</p>
           <table class="data"><thead><tr><th>Nom</th><th>Étage</th><th>Type</th><th>Cap.</th><th>Statut</th></tr></thead><tbody>
-          ${parsed.map(r => `<tr><td>${r.nom}</td><td>${r.etage}</td><td>${r.type}</td><td>${r.capacite}</td>
+          ${parsed.map(r => `<tr><td>${App.escapeHTML(r.nom)}</td><td>${App.escapeHTML(r.etage)}</td><td>${App.escapeHTML(r.type)}</td><td>${r.capacite}</td>
             <td>${r.errors.length?`<span class="badge bad">${r.errors[0]}</span>`:r.existing?'<span class="badge warn">màj</span>':'<span class="badge good">nouveau</span>'}</td></tr>`).join('')}
           </tbody></table>`;
         const importable = parsed.filter(r => !r.errors.length);

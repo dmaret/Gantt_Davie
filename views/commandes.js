@@ -53,9 +53,9 @@ App.views.commandes = {
       const tva = Money.tva(c.montantHT, c.tauxTVA);
       const ttc = Money.ttc(c.montantHT, c.tauxTVA);
       return `<tr data-id="${c.id}">
-        <td class="mono">${c.ref}</td>
-        <td>${c.fournisseur}</td>
-        <td>${prj?`<span class="badge" style="background:${prj.couleur}22;color:${prj.couleur}">${prj.code}</span>`:'—'}</td>
+        <td class="mono">${App.escapeHTML(c.ref)}</td>
+        <td>${App.escapeHTML(c.fournisseur)}</td>
+        <td>${prj?`<span class="badge" style="background:${App.safeColor(prj.couleur)}22;color:${App.safeColor(prj.couleur)}">${App.escapeHTML(prj.code)}</span>`:'—'}</td>
         <td class="right">${Money.chf(c.montantHT)}</td>
         <td class="right muted small">${c.tauxTVA}% · ${Money.chf(tva)}</td>
         <td class="right"><strong>${Money.chf(ttc)}</strong></td>
@@ -125,11 +125,11 @@ App.views.commandes = {
     };
     const body = `
       <div class="row">
-        <div class="field"><label>Référence</label><input id="cf-ref" value="${c.ref}"></div>
+        <div class="field"><label>Référence</label><input id="cf-ref" value="${App.escapeHTML(c.ref)}"></div>
         <div class="field"><label>Date demande</label><input type="date" id="cf-date" value="${c.dateDemande}"></div>
       </div>
       <div class="row">
-        <div class="field"><label>Fournisseur</label><input id="cf-four" value="${c.fournisseur||''}"></div>
+        <div class="field"><label>Fournisseur</label><input id="cf-four" value="${App.escapeHTML(c.fournisseur||'')}"></div>
         <div class="field"><label>Montant HT (CHF)</label><input type="number" step="0.01" id="cf-ht" value="${c.montantHT||0}"></div>
         <div class="field"><label>Taux TVA (%)</label><input type="number" step="0.1" id="cf-tva" value="${c.tauxTVA!==undefined?c.tauxTVA:8.1}"></div>
       </div>
@@ -148,7 +148,7 @@ App.views.commandes = {
         }).join('')}
       </div>
       ${(c.validationLog||[]).length ? `<h3 style="margin-top:14px">Historique (${c.validationLog.length})</h3>
-      <ul class="list" style="max-height:160px;overflow:auto">${c.validationLog.slice().reverse().map(l => `<li style="font-size:12px"><div><strong>${l.axe}</strong> · ${l.action}</div><div class="muted small">${l.valideur} · ${new Date(l.date).toLocaleString('fr-CH')}</div></li>`).join('')}</ul>` : ''}
+      <ul class="list" style="max-height:160px;overflow:auto">${c.validationLog.slice().reverse().map(l => `<li style="font-size:12px"><div><strong>${App.escapeHTML(l.axe)}</strong> · ${App.escapeHTML(l.action)}</div><div class="muted small">${App.escapeHTML(l.valideur)} · ${new Date(l.date).toLocaleString('fr-CH')}</div></li>`).join('')}</ul>` : ''}
     `;
     const foot = `${!isNew?'<button class="btn btn-danger" id="cf-del">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" id="cf-cancel">Annuler</button>
@@ -246,8 +246,8 @@ App.views.commandes = {
         const body = `<p class="muted small">${parsed.filter(r=>!r.existing&&!r.errors.length).length} à créer · ${parsed.filter(r=>r.existing).length} à màj · ${parsed.filter(r=>r.errors.length).length} erreur(s)</p>
           <table class="data"><thead><tr><th>Réf</th><th>Fournisseur</th><th>Projet</th><th class="right">HT</th><th>Statut</th></tr></thead><tbody>
           ${parsed.map(r => `<tr>
-            <td class="mono">${r.ref}</td><td>${r.fournisseur}</td>
-            <td>${r.prj?r.prj.code:'<span class="muted">—</span>'}</td>
+            <td class="mono">${App.escapeHTML(r.ref)}</td><td>${App.escapeHTML(r.fournisseur)}</td>
+            <td>${r.prj?App.escapeHTML(r.prj.code):'<span class="muted">—</span>'}</td>
             <td class="right">${r.montantHT}</td>
             <td>${r.errors.length?`<span class="badge bad">${r.errors.join(', ')}</span>`:r.existing?'<span class="badge warn">màj</span>':'<span class="badge good">nouveau</span>'}</td>
           </tr>`).join('')}
@@ -307,7 +307,7 @@ App.views.commandes = {
     const s = DB.state;
     return `<div class="ligne-row row" style="align-items:end;margin-bottom:6px">
       <div class="field" style="flex:3"><label>Article</label>
-        <select data-k="art">${s.stock.map(x => `<option value="${x.id}" ${x.id===l.articleId?'selected':''}>${x.ref} — ${x.nom}</option>`).join('')}</select>
+        <select data-k="art">${s.stock.map(x => `<option value="${x.id}" ${x.id===l.articleId?'selected':''}>${App.escapeHTML(x.ref)} — ${App.escapeHTML(x.nom)}</option>`).join('')}</select>
       </div>
       <div class="field" style="flex:1"><label>Qté</label><input type="number" data-k="qte" value="${l.qte}" min="0"></div>
       <button class="btn-ghost" onclick="this.parentElement.remove()" style="margin-bottom:10px">✕</button>

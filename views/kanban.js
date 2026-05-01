@@ -176,10 +176,10 @@ App.views.kanban = {
         onmouseenter="this.style.boxShadow='0 4px 16px rgba(0,0,0,.10)'"
         onmouseleave="this.style.boxShadow=''">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-          <span class="badge small" style="background:${pColor}22;color:${pColor};font-weight:700;font-size:10px;padding:1px 6px;border-radius:4px;">${pCode}</span>
+          <span class="badge small" style="background:${App.safeColor(pColor)}22;color:${App.safeColor(pColor)};font-weight:700;font-size:10px;padding:1px 6px;border-radius:4px;">${App.escapeHTML(pCode)}</span>
           ${retardBadge}
         </div>
-        <div style="font-weight:600;font-size:13px;margin-bottom:5px;line-height:1.3;">${t.nom}</div>
+        <div style="font-weight:600;font-size:13px;margin-bottom:5px;line-height:1.3;">${App.escapeHTML(t.nom)}</div>
         <div class="muted small" style="font-size:11px;margin-bottom:6px;">
           ${debut} → ${fin}${duree ? ` · ${duree} j.o.` : ''}
         </div>

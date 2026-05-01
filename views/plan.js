@@ -114,7 +114,7 @@ App.views.plan = {
         const p = people[i];
         const cx = (l.x||0) + 12 + (i%6) * 16;
         const cy = (l.y||0) + (l.h||110) - 14 - Math.floor(i/6) * 14;
-        dots.push(`<circle class="plan-person" cx="${cx}" cy="${cy}" r="5" fill="${p.couleur||'#2c5fb3'}" title="${p.prenom} ${p.nom}"><title>${p.prenom} ${p.nom} · ${p.role}</title></circle>`);
+        dots.push(`<circle class="plan-person" cx="${cx}" cy="${cy}" r="5" fill="${App.safeColor(p.couleur||'#2c5fb3')}" title="${App.escapeHTML(p.prenom)} ${App.escapeHTML(p.nom)}"><title>${App.escapeHTML(p.prenom)} ${App.escapeHTML(p.nom)} · ${App.escapeHTML(p.role)}</title></circle>`);
       }
       if (people.length > 12) {
         const cx = (l.x||0) + 12 + (12%6) * 16;
@@ -127,7 +127,7 @@ App.views.plan = {
       return `<g class="plan-lieu ${isSel?'selected':''} ${editClass}" data-lieu="${l.id}">
         <defs><clipPath id="${cid}"><rect x="${l.x||0}" y="${(l.y||0)}" width="${titleMaxW}" height="26"/></clipPath></defs>
         <rect x="${l.x||0}" y="${l.y||0}" width="${l.w||180}" height="${l.h||110}" rx="8" fill="${col.fill}" stroke="${col.stroke}" stroke-width="2"/>
-        <text class="plan-lieu-title" x="${(l.x||0)+10}" y="${(l.y||0)+20}" clip-path="url(#${cid})">${typeIcon} ${l.nom}</text>
+        <text class="plan-lieu-title" x="${(l.x||0)+10}" y="${(l.y||0)+20}" clip-path="url(#${cid})">${typeIcon} ${App.escapeHTML(l.nom)}</text>
         <text class="plan-lieu-meta" x="${(l.x||0)+10}" y="${(l.y||0)+38}">${charge.tasks.length} tâche${charge.tasks.length>1?'s':''} · ${charge.pct}% charge</text>
         <text class="plan-lieu-cap" x="${(l.x||0)+(l.w||180)-10}" y="${(l.y||0)+38}" text-anchor="end">cap ${l.capacite}</text>
         ${dots.join('')}
@@ -212,18 +212,18 @@ App.views.plan = {
     tasks.sort((a,b) => a.debut.localeCompare(b.debut));
 
     target.innerHTML = `
-      <h3 style="margin:0">${l.nom}</h3>
-      <div class="muted small">${l.type} · étage ${l.etage} · capacité ${l.capacite}</div>
+      <h3 style="margin:0">${App.escapeHTML(l.nom)}</h3>
+      <div class="muted small">${App.escapeHTML(l.type)} · étage ${App.escapeHTML(l.etage)} · capacité ${l.capacite}</div>
       <div style="margin-top:10px;padding:8px;border-radius:6px;background:${col.fill};border-left:3px solid ${col.stroke}">
         <div><strong>${charge.pct}%</strong> de charge sur 5 j. ouvrés</div>
         <div class="muted small">${charge.jours} / ${charge.capa} j-personne occupés</div>
       </div>
       <h4>👥 Personnes présentes aujourd'hui (${people.length})</h4>
-      ${people.length ? `<ul class="list list-clickable">${people.map(p => `<li class="alert-row" data-pid="${p.id}" role="button" tabindex="0"><div style="flex:1"><strong>${App.personneLabel(p)}</strong> <span class="muted small">${p.role}</span></div><span class="alert-arrow">›</span></li>`).join('')}</ul>` : '<p class="muted small">Personne aujourd\'hui.</p>'}
+      ${people.length ? `<ul class="list list-clickable">${people.map(p => `<li class="alert-row" data-pid="${p.id}" role="button" tabindex="0"><div style="flex:1"><strong>${App.personneLabel(p)}</strong> <span class="muted small">${App.escapeHTML(p.role)}</span></div><span class="alert-arrow">›</span></li>`).join('')}</ul>` : '<p class="muted small">Personne aujourd\'hui.</p>'}
       <h4>📋 Tâches prévues (5 j. ouvrés) · ${tasks.length}</h4>
       ${tasks.length ? `<ul class="list list-clickable">${tasks.map(t => {
         const prj = DB.projet(t.projetId);
-        return `<li class="alert-row" data-tid="${t.id}" role="button" tabindex="0"><div style="flex:1"><strong>${t.nom}</strong><div class="small muted">${prj?prj.code:''} · ${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${(t.assignes||[]).length} pers.</div></div><span class="badge" style="background:${prj?prj.couleur+'33':''};color:${prj?prj.couleur:''}">${prj?prj.code:''}</span><span class="alert-arrow">›</span></li>`;
+        return `<li class="alert-row" data-tid="${t.id}" role="button" tabindex="0"><div style="flex:1"><strong>${App.escapeHTML(t.nom)}</strong><div class="small muted">${prj?App.escapeHTML(prj.code):''} · ${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${(t.assignes||[]).length} pers.</div></div><span class="badge" style="background:${prj?App.safeColor(prj.couleur)+'33':''};color:${prj?App.safeColor(prj.couleur):''}">${prj?App.escapeHTML(prj.code):''}</span><span class="alert-arrow">›</span></li>`;
       }).join('')}</ul>` : '<p class="muted small">Aucune tâche prévue.</p>'}
     `;
     target.querySelectorAll('[data-tid]').forEach(el => el.onclick = () => {

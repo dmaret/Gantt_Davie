@@ -34,12 +34,12 @@ App.views.modelesprojets = {
       return s + (e.gestes || []).reduce((n, code) => n + DB.tempsGeste(code), 0);
     }, 0);
     const dureeTotal = (mp.etapes || []).reduce((n, e) => n + (e.duree || 0), 0);
-    return `<div class="card" style="border-left:4px solid ${mp.couleur || '#888'}">
+    return `<div class="card" style="border-left:4px solid ${App.safeColor(mp.couleur || '#888')}">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
         <div>
-          <h3 style="margin:0 0 4px">${mp.nom}</h3>
-          <div class="muted small">${mp.description || ''}</div>
-          ${mp.groupe ? `<span class="badge" style="margin-top:4px;display:inline-block;background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb);font-size:10px">${mp.groupe}</span>` : ''}
+          <h3 style="margin:0 0 4px">${App.escapeHTML(mp.nom)}</h3>
+          <div class="muted small">${App.escapeHTML(mp.description || '')}</div>
+          ${mp.groupe ? `<span class="badge" style="margin-top:4px;display:inline-block;background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb);font-size:10px">${App.escapeHTML(mp.groupe)}</span>` : ''}
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div class="small" style="font-weight:600">${dureeTotal} j.o.</div>
@@ -65,7 +65,7 @@ App.views.modelesprojets = {
       ${(mp.etapes || []).map((e, i) => {
         const color = { appro:'#6366f1', prod:'#2c5fb3', etude:'#f59e0b', livraison:'#059669', jalon:'#dc2626' }[e.type] || '#888';
         return `<span style="display:inline-flex;align-items:center;gap:2px">
-          <span style="background:${color}22;color:${color};border:1px solid ${color}55;border-radius:4px;padding:2px 6px;font-size:10px;white-space:nowrap">${e.jalon ? '🏁' : ''}${e.nom}</span>
+          <span style="background:${App.safeColor(color)}22;color:${App.safeColor(color)};border:1px solid ${App.safeColor(color)}55;border-radius:4px;padding:2px 6px;font-size:10px;white-space:nowrap">${e.jalon ? '🏁' : ''}${App.escapeHTML(e.nom)}</span>
           ${i < (mp.etapes.length - 1) ? '<span style="color:var(--text-muted);font-size:10px">→</span>' : ''}
         </span>`;
       }).join('')}
@@ -106,7 +106,7 @@ App.views.modelesprojets = {
           <div style="display:flex;gap:8px;align-items:start;flex-wrap:wrap">
             <div class="field" style="flex:2;min-width:140px">
               <label style="font-size:11px">Nom de l'étape</label>
-              <input class="ep-nom" data-i="${idx}" value="${e.nom}" placeholder="Ex: Réception marchandise">
+              <input class="ep-nom" data-i="${idx}" value="${App.escapeHTML(e.nom)}" placeholder="Ex: Réception marchandise">
             </div>
             <div class="field" style="flex:1;min-width:90px">
               <label style="font-size:11px">Type</label>
@@ -153,14 +153,14 @@ App.views.modelesprojets = {
                 const sel = (e.dependsDe || []).includes(pe.id);
                 return `<label style="display:flex;align-items:center;gap:3px;cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px;border:1px solid ${sel ? 'var(--primary)' : 'var(--border)'};background:${sel ? 'var(--primary-weak)' : 'transparent'}">
                   <input type="checkbox" class="ep-dep" data-i="${idx}" data-depid="${pe.id}" ${sel ? 'checked' : ''} style="margin:0">
-                  ${pe.nom || '—'}
+                  ${App.escapeHTML(pe.nom || '—')}
                 </label>`;
               }).join('')}
             </div>
           </div>` : ''}
           <div class="field" style="margin-top:4px">
             <label style="font-size:11px">Notes</label>
-            <input class="ep-notes" data-i="${idx}" value="${e.notes || ''}" placeholder="Instructions pour cette étape…">
+            <input class="ep-notes" data-i="${idx}" value="${App.escapeHTML(e.notes || '')}" placeholder="Instructions pour cette étape…">
           </div>
         </div>`;
       }).join('');
@@ -169,17 +169,17 @@ App.views.modelesprojets = {
     const existingGroups = [...new Set((s.projets||[]).map(p => p.groupe||'').filter(Boolean))].sort();
     const body = `
       <div class="row">
-        <div class="field"><label>Nom du modèle</label><input id="mpf-nom" value="${mp.nom}" placeholder="Logistique complète…"></div>
+        <div class="field"><label>Nom du modèle</label><input id="mpf-nom" value="${App.escapeHTML(mp.nom)}" placeholder="Logistique complète…"></div>
         <div class="field"><label>Couleur</label><input type="color" id="mpf-col" value="${mp.couleur || '#2c5fb3'}"></div>
       </div>
       <div class="row">
         <div class="field">
           <label>Groupe associé <span class="muted small">(ex: PRJ-Log — s'applique aux projets de ce groupe)</span></label>
-          <input id="mpf-groupe" list="mpf-groupe-list" value="${mp.groupe||''}" placeholder="Laisser vide = modèle générique">
+          <input id="mpf-groupe" list="mpf-groupe-list" value="${App.escapeHTML(mp.groupe||'')}" placeholder="Laisser vide = modèle générique">
           <datalist id="mpf-groupe-list">${existingGroups.map(g=>`<option value="${g}">`).join('')}</datalist>
         </div>
       </div>
-      <div class="field"><label>Description</label><input id="mpf-desc" value="${mp.description || ''}" placeholder="Description du flux couvert par ce modèle…"></div>
+      <div class="field"><label>Description</label><input id="mpf-desc" value="${App.escapeHTML(mp.description || '')}" placeholder="Description du flux couvert par ce modèle…"></div>
       <div style="display:flex;align-items:center;gap:8px;margin:12px 0 6px">
         <strong>Étapes</strong>
         <button class="btn-ghost" id="mpf-add-step" style="font-size:12px">+ Ajouter étape</button>
@@ -336,7 +336,7 @@ App.views.modelesprojets = {
         </tr></thead>
         <tbody>
           ${rows.map(r => `<tr style="border-bottom:1px solid var(--border)">
-            <td style="padding:4px 6px">${r.jalon ? '🏁 ' : ''}${r.nom}</td>
+            <td style="padding:4px 6px">${r.jalon ? '🏁 ' : ''}${App.escapeHTML(r.nom)}</td>
             <td style="padding:4px 6px;text-align:center"><span class="badge">${r.type}</span></td>
             <td style="padding:4px 6px;text-align:center">${D.fmt(r.calcDebut)}</td>
             <td style="padding:4px 6px;text-align:center">${r.jalon ? '—' : D.fmt(r.calcFin)}</td>
@@ -354,7 +354,7 @@ App.views.modelesprojets = {
         <div class="field">
           <label>Projet d'affectation</label>
           ${presetProjet
-            ? `<input id="mpi-proj" value="${presetProjet.code} — ${presetProjet.nom}" readonly style="background:var(--surface-2);color:var(--text-muted)" data-pid="${presetProjet.id}">`
+            ? `<input id="mpi-proj" value="${App.escapeHTML(presetProjet.code)} — ${App.escapeHTML(presetProjet.nom)}" readonly style="background:var(--surface-2);color:var(--text-muted)" data-pid="${presetProjet.id}">`
             : `<select id="mpi-proj">${App.projetsOptions(presetProjetId||'', '— Choisir un projet —')}</select>`
           }
         </div>
@@ -381,7 +381,7 @@ App.views.modelesprojets = {
       <span class="spacer" style="flex:1"></span>
       <button class="btn" id="mpi-ok">▶ Créer ${(mp.etapes || []).length} tâche(s)</button>
     `;
-    App.openModal(`Instancier : ${mp.nom}`, body, foot);
+    App.openModal(`Instancier : ${App.escapeHTML(mp.nom)}`, body, foot);
 
     const getPid = () => {
       const el = document.getElementById('mpi-proj');

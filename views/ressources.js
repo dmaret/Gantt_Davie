@@ -110,15 +110,15 @@ App.views.ressources = {
         const weCls = isWeekEnd ? ' r-weekend' : '';
         const mkCell = (on, label, extra) => {
           const stCls = isWeekEnd ? 'weekend' : state(on);
-          const tt = isWeekEnd ? '' : `${p.prenom} ${p.nom} — ${D.fmt(d)} ${label} : ${!on?'off':absent?'absent ('+absInfo.motif+')':occupé?'occupé·e':'dispo'}`;
+          const tt = isWeekEnd ? '' : `${App.escapeHTML(p.prenom)} ${App.escapeHTML(p.nom)} — ${D.fmt(d)} ${label} : ${!on?'off':absent?'absent ('+App.escapeHTML(absInfo.motif)+')':occupé?'occupé·e':'dispo'}`;
           return `<td class="r-cell r-${stCls}${weCls}${extra||''}" title="${tt}"></td>`;
         };
         return mkCell(matinOn,'matin', isFirstOfWeek ? ' week-start' : '') + mkCell(apremOn,'après-midi', '');
       }).join('');
       const lieu = DB.lieu(p.lieuPrincipalId);
       return `<tr>
-        <td><strong>${App.personneLabel(p)}</strong><div class="muted small">${lieu?lieu.nom:'—'}</div></td>
-        <td>${p.role}<div>${(p.competences||[]).map(c=>`<span class="chip small">${c}</span>`).join('')}</div></td>
+        <td><strong>${App.personneLabel(p)}</strong><div class="muted small">${lieu?App.escapeHTML(lieu.nom):'—'}</div></td>
+        <td>${App.escapeHTML(p.role)}<div>${(p.competences||[]).map(c=>`<span class="chip small">${App.escapeHTML(c)}</span>`).join('')}</div></td>
         ${cells}
         <td class="right mono">${totalDJ ? Math.round(dispoCount / totalDJ * 100) + '%' : '—'}</td>
       </tr>`;

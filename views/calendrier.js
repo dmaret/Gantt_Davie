@@ -88,7 +88,7 @@ App.views.calendrier = {
       const tday = d === today ? 'today' : '';
       const badges = ts.slice(0, 4).map(t => {
         const p = DB.projet(t.projetId);
-        return `<div class="cal-event" style="background:${p?p.couleur+'22':''};color:${p?p.couleur:''};border-left:3px solid ${p?p.couleur:'#888'}" title="${t.nom} (${p?p.code:''})">${t.jalon?'◆ ':''}${t.nom}</div>`;
+        return `<div class="cal-event" style="background:${p?App.safeColor(p.couleur)+'22':''};color:${p?App.safeColor(p.couleur):''};border-left:3px solid ${p?App.safeColor(p.couleur):'#888'}" title="${App.escapeHTML(t.nom)} (${p?App.escapeHTML(p.code):''})">${t.jalon?'◆ ':''}${App.escapeHTML(t.nom)}</div>`;
       }).join('');
       const more = ts.length > 4 ? `<div class="small muted">+${ts.length-4}</div>` : '';
       const moves = ms.length ? `<div class="small muted">🚚 ${ms.length}</div>` : '';
@@ -122,11 +122,11 @@ App.views.calendrier = {
       ${ts.length ? `<h4>Tâches (${ts.length})</h4><ul class="list">${ts.map(t => {
         const p = DB.projet(t.projetId), l = DB.lieu(t.lieuId);
         const ass = (t.assignes||[]).map(id => App.personneLabel(DB.personne(id))).join(', ');
-        return `<li style="cursor:pointer" data-tid="${t.id}"><div><strong>${t.nom}</strong> · <span class="muted small">${p?p.code:''}</span><div class="small muted">${l?l.nom:'—'} · ${ass||'—'}</div></div><span class="badge" style="background:${p?p.couleur+'22':''};color:${p?p.couleur:''}">${p?p.code:''}</span></li>`;
+        return `<li style="cursor:pointer" data-tid="${t.id}"><div><strong>${App.escapeHTML(t.nom)}</strong> · <span class="muted small">${p?App.escapeHTML(p.code):''}</span><div class="small muted">${l?App.escapeHTML(l.nom):'—'} · ${ass||'—'}</div></div><span class="badge" style="background:${p?App.safeColor(p.couleur)+'22':''};color:${p?App.safeColor(p.couleur):''}">${p?App.escapeHTML(p.code):''}</span></li>`;
       }).join('')}</ul>` : '<p class="muted">Aucune tâche.</p>'}
       ${ms.length ? `<h4>Déplacements (${ms.length})</h4><ul class="list">${ms.map(m => {
         const p = DB.personne(m.personneId), o = DB.lieu(m.origineId), de = DB.lieu(m.destinationId);
-        return `<li><div><strong>${App.personneLabel(p)}</strong> · ${m.motif}<div class="small muted">${o?o.nom:'—'} → ${de?de.nom:'—'} · ${m.duree}</div></div></li>`;
+        return `<li><div><strong>${App.personneLabel(p)}</strong> · ${App.escapeHTML(m.motif)}<div class="small muted">${o?App.escapeHTML(o.nom):'—'} → ${de?App.escapeHTML(de.nom):'—'} · ${m.duree}</div></div></li>`;
       }).join('')}</ul>` : ''}
     `;
     App.openModal(D.fmt(d), body, `<button class="btn btn-secondary" onclick="App.closeModal()">Fermer</button>`);

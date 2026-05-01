@@ -91,9 +91,9 @@ App.views.projets = {
         </div>
         <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           <span class="badge muted">${jalons.length} jalons</span>
-          <span class="badge ${p.statut==='en-cours'?'good':'muted'}">${p.statut}</span>
+          <span class="badge ${p.statut==='en-cours'?'good':'muted'}">${App.escapeHTML(p.statut)}</span>
           ${retard ? '<span class="badge bad">retard</span>' : ''}
-          ${p.groupe ? `<span class="badge muted" style="font-size:10px">${p.groupe}</span>` : ''}
+          ${p.groupe ? `<span class="badge muted" style="font-size:10px">${App.escapeHTML(p.groupe)}</span>` : ''}
           ${p.sequencementStrict ? '<span class="badge" title="Séquencement strict activé" style="background:#7c3aed22;color:#7c3aed;border:1px solid #7c3aed44">⛓ strict</span>' : ''}
           <span style="flex:1"></span>
           <button class="btn-ghost prj-report" data-id="${p.id}" title="Rapport PDF">⎙ Rapport</button>
@@ -132,7 +132,7 @@ App.views.projets = {
       const w = Math.max(1, D.diffDays(t.debut, t.fin) / totalDays * 100);
       const color = t.jalon ? '#000' : p.couleur;
       return `<tr>
-        <td style="width:180px">${t.nom}${t.jalon?' ◆':''}</td>
+        <td style="width:180px">${App.escapeHTML(t.nom)}${t.jalon?' ◆':''}</td>
         <td style="width:110px">${D.fmt(t.debut)} → ${D.fmt(t.fin)}</td>
         <td style="width:50px;text-align:right">${t.avancement||0}%</td>
         <td style="position:relative;background:#f6f6f6;height:14px;border-radius:3px">
@@ -149,7 +149,7 @@ App.views.projets = {
           const art = DB.stock(l.articleId);
           if (!art) return '';
           const manque = l.quantite - art.quantite;
-          return `<tr><td>${art.ref} — ${art.nom}</td><td class="right">${l.quantite} ${art.unite}</td><td class="right">${art.quantite}</td><td>${manque>0?`<span style="color:#c43b3b">rupture -${manque}</span>`:'OK'}</td></tr>`;
+          return `<tr><td>${App.escapeHTML(art.ref)} — ${App.escapeHTML(art.nom)}</td><td class="right">${l.quantite} ${art.unite}</td><td class="right">${art.quantite}</td><td>${manque>0?`<span style="color:#c43b3b">rupture -${manque}</span>`:'OK'}</td></tr>`;
         }).join('')}</tbody>
       </table>` : '';
 
@@ -157,7 +157,7 @@ App.views.projets = {
       <h2>Commandes (${cmds.length})</h2>
       <table class="data">
         <thead><tr><th>Réf</th><th>Fournisseur</th><th class="right">HT</th><th class="right">TTC</th><th>Statut</th></tr></thead>
-        <tbody>${cmds.map(c => `<tr><td>${c.ref}</td><td>${c.fournisseur}</td><td class="right">${Money.chf(c.montantHT||0)}</td><td class="right">${Money.chf(Money.ttc(c.montantHT||0, c.tauxTVA||8.1))}</td><td>${c.statut}</td></tr>`).join('')}
+        <tbody>${cmds.map(c => `<tr><td>${App.escapeHTML(c.ref)}</td><td>${App.escapeHTML(c.fournisseur)}</td><td class="right">${Money.chf(c.montantHT||0)}</td><td class="right">${Money.chf(Money.ttc(c.montantHT||0, c.tauxTVA||8.1))}</td><td>${App.escapeHTML(c.statut)}</td></tr>`).join('')}
         <tr><td colspan="2"><strong>Total</strong></td><td class="right"><strong>${Money.chf(htTotal)}</strong></td><td class="right"><strong>${Money.chf(ttcTotal)}</strong></td><td></td></tr>
         </tbody>
       </table>` : '';
@@ -169,22 +169,22 @@ App.views.projets = {
     const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Rapport ${p.code}</title>
       <style>
         body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 20px; color: #222; font-size: 12px; }
-        h1 { font-size: 18px; border-bottom: 3px solid ${p.couleur}; padding-bottom: 4px; margin: 0 0 6px 0; }
-        h2 { font-size: 13px; margin-top: 10px; margin-bottom: 2px; color: ${p.couleur}; border-bottom: 1px solid #ddd; padding-bottom: 3px; }
+        h1 { font-size: 18px; border-bottom: 3px solid ${App.safeColor(p.couleur)}; padding-bottom: 4px; margin: 0 0 6px 0; }
+        h2 { font-size: 13px; margin-top: 10px; margin-bottom: 2px; color: ${App.safeColor(p.couleur)}; border-bottom: 1px solid #ddd; padding-bottom: 3px; }
         table.data { width: 100%; border-collapse: collapse; font-size: 11px; }
         table.data th, table.data td { border-bottom: 1px solid #eee; padding: 3px 5px; text-align: left; }
         table.data th { background: #f6f6f6; }
         .right { text-align: right; }
         .kpis { display: flex; gap: 10px; margin: 8px 0 4px 0; }
-        .kpi { flex: 1; background: #f6f6f6; padding: 6px 8px; border-radius: 5px; border-left: 4px solid ${p.couleur}; }
+        .kpi { flex: 1; background: #f6f6f6; padding: 6px 8px; border-radius: 5px; border-left: 4px solid ${App.safeColor(p.couleur)}; }
         .kpi .label { font-size: 9px; color: #777; text-transform: uppercase; }
         .kpi .value { font-size: 16px; font-weight: 600; line-height: 1.2; }
         .small { font-size: 11px; color: #666; }
         .footer { margin-top: 12px; color: #888; font-size: 9px; text-align: center; border-top: 1px solid #ddd; padding-top: 4px; }
         @media print { @page { size: A4 portrait; margin: 10mm; } body { margin: 0; font-size: 11px; } }
       </style></head><body>
-      <h1>${p.code} — ${p.nom}</h1>
-      <p class="small">Client : <strong>${p.client||'—'}</strong> · Étage ${p.etage} · Priorité ${p.priorite} · Statut ${p.statut}</p>
+      <h1>${App.escapeHTML(p.code)} — ${App.escapeHTML(p.nom)}</h1>
+      <p class="small">Client : <strong>${App.escapeHTML(p.client||'—')}</strong> · Étage ${App.escapeHTML(p.etage)} · Priorité ${App.escapeHTML(p.priorite)} · Statut ${App.escapeHTML(p.statut)}</p>
       <div class="kpis">
         <div class="kpi"><div class="label">Avancement</div><div class="value">${pct} %</div></div>
         <div class="kpi"><div class="label">Tâches</div><div class="value">${tasks.length}</div></div>
@@ -196,7 +196,7 @@ App.views.projets = {
       <table class="data">${barsHtml}</table>
       ${bomHtml}
       ${cmdHtml}
-      <div class="footer">Généré le ${D.fmt(today)} par ${App.currentUser().nom} · Atelier · Planification</div>
+      <div class="footer">Généré le ${D.fmt(today)} par ${App.escapeHTML(App.currentUser().nom)} · Atelier · Planification</div>
       <script>setTimeout(() => window.print(), 400);</script>
       </body></html>`;
     const w = window.open('', '_blank');
@@ -219,12 +219,12 @@ App.views.projets = {
     const linkedModelsHtml = linkedModels.length ? `
       <div style="margin-top:14px;padding:10px 12px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <span style="font-size:13px;font-weight:600">🗂 ${isNew ? 'Modèles disponibles' : 'Modèles pour <span class="badge" style="background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb)">' + p.groupe + '</span>'}</span>
+          <span style="font-size:13px;font-weight:600">🗂 ${isNew ? 'Modèles disponibles' : 'Modèles pour <span class="badge" style="background:var(--primary-light,#dbeafe);color:var(--primary,#2563eb)">' + App.escapeHTML(p.groupe) + '</span>'}</span>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
           ${linkedModels.map(mp => `
-            <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;border-left:3px solid ${mp.couleur||'#888'}">
-              <span style="font-size:12px;font-weight:500">${mp.nom}</span>
+            <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;border-left:3px solid ${App.safeColor(mp.couleur||'#888')}">
+              <span style="font-size:12px;font-weight:500">${App.escapeHTML(mp.nom)}</span>
               <span class="muted small">${(mp.etapes||[]).length} étapes · ${(mp.etapes||[]).reduce((n,e)=>n+(e.duree||0),0)} j.o.</span>
               <button class="btn btn-secondary pf-use-modele" data-mpid="${mp.id}" style="padding:3px 10px;font-size:11px">▶ Appliquer</button>
             </div>`).join('')}
@@ -578,8 +578,8 @@ App.views.projets = {
         const body = `<p class="muted small">${parsed.filter(r=>!r.existing&&!r.errors.length).length} à créer · ${parsed.filter(r=>r.existing).length} à mettre à jour · ${parsed.filter(r=>r.errors.length).length} erreur(s)</p>
           <table class="data"><thead><tr><th>Code</th><th>Nom</th><th>Client</th><th>Début</th><th>Fin</th><th>Statut</th></tr></thead><tbody>
           ${parsed.map(r => `<tr>
-            <td><span class="badge" style="background:${r.couleur}22;color:${r.couleur}">${r.code}</span></td>
-            <td>${r.nom}</td><td class="muted small">${r.client}</td><td>${r.debut}</td><td>${r.fin}</td>
+            <td><span class="badge" style="background:${App.safeColor(r.couleur)}22;color:${App.safeColor(r.couleur)}">${App.escapeHTML(r.code)}</span></td>
+            <td>${App.escapeHTML(r.nom)}</td><td class="muted small">${App.escapeHTML(r.client)}</td><td>${r.debut}</td><td>${r.fin}</td>
             <td>${r.errors.length?`<span class="badge bad">${r.errors.join(', ')}</span>`:r.existing?'<span class="badge warn">màj</span>':'<span class="badge good">nouveau</span>'}</td>
           </tr>`).join('')}
           </tbody></table>`;

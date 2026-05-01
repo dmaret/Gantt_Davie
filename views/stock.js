@@ -52,16 +52,16 @@ App.views.stock = {
       const cls = x.quantite < x.seuilAlerte ? 'bad' : x.quantite < x.seuilAlerte*1.3 ? 'warn' : '';
       const badge = x.quantite < x.seuilAlerte ? '<span class="badge bad">alerte</span>' : '';
       const projs = (x.projetsLies||[]).map(pid => {
-        const p = DB.projet(pid); return p ? `<span class="chip" style="background:${p.couleur}22;color:${p.couleur}">${p.code}</span>` : '';
+        const p = DB.projet(pid); return p ? `<span class="chip" style="background:${App.safeColor(p.couleur)}22;color:${App.safeColor(p.couleur)}">${App.escapeHTML(p.code)}</span>` : '';
       }).join('');
       const lieu = DB.lieu(x.lieuId);
       const qteCell = canEdit
         ? `<input type="number" class="inline-edit" data-stock-qte="${x.id}" value="${x.quantite}" step="1"> <span class="muted small">${x.unite}</span>`
         : `${x.quantite} ${x.unite}`;
       return `<tr data-id="${x.id}">
-        <td class="mono st-open">${x.ref}</td>
-        <td class="st-open"><strong>${x.nom}</strong> ${badge}</td>
-        <td class="st-open">${lieu?lieu.nom:'—'}</td>
+        <td class="mono st-open">${App.escapeHTML(x.ref)}</td>
+        <td class="st-open"><strong>${App.escapeHTML(x.nom)}</strong> ${badge}</td>
+        <td class="st-open">${lieu?App.escapeHTML(lieu.nom):'—'}</td>
         <td class="right">${qteCell}</td>
         <td class="right st-open">${x.seuilAlerte}</td>
         <td class="st-open"><div class="bar-inline ${cls}"><div class="fill" style="width:${pct}%"></div></div></td>
@@ -100,10 +100,10 @@ App.views.stock = {
     const x = id ? DB.stock(id) : { id: DB.uid('ART'), ref:'', nom:'', unite:'p', quantite:0, seuilAlerte:0, lieuId: s.lieux.find(l=>l.type==='stockage').id, projetsLies:[] };
     const body = `
       <div class="row">
-        <div class="field"><label>Référence</label><input id="xf-ref" value="${x.ref||''}"></div>
-        <div class="field"><label>Unité</label><input id="xf-unite" value="${x.unite||'p'}"></div>
+        <div class="field"><label>Référence</label><input id="xf-ref" value="${App.escapeHTML(x.ref||'')}"></div>
+        <div class="field"><label>Unité</label><input id="xf-unite" value="${App.escapeHTML(x.unite||'p')}"></div>
       </div>
-      <div class="field"><label>Nom</label><input id="xf-nom" value="${x.nom||''}"></div>
+      <div class="field"><label>Nom</label><input id="xf-nom" value="${App.escapeHTML(x.nom||'')}"></div>
       <div class="row">
         <div class="field"><label>Quantité</label><input type="number" id="xf-qte" value="${x.quantite||0}"></div>
         <div class="field"><label>Seuil alerte</label><input type="number" id="xf-seuil" value="${x.seuilAlerte||0}"></div>
@@ -190,8 +190,8 @@ App.views.stock = {
     const body = `<p class="muted small">${creates} à créer · ${updates} à mettre à jour</p>
       <table class="data"><thead><tr><th>Réf</th><th>Nom</th><th>Qté</th><th>Seuil</th><th>Lieu</th><th>Statut</th></tr></thead><tbody>
       ${parsed.map(r => `<tr>
-        <td class="mono">${r.ref}</td><td>${r.nom}</td><td>${r.qte}</td><td>${r.seuil}</td>
-        <td class="${r.lieuId?'':'warn'}">${r.lieuNom||'—'}${r.lieuId?'':' ⚠'}</td>
+        <td class="mono">${App.escapeHTML(r.ref)}</td><td>${App.escapeHTML(r.nom)}</td><td>${r.qte}</td><td>${r.seuil}</td>
+        <td class="${r.lieuId?'':'warn'}">${App.escapeHTML(r.lieuNom||'—')}${r.lieuId?'':' ⚠'}</td>
         <td><span class="badge ${r.existing?'warn':'good'}">${r.existing?'màj':'nouveau'}</span></td>
       </tr>`).join('')}
       </tbody></table>`;

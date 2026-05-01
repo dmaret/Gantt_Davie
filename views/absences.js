@@ -57,8 +57,8 @@ App.views.absences = {
                 <td>${D.fmt(a.debut)}</td>
                 <td>${D.fmt(a.fin)}</td>
                 <td class="right">${dur} j</td>
-                <td><span class="badge ${cls}">${a.motif}</span></td>
-                <td class="small muted">${a.note||'—'}</td>
+                <td><span class="badge ${cls}">${App.escapeHTML(a.motif)}</span></td>
+                <td class="small muted">${App.escapeHTML(a.note||'—')}</td>
                 <td>${canEdit ? `<button class="btn-ghost small ab-edit" data-pid="${a.personneId}" data-aid="${a.id}">✎</button> <button class="btn-ghost small ab-del" data-pid="${a.personneId}" data-aid="${a.id}">🗑</button>` : ''}</td>
               </tr>`;
             }).join('')}</tbody>
@@ -111,7 +111,7 @@ App.views.absences = {
       <div class="field"><label>Motif</label>
         <select id="ab-motif">${motifs.map(m => `<option ${m===a.motif?'selected':''}>${m}</option>`).join('')}</select>
       </div>
-      <div class="field"><label>Note (optionnelle)</label><input id="ab-note" value="${a.note||''}" placeholder="Précision, référence dossier…"></div>
+      <div class="field"><label>Note (optionnelle)</label><input id="ab-note" value="${App.escapeHTML(a.note||'')}" placeholder="Précision, référence dossier…"></div>
     `;
     const foot = `${!isNew?'<button class="btn btn-danger" id="ab-fdel">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>
       <button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>
@@ -206,7 +206,7 @@ App.views.absences = {
               : r.unknown
               ? `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap"><input type="checkbox" class="ab-unknown-cb" data-idx="${i}"> <span class="badge warn">inconnu · créer ?</span></label>`
               : '<span class="badge good">nouveau</span>';
-            return `<tr style="${rowStyle}"><td>${r.prenom} ${r.nomP}</td><td>${r.debut}</td><td>${r.fin}</td><td>${r.motif}</td><td>${status}</td></tr>`;
+            return `<tr style="${rowStyle}"><td>${App.escapeHTML(r.prenom)} ${App.escapeHTML(r.nomP)}</td><td>${r.debut}</td><td>${r.fin}</td><td>${App.escapeHTML(r.motif)}</td><td>${status}</td></tr>`;
           }).join('')}
           </tbody></table>`;
         const foot = `<button class="btn btn-secondary" onclick="App.closeModal()">Annuler</button>

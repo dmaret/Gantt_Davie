@@ -114,8 +114,8 @@ App.views.admin = {
       const groupeClass = u.groupe === 'admin' ? 'bad' : u.groupe === 'MSP' ? 'warn' : 'muted';
       const pw = u.passwordHash ? '<span class="badge good">🔒 défini</span>' : '<span class="badge muted">aucun</span>';
       return `<tr data-id="${u.id}" style="cursor:pointer">
-        <td><strong>${u.nom}</strong></td>
-        <td>${u.role||''}</td>
+        <td><strong>${App.escapeHTML(u.nom)}</strong></td>
+        <td>${App.escapeHTML(u.role||'')}</td>
         <td><span class="badge ${groupeClass}">${u.groupe||'—'}</span></td>
         <td>${(u.axes||[]).join(', ')||'—'}</td>
         <td>${pw}</td>
@@ -137,9 +137,9 @@ App.views.admin = {
     const u = id ? s.utilisateurs.find(x => x.id === id) : { id: DB.uid('U'), nom:'', role:'', groupe:'utilisateur', axes:[] };
     const axesCodes = (s.regle4A.axes || []).map(a => a.code);
     const body = `
-      <div class="field"><label>Nom complet</label><input id="uf-nom" value="${u.nom||''}"></div>
+      <div class="field"><label>Nom complet</label><input id="uf-nom" value="${App.escapeHTML(u.nom||'')}"></div>
       <div class="row">
-        <div class="field"><label>Rôle (libellé)</label><input id="uf-role" value="${u.role||''}"></div>
+        <div class="field"><label>Rôle (libellé)</label><input id="uf-role" value="${App.escapeHTML(u.role||'')}"></div>
         <div class="field"><label>Groupe d'accès</label>
           <select id="uf-groupe">
             ${Object.keys(s.groupes).map(g => `<option value="${g}" ${g===u.groupe?'selected':''}>${s.groupes[g].libelle}</option>`).join('')}

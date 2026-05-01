@@ -25,15 +25,15 @@ App.views.modeles = {
   renderCard(m) {
     const s = DB.state;
     const machine = DB.machine(m.machineId), lieu = DB.lieu(m.lieuId);
-    return `<div class="card" style="border-left:4px solid ${m.couleur||'#888'}">
+    return `<div class="card" style="border-left:4px solid ${App.safeColor(m.couleur||'#888')}">
       <div style="display:flex;justify-content:space-between;align-items:start">
         <div>
-          <h3 style="margin:0">${m.nom}</h3>
-          <div class="muted small">${m.type||''} · ${m.duree||1} j · ${lieu?lieu.nom:'—'}${machine?' · '+machine.nom:''}</div>
+          <h3 style="margin:0">${App.escapeHTML(m.nom)}</h3>
+          <div class="muted small">${App.escapeHTML(m.type||'')} · ${m.duree||1} j · ${lieu?App.escapeHTML(lieu.nom):'—'}${machine?' · '+App.escapeHTML(machine.nom):''}</div>
         </div>
         <span class="badge muted">${(m.competences||[]).length} compétence(s)</span>
       </div>
-      ${m.notes ? `<div class="small muted" style="margin-top:8px">📝 ${m.notes}</div>` : ''}
+      ${m.notes ? `<div class="small muted" style="margin-top:8px">📝 ${App.escapeHTML(m.notes)}</div>` : ''}
       <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
         ${(m.competences||[]).map(c => `<span class="chip small">${c}</span>`).join('')}
       </div>
@@ -55,7 +55,7 @@ App.views.modeles = {
     const allComps = [...new Set(s.personnes.flatMap(p => p.competences||[]))].sort();
     const body = `
       <div class="row">
-        <div class="field"><label>Nom du modèle</label><input id="mf-nom" value="${m.nom||''}" placeholder="Préparation commandes matin…"></div>
+        <div class="field"><label>Nom du modèle</label><input id="mf-nom" value="${App.escapeHTML(m.nom||'')}" placeholder="Préparation commandes matin…"></div>
         <div class="field"><label>Couleur</label><input type="color" id="mf-col" value="${m.couleur||'#2c5fb3'}"></div>
       </div>
       <div class="row">
@@ -78,7 +78,7 @@ App.views.modeles = {
         </select>
       </div>
       <div class="field"><label>Notes / consignes</label>
-        <textarea id="mf-notes" rows="3" placeholder="Instructions d'exécution récurrentes…">${m.notes||''}</textarea>
+        <textarea id="mf-notes" rows="3" placeholder="Instructions d'exécution récurrentes…">${App.escapeHTML(m.notes||'')}</textarea>
       </div>
     `;
     const foot = `${!isNew?'<button class="btn btn-danger" id="mf-del">Supprimer</button>':''}<span class="spacer" style="flex:1"></span>

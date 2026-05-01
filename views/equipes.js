@@ -33,17 +33,17 @@ App.views.equipes = {
         const candidats = s.personnes.filter(p => (p.competences||[]).includes(sl.competence));
         return `<div class="eq-slot">
           <span class="eq-slot-count">×${sl.n}</span>
-          <strong>${sl.competence}</strong>
+          <strong>${App.escapeHTML(sl.competence)}</strong>
           <span class="muted small"> · ${candidats.length} personne(s) avec cette compétence</span>
         </div>`;
       }).join('');
-      return `<div class="card eq-card" data-id="${eq.id}" style="border-left:4px solid ${eq.couleur||'#888'}">
+      return `<div class="card eq-card" data-id="${eq.id}" style="border-left:4px solid ${App.safeColor(eq.couleur||'#888')}">
         <div style="display:flex;justify-content:space-between;align-items:start">
           <div>
-            <h3 style="margin:0">${eq.nom}</h3>
+            <h3 style="margin:0">${App.escapeHTML(eq.nom)}</h3>
             <div class="muted small">${total} personne(s) · ${(eq.slots||[]).length} compétence(s)</div>
           </div>
-          <span class="badge" style="background:${eq.couleur}22;color:${eq.couleur}">${eq.id}</span>
+          <span class="badge" style="background:${App.safeColor(eq.couleur)}22;color:${App.safeColor(eq.couleur)}">${App.escapeHTML(eq.id)}</span>
         </div>
         <div style="margin-top:10px;margin-bottom:12px">${slotsHtml || '<span class="muted small">Aucun slot défini.</span>'}</div>
         <div style="display:flex;gap:8px;border-top:1px solid var(--border);padding-top:10px">
@@ -187,8 +187,8 @@ App.views.equipes = {
         const body = `<p class="muted small">${parsed.filter(r=>!r.existing).length} à créer · ${parsed.filter(r=>r.existing).length} à mettre à jour</p>
           <table class="data"><thead><tr><th>Équipe</th><th>Slots</th><th>Statut</th></tr></thead><tbody>
           ${parsed.map(eq => `<tr>
-            <td><span class="badge" style="background:${eq.couleur}22;color:${eq.couleur}">${eq.nom}</span></td>
-            <td>${eq.slots.map(sl=>`×${sl.n} ${sl.competence}`).join(', ')||'—'}</td>
+            <td><span class="badge" style="background:${App.safeColor(eq.couleur)}22;color:${App.safeColor(eq.couleur)}">${App.escapeHTML(eq.nom)}</span></td>
+            <td>${eq.slots.map(sl=>`×${sl.n} ${App.escapeHTML(sl.competence)}`).join(', ')||'—'}</td>
             <td><span class="badge ${eq.existing?'warn':'good'}">${eq.existing?'màj':'nouveau'}</span></td>
           </tr>`).join('')}
           </tbody></table>`;
@@ -234,7 +234,7 @@ App.views.equipes = {
     const body = `
       <div class="row">
         <div class="field"><label>Nom</label>
-          <input id="ef-nom" list="ef-nom-suggestions" value="${eq.nom||''}" placeholder="Ligne 1, Logistique 2, Assemblage…">
+          <input id="ef-nom" list="ef-nom-suggestions" value="${App.escapeHTML(eq.nom||'')}" placeholder="Ligne 1, Logistique 2, Assemblage…">
           <datalist id="ef-nom-suggestions">
             ${suggestedNames.filter(n => !existingNames.has(n.toLowerCase())).map(n => `<option value="${n}">`).join('')}
           </datalist>
