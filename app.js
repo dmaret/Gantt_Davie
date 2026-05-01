@@ -5,9 +5,16 @@ const App = {
   _navHistory: [],
   _navFuture: [],
 
-  init() {
-    DB.load();
+  async init() {
     this.applyTheme(localStorage.getItem('theme') || 'light');
+    if (!this.isAuthed()) { this.showLogin(); return; }
+
+    const vr = document.getElementById('view-root');
+    if (vr) vr.innerHTML = `<div style="text-align:center;padding:80px 20px;color:var(--text-muted)"><div style="font-size:36px;margin-bottom:12px">◆</div><div>Chargement…</div></div>`;
+
+    const ok = await DB.load();
+    if (!ok) { this.showLogin(); return; }
+
     this.bindTopbar();
     this.initSearchBar();
     this.populateUserSelect();
@@ -15,14 +22,9 @@ const App = {
     this.bellInterval = setInterval(() => this.updateBell(), 30000);
     this.initNotifications();
     this.applyGroupUI();
-    // Login au démarrage si pas de session authentifiée
-    if (!this.isAuthed()) {
-      this.showLogin();
-    } else {
-      this.navigate(location.hash.replace('#','') || 'dashboard');
-      if (!localStorage.getItem('atelier_tuto_seen')) {
-        setTimeout(() => this.showTutorial(false), 400);
-      }
+    this.navigate(location.hash.replace('#','') || 'dashboard');
+    if (!localStorage.getItem('atelier_tuto_seen')) {
+      setTimeout(() => this.showTutorial(false), 400);
     }
   },
 
@@ -46,32 +48,33 @@ const App = {
   },
 
   isAuthed() {
-    const id = sessionStorage.getItem('atelier_authed');
-    if (!id) return false;
-    const u = (DB.state.utilisateurs || []).find(x => x.id === id);
-    return !!u;
+    const token = localStorage.getItem('atelier_token');
+    if (!token) return false;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return !!payload.id && payload.exp > Math.floor(Date.now() / 1000);
+    } catch { return false; }
   },
 
   async login(userId, password) {
-    const u = (DB.state.utilisateurs || []).find(x => x.id === userId);
-    if (!u) return false;
-    // Pas de mot de passe défini → accès direct
-    if (!u.passwordHash) {
-      sessionStorage.setItem('atelier_authed', userId);
-      localStorage.setItem('atelier_user_id', userId);
-      return true;
-    }
     const h = await this.hash(password || '');
-    if (h === u.passwordHash) {
-      sessionStorage.setItem('atelier_authed', userId);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, passwordHash: h }),
+      });
+      if (!res.ok) return false;
+      const { token } = await res.json();
+      DB._setToken(token);
       localStorage.setItem('atelier_user_id', userId);
       return true;
-    }
-    return false;
+    } catch { return false; }
   },
 
   logout() {
-    sessionStorage.removeItem('atelier_authed');
+    DB._clearToken();
+    localStorage.removeItem('atelier_user_id');
     this.showLogin();
   },
 
@@ -86,13 +89,23 @@ const App = {
     DB.save();
   },
 
-  showLogin() {
+  async showLogin() {
     const existing = document.getElementById('login-overlay');
     if (existing) existing.remove();
+
+    // Affiche un loader pendant le fetch des utilisateurs
     const o = document.createElement('div');
     o.id = 'login-overlay';
     o.className = 'login-overlay';
-    const users = DB.state.utilisateurs || [];
+    o.innerHTML = `<div class="login-card"><div class="login-logo">◆</div><p class="muted">Chargement…</p></div>`;
+    document.body.appendChild(o);
+
+    let users = [];
+    try {
+      const res = await fetch('/api/auth/users');
+      if (res.ok) users = await res.json();
+    } catch { /* serveur non disponible */ }
+
     const curId = localStorage.getItem('atelier_user_id') || users[0]?.id || '';
     o.innerHTML = `<div class="login-card">
       <div class="login-logo">◆</div>
@@ -100,30 +113,26 @@ const App = {
       <p class="muted">Connecte-toi pour continuer</p>
       <label class="small" style="display:block;text-align:left;margin-top:14px">Utilisateur</label>
       <select id="login-user" class="login-input">
-        ${users.map(u => `<option value="${u.id}" ${u.id===curId?'selected':''}>${u.nom} · ${u.groupe}${u.passwordHash?' 🔒':''}</option>`).join('')}
+        ${users.map(u => `<option value="${u.id}" ${u.id===curId?'selected':''}>${this.escapeHTML(u.nom)} · ${this.escapeHTML(u.groupe)}${u.hasPassword?' 🔒':''}</option>`).join('')}
       </select>
       <label class="small" style="display:block;text-align:left;margin-top:10px">Mot de passe <span id="login-pw-hint" class="muted">(aucun — laisser vide)</span></label>
       <input type="password" id="login-pw" class="login-input" placeholder="••••••••" autofocus>
       <div id="login-error" class="login-error" style="display:none"></div>
       <button class="btn" id="login-btn" style="margin-top:14px;width:100%;padding:10px">Se connecter</button>
       ${this._pendingSwitch ? '<button class="btn btn-secondary" id="login-cancel" style="margin-top:6px;width:100%">Annuler (rester connecté·e comme avant)</button>' : ''}
-      <p class="muted small" style="margin-top:14px">Astuce : les utilisateurs sans cadenas 🔒 n'ont pas de mot de passe. Un admin peut en définir un dans la vue Admin (⚙).</p>
+      <p class="muted small" style="margin-top:14px">Les utilisateurs sans 🔒 n'ont pas de mot de passe. Un admin peut en définir un dans la vue Admin (⚙).</p>
     </div>`;
-    document.body.appendChild(o);
 
     const userSel = document.getElementById('login-user');
     const pwInput = document.getElementById('login-pw');
-    const hint = document.getElementById('login-pw-hint');
-    const errEl = document.getElementById('login-error');
-    const btn = document.getElementById('login-btn');
+    const hint    = document.getElementById('login-pw-hint');
+    const errEl   = document.getElementById('login-error');
+    const btn     = document.getElementById('login-btn');
 
     const refreshHint = () => {
       const u = users.find(x => x.id === userSel.value);
-      if (u && u.passwordHash) {
-        hint.textContent = '(obligatoire)'; hint.classList.remove('muted');
-      } else {
-        hint.textContent = '(aucun — laisser vide)'; hint.classList.add('muted');
-      }
+      if (u?.hasPassword) { hint.textContent = '(obligatoire)'; hint.classList.remove('muted'); }
+      else { hint.textContent = '(aucun — laisser vide)'; hint.classList.add('muted'); }
     };
     userSel.onchange = refreshHint;
     refreshHint();
@@ -135,6 +144,12 @@ const App = {
       btn.disabled = false; btn.textContent = 'Se connecter';
       if (ok) {
         document.getElementById('login-overlay').remove();
+        // Charge les données puis lance l'appli
+        const vr = document.getElementById('view-root');
+        if (vr) vr.innerHTML = `<div style="text-align:center;padding:80px;color:var(--text-muted)"><div style="font-size:36px;margin-bottom:12px">◆</div><div>Chargement…</div></div>`;
+        await DB.load();
+        this.bindTopbar();
+        this.initSearchBar();
         this.populateUserSelect();
         this.applyGroupUI();
         this.navigate(location.hash.replace('#','') || 'dashboard');
@@ -144,7 +159,7 @@ const App = {
         }
       } else {
         errEl.style.display = 'block';
-        errEl.textContent = '✗ Mot de passe incorrect';
+        errEl.textContent = '✗ Mot de passe incorrect ou utilisateur inconnu';
         pwInput.value = '';
         pwInput.focus();
       }
@@ -153,10 +168,9 @@ const App = {
     pwInput.onkeydown = e => { if (e.key === 'Enter') doLogin(); };
     const cancelBtn = document.getElementById('login-cancel');
     if (cancelBtn) cancelBtn.onclick = () => {
-      // Restaure la session précédente
-      const prevId = this._pendingSwitch.prevId;
-      sessionStorage.setItem('atelier_authed', prevId);
-      localStorage.setItem('atelier_user_id', prevId);
+      const prev = this._pendingSwitch;
+      if (prev?.prevToken) DB._setToken(prev.prevToken);
+      if (prev?.prevId) localStorage.setItem('atelier_user_id', prev.prevId);
       this._pendingSwitch = null;
       document.getElementById('login-overlay').remove();
       this.populateUserSelect();
@@ -199,9 +213,10 @@ const App = {
   },
   // Changement d'utilisateur : passe par l'écran de login pour re-authentifier
   setCurrentUser(id) {
-    const prev = sessionStorage.getItem('atelier_authed');
-    this._pendingSwitch = prev ? { prevId: prev } : null;
-    sessionStorage.removeItem('atelier_authed');
+    const prevToken = DB._token();
+    const prevId    = localStorage.getItem('atelier_user_id');
+    this._pendingSwitch = prevToken ? { prevToken, prevId } : null;
+    DB._clearToken();
     localStorage.setItem('atelier_user_id', id);
     this.showLogin();
   },
@@ -635,7 +650,7 @@ const App = {
   showTutorial(forceReplay) {
     const steps = [
       { icon:'👋', title:'Bienvenue sur Atelier · Planification',
-        body:'Application web 100% locale pour gérer personnes, projets, machines, lieux, stock, commandes et plannings.<br><br>Les données sont sauvegardées dans le navigateur (<code>localStorage</code>). Utilise <strong>Exporter</strong> régulièrement pour des sauvegardes JSON.' },
+        body:'Application web pour gérer personnes, projets, machines, lieux, stock, commandes et plannings.<br><br>Les données sont sauvegardées automatiquement sur le serveur. Accessible depuis n\'importe quel poste connecté.' },
       { icon:'🧭', title:'Navigation',
         body:'Utilise les onglets en haut ou les <strong>raccourcis clavier</strong> : <kbd>G</kbd> Gantt, <kbd>P</kbd> Personnes, <kbd>J</kbd> Projets, <kbd>O</kbd> Commandes, etc.<br><br><kbd>?</kbd> affiche la liste complète, <kbd>N</kbd> crée un élément, <kbd>/</kbd> focus la recherche, <kbd>Ctrl+K</kbd> recherche globale.' },
       { icon:'👥', title:'Utilisateurs & groupes',

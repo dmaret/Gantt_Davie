@@ -1,37 +1,34 @@
-// Données + persistance localStorage + seed réaliste
-const STORAGE_KEY = 'atelier_plan_v3';
-
+// Données + persistance API serveur + seed réaliste
 const DB = {
   state: null,
-  _computeChecksum(obj) {
-    const str = JSON.stringify(obj);
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash).toString(36);
-  },
-  load() {
+
+  // ─── Token JWT ─────────────────────────────────────────────────────────────
+  _token()       { return localStorage.getItem('atelier_token'); },
+  _setToken(t)   { localStorage.setItem('atelier_token', t); },
+  _clearToken()  { localStorage.removeItem('atelier_token'); },
+
+  async load() {
+    const token = this._token();
+    if (!token) { this.state = seed(); return false; }
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const data = JSON.parse(raw);
-        const checksum = localStorage.getItem(STORAGE_KEY + '_checksum');
-        const computedChecksum = this._computeChecksum(data);
-        if (checksum && checksum !== computedChecksum) {
-          console.warn('⚠️ Données corrompues ou modifiées');
-          App.toast('⚠️ Les données ont été modifiées. Restauration depuis le backup…', 'warn');
-        }
-        this.state = data;
-        this.migrate();
-        this._pushHistory();
-        return;
+      const res = await fetch('/api/state', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (res.status === 401) { this._clearToken(); this.state = seed(); return false; }
+      if (res.status === 404) {
+        // Première utilisation : créer le jeu de données initial
+        this.state = seed();
+        await this._saveNow();
+        return true;
       }
-    } catch (e) { console.warn('load failed', e); }
-    this.state = seed();
-    this.save();
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      this.state = await res.json();
+      this.migrate();
+      this._pushHistory();
+      return true;
+    } catch (e) {
+      console.warn('load failed', e);
+      this.state = seed();
+      return false;
+    }
   },
   migrate() {
     // Ajouts rétrocompatibles sans invalider le localStorage
@@ -175,19 +172,28 @@ const DB = {
     if (!p || !p.absences) return false;
     return p.absences.some(a => a.debut <= iso && a.fin >= iso);
   },
-  save() {
+  // Sauvegarde immédiate (async, sans debounce)
+  async _saveNow() {
+    const token = this._token();
+    if (!token) return;
     try {
-      const json = JSON.stringify(this.state);
-      localStorage.setItem(STORAGE_KEY, json);
-      localStorage.setItem(STORAGE_KEY + '_checksum', this._computeChecksum(this.state));
+      const res = await fetch('/api/state', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify(this.state),
+      });
+      if (res.status === 401) { this._clearToken(); }
     } catch (e) {
-      if (e.name === 'QuotaExceededError' || e.code === 22) {
-        console.error('localStorage quota dépassé');
-        if (window.App && App.toast) App.toast('⚠️ Stockage plein — données non sauvegardées', 'error');
-      }
+      console.error('save failed', e);
+      if (window.App && App.toast) App.toast('⚠️ Erreur de sauvegarde serveur', 'error');
     }
-    if (this._skipHistory) { this._skipHistory = false; return; }
-    this._pushHistory();
+  },
+  // Sauvegarde debouncée (800 ms) — appelée partout dans l'appli
+  save() {
+    if (!this._skipHistory) this._pushHistory();
+    this._skipHistory = false;
+    if (this._saveTimer) clearTimeout(this._saveTimer);
+    this._saveTimer = setTimeout(() => this._saveNow(), 800);
   },
   // Historique pour Undo/Redo (limité à 20 entrées)
   _history: [], _future: [],
@@ -204,11 +210,9 @@ const DB = {
     if (this._history.length < 2) return false;
     const current = this._history.pop();
     this._future.push(current);
-    const prev = this._history[this._history.length - 1];
-    this.state = JSON.parse(prev);
+    this.state = JSON.parse(this._history[this._history.length - 1]);
     this._skipHistory = true;
-    localStorage.setItem(STORAGE_KEY, prev);
-    localStorage.setItem(STORAGE_KEY + '_checksum', this._computeChecksum(this.state));
+    this.save();
     return true;
   },
   redo() {
@@ -217,8 +221,7 @@ const DB = {
     this._history.push(snap);
     this.state = JSON.parse(snap);
     this._skipHistory = true;
-    localStorage.setItem(STORAGE_KEY, snap);
-    localStorage.setItem(STORAGE_KEY + '_checksum', this._computeChecksum(this.state));
+    this.save();
     return true;
   },
   reset() { this.state = seed(); this.migrate(); this.save(); },
