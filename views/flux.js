@@ -66,6 +66,7 @@ App.views.flux = {
             ${(s.lieux||[]).map(l => `<option value="${l.id}" ${this.state.lieu===l.id?'selected':''}>${l.nom}</option>`).join('')}
           </select>
           <span class="spacer"></span>
+          <button class="btn-ghost" id="fx-print" title="Imprimer le tableau des tâches par machine">⎙ Imprimer</button>
           <div style="display:flex;gap:2px;">${viewBtns}</div>
           ${canvasControls}${swimZoom}
         </div>
@@ -88,6 +89,7 @@ App.views.flux = {
 
     document.getElementById('fx-proj').onchange = e => { this.state.projet = e.target.value; this.render(root); };
     document.getElementById('fx-lieu').onchange = e => { this.state.lieu = e.target.value; this.render(root); };
+    document.getElementById('fx-print').onclick = () => this._printFlux();
 
     if (this.state.viewMode === 'canvas') {
       const editEl = document.getElementById('fx-edit');
@@ -964,5 +966,61 @@ App.views.flux = {
         if (ttEl) ttEl.style.display = 'none';
       });
     });
+  },
+
+  _printFlux() {
+    const s = DB.state;
+    const machines = this._filtered();
+    const today = D.today();
+    const esc = v => App.escapeHTML(String(v || ''));
+    const sc = c => App.safeColor(c);
+
+    const tasks = s.taches.filter(t => t.machineId && t.avancement < 100 && t.fin >= D.addDays(today, -30));
+    const byLieu = {};
+    const noLieu = [];
+    machines.forEach(m => {
+      if (m.lieuId) { if (!byLieu[m.lieuId]) byLieu[m.lieuId] = []; byLieu[m.lieuId].push(m); }
+      else noLieu.push(m);
+    });
+
+    const css = `body{font-family:system-ui,sans-serif;margin:20px;font-size:11px;color:#222}h1{font-size:15px;margin:0 0 2px}h2{font-size:12px;margin:10px 0 3px;padding:3px 8px;background:#f0f0f0;border-radius:3px}h3{font-size:11px;margin:6px 0 2px;font-weight:600}.sub{color:#777;font-size:9px;margin:0 0 10px}table{width:100%;border-collapse:collapse;margin-bottom:8px}th,td{padding:3px 7px;border:1px solid #ddd;text-align:left;font-size:10px}th{background:#f5f5f5;font-weight:600}tr:nth-child(even)td{background:#fafafa}.b{display:inline-block;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:600}.ret{color:#dc2626}@media print{@page{size:A4 landscape;margin:10mm}}`;
+
+    const renderMachineTables = ms => {
+      let html = '';
+      ms.forEach(m => {
+        const mTasks = tasks.filter(t => t.machineId === m.id).sort((a,b) => a.debut.localeCompare(b.debut));
+        if (!mTasks.length) return;
+        html += `<h3>🔧 ${esc(m.nom)}${m.type ? ` <span style="color:#777;font-weight:400">(${esc(m.type)})</span>` : ''}</h3>`;
+        html += `<table><thead><tr><th>Tâche</th><th>Projet</th><th>Début</th><th>Fin</th><th>Assignés</th><th>Av.</th><th>Statut</th></tr></thead><tbody>`;
+        mTasks.forEach(t => {
+          const prj = DB.projet(t.projetId);
+          const ass = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join(', ') || '—';
+          const av = t.avancement || 0;
+          const retard = t.fin < today;
+          const col = sc(prj?.couleur || '#888');
+          const statut = retard ? `<span class="ret">⚠ Retard</span>` : av === 0 ? 'À démarrer' : `En cours`;
+          html += `<tr><td>${esc(t.nom)}</td><td><span class="b" style="background:${col}22;color:${col}">${esc(prj?.code||'—')}</span></td><td>${D.fmt(t.debut)}</td><td class="${retard?'ret':''}">${D.fmt(t.fin)}</td><td>${esc(ass)}</td><td>${av}%</td><td>${statut}</td></tr>`;
+        });
+        html += `</tbody></table>`;
+      });
+      return html;
+    };
+
+    let body = `<h1>Flux atelier — ${D.fmt(today)}</h1><p class="sub">${machines.length} machine(s) · ${tasks.length} tâche(s) en cours / à venir</p>`;
+    s.lieux.forEach(l => {
+      const ms = byLieu[l.id];
+      if (!ms?.length) return;
+      const rows = renderMachineTables(ms);
+      if (rows) body += `<h2>📍 ${esc(l.nom)}</h2>${rows}`;
+    });
+    if (noLieu.length) {
+      const rows = renderMachineTables(noLieu);
+      if (rows) body += `<h2>📋 Sans lieu</h2>${rows}`;
+    }
+    if (!body.includes('<table>')) body += `<p style="color:#999">Aucune tâche en cours sur ces machines.</p>`;
+
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Flux atelier</title><style>${css}</style></head><body>${body}<script>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+    w.document.close();
   },
 };

@@ -265,6 +265,70 @@ App.views.gantt = {
     this.render(document.getElementById('view-root'));
   },
 
+  _printTableau() {
+    const s = DB.state;
+    const st = this.state;
+    const today = D.today();
+    const start = st.rangeStart || D.addDays(today, -7);
+    const end = D.addDays(start, st.rangeDays || 30);
+    const esc = v => App.escapeHTML(String(v || ''));
+    const sc = c => App.safeColor(c);
+
+    let taches = s.taches.filter(t => !t.jalon && t.fin >= start && t.debut <= end);
+    if (st.projetFilter) taches = taches.filter(t => t.projetId === st.projetFilter);
+    if (st.search) taches = taches.filter(t => t.nom.toLowerCase().includes(st.search));
+
+    const groups = [];
+    if (st.mode === 'personne') {
+      const byPers = {};
+      taches.forEach(t => {
+        const ids = t.assignes && t.assignes.length ? t.assignes : ['__none__'];
+        ids.forEach(pid => { if (!byPers[pid]) byPers[pid] = []; byPers[pid].push(t); });
+      });
+      s.personnes.forEach(p => { if (byPers[p.id]) groups.push({ label: App.personneLabel(p), tasks: byPers[p.id].sort((a,b) => a.debut.localeCompare(b.debut)) }); });
+      if (byPers['__none__']) groups.push({ label: 'Non assigné', tasks: byPers['__none__'].sort((a,b) => a.debut.localeCompare(b.debut)) });
+    } else if (st.mode === 'machine') {
+      const byMach = {};
+      taches.forEach(t => { const mid = t.machineId || '__none__'; if (!byMach[mid]) byMach[mid] = []; byMach[mid].push(t); });
+      s.machines.forEach(m => { if (byMach[m.id]) groups.push({ label: m.nom, tasks: byMach[m.id].sort((a,b) => a.debut.localeCompare(b.debut)) }); });
+      if (byMach['__none__']) groups.push({ label: 'Sans machine', tasks: byMach['__none__'].sort((a,b) => a.debut.localeCompare(b.debut)) });
+    } else if (st.mode === 'lieu') {
+      const byLieu = {};
+      taches.forEach(t => { const lid = t.lieuId || '__none__'; if (!byLieu[lid]) byLieu[lid] = []; byLieu[lid].push(t); });
+      s.lieux.forEach(l => { if (byLieu[l.id]) groups.push({ label: l.nom, tasks: byLieu[l.id].sort((a,b) => a.debut.localeCompare(b.debut)) }); });
+      if (byLieu['__none__']) groups.push({ label: 'Sans lieu', tasks: byLieu['__none__'].sort((a,b) => a.debut.localeCompare(b.debut)) });
+    } else {
+      const byProj = {};
+      taches.forEach(t => { const pid = t.projetId || '__none__'; if (!byProj[pid]) byProj[pid] = []; byProj[pid].push(t); });
+      s.projets.forEach(p => { if (byProj[p.id]) groups.push({ label: `${p.code} — ${p.nom}`, tasks: byProj[p.id].sort((a,b) => a.debut.localeCompare(b.debut)) }); });
+      if (byProj['__none__']) groups.push({ label: 'Sans projet', tasks: byProj['__none__'].sort((a,b) => a.debut.localeCompare(b.debut)) });
+    }
+
+    const css = `body{font-family:system-ui,sans-serif;margin:20px;font-size:11px;color:#222}h1{font-size:15px;margin:0 0 2px}h2{font-size:12px;margin:10px 0 3px;padding:3px 8px;background:#f0f0f0;border-radius:3px}.sub{color:#777;font-size:9px;margin:0 0 10px}table{width:100%;border-collapse:collapse;margin-bottom:8px}th,td{padding:3px 7px;border:1px solid #ddd;text-align:left;font-size:10px}th{background:#f5f5f5;font-weight:600}tr:nth-child(even)td{background:#fafafa}.b{display:inline-block;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:600}@media print{@page{size:A4 landscape;margin:10mm}}`;
+    let body = `<h1>Planning — ${D.fmt(start)} → ${D.fmt(end)}</h1><p class="sub">Généré le ${D.fmt(today)} · ${taches.length} tâche(s)</p>`;
+
+    if (!groups.length || !taches.length) {
+      body += `<p style="color:#999">Aucune tâche sur cette période.</p>`;
+    } else {
+      groups.forEach(g => {
+        body += `<h2>${esc(g.label)}</h2><table><thead><tr><th>Tâche</th><th>Projet</th><th>Début</th><th>Fin</th><th>Lieu</th><th>Assignés</th><th>Av.</th></tr></thead><tbody>`;
+        g.tasks.forEach(t => {
+          const prj = DB.projet(t.projetId);
+          const lieu = DB.lieu(t.lieuId);
+          const ass = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join(', ') || '—';
+          const av = t.avancement || 0;
+          const col = sc(prj?.couleur || '#888');
+          body += `<tr><td>${esc(t.nom)}${av===100?' ✓':''}</td><td><span class="b" style="background:${col}22;color:${col}">${esc(prj?.code||'—')}</span></td><td>${D.fmt(t.debut)}</td><td>${D.fmt(t.fin)}</td><td>${esc(lieu?.nom||'—')}</td><td>${esc(ass)}</td><td>${av}%</td></tr>`;
+        });
+        body += `</tbody></table>`;
+      });
+    }
+
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Planning</title><style>${css}</style></head><body>${body}<script>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+    w.document.close();
+  },
+
   showRapportHebdo() {
     const s = DB.state;
     const today = D.today();
@@ -468,6 +532,7 @@ App.views.gantt = {
           <button class="btn-ghost" id="g-csv">⤓ Exporter CSV</button>
           <button class="btn-ghost" id="g-ics" title="Exporter vers Outlook / Google Agenda / Apple Calendar">📅 Export .ics</button>
           <button class="btn-ghost" id="g-rapport" title="Rapport hebdomadaire imprimable par lieu">📋 Rapport</button>
+          <button class="btn-ghost" id="g-print" title="Imprimer le planning courant sous forme de tableau">⎙ Tableau</button>
           <button class="btn-ghost" id="g-flux" title="Vue flux atelier — schéma machines & dépendances">🔗 Flux</button>
           <button class="btn-ghost" id="g-level" data-perm="edit" title="Détecter les surcharges et proposer un rééquilibrage automatique des ressources">⚖ Équilibrer</button>
           <button class="btn-ghost" id="g-baseline" data-perm="edit" title="Sauvegarder l'état actuel du planning comme référence (baseline)">📸 Baseline</button>
@@ -530,6 +595,7 @@ App.views.gantt = {
     };
     document.getElementById('g-ics').onclick = () => this.exportICS();
     document.getElementById('g-rapport').onclick = () => this.showRapportHebdo();
+    document.getElementById('g-print').onclick = () => this._printTableau();
     document.getElementById('g-flux').onclick = () => {
       if (st.projetFilter) App.views.flux.state.projet = st.projetFilter;
       App.navigate('flux');

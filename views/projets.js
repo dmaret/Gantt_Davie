@@ -32,6 +32,7 @@ App.views.projets = {
         <button class="btn-ghost" id="prj-tpl" data-perm="edit">⬇ Modèle</button>
         <button class="btn-ghost" id="prj-import" data-perm="edit">⬆ Importer</button>
         <button class="btn-ghost" id="prj-csv">⤓ Exporter CSV</button>
+        <button class="btn-ghost" id="prj-print" title="Imprimer le tableau récapitulatif des projets">⎙ Tableau</button>
         <button class="btn" id="prj-add">+ Nouveau projet</button>
       </div>
       ${emptyState || cardsHtml}
@@ -43,6 +44,7 @@ App.views.projets = {
     document.getElementById('prj-import').onclick = () => document.getElementById('prj-import-file').click();
     document.getElementById('prj-import-file').onchange = e => { if (e.target.files[0]) this.importFile(e.target.files[0]); e.target.value = ''; };
     document.getElementById('prj-csv').onclick = () => this.exportCSV();
+    document.getElementById('prj-print').onclick = () => this._printTableau();
     root.querySelectorAll('.prj-card').forEach(c => c.onclick = e => {
       if (e.target.closest('.prj-report')) return;
       this.openForm(c.dataset.id);
@@ -537,6 +539,33 @@ App.views.projets = {
       ['Code','Nom','Client','Couleur (#hex)','Début (YYYY-MM-DD)','Fin (YYYY-MM-DD)','Étage','Priorité (haute/moyenne/basse)','Statut (planifié/en-cours/terminé/annulé)'],
       ['PRJ-G','Nouveau projet G','Client SA','#2563eb','2026-06-01','2026-09-30','2e','haute','planifié'],
     ]);
+  },
+
+  _printTableau() {
+    const s = DB.state;
+    const today = D.today();
+    const esc = v => App.escapeHTML(String(v || ''));
+    const sc = c => App.safeColor(c);
+
+    const projets = s.projets.slice().sort((a,b) => (a.groupe||'').localeCompare(b.groupe||'') || (a.code||'').localeCompare(b.code||''));
+    const css = `body{font-family:system-ui,sans-serif;margin:20px;font-size:11px;color:#222}h1{font-size:15px;margin:0 0 2px}.sub{color:#777;font-size:9px;margin:0 0 10px}table{width:100%;border-collapse:collapse}th,td{padding:4px 8px;border:1px solid #ddd;text-align:left;font-size:10px}th{background:#f5f5f5;font-weight:600}tr:nth-child(even)td{background:#fafafa}.b{display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600}@media print{@page{size:A4 landscape;margin:10mm}}`;
+
+    let body = `<h1>Tableau des projets — ${D.fmt(today)}</h1><p class="sub">${projets.length} projet(s)</p>`;
+    body += `<table><thead><tr><th>Code</th><th>Nom</th><th>Client</th><th>Groupe</th><th>Statut</th><th>Début</th><th>Fin</th><th>Avancement</th><th>Tâches</th></tr></thead><tbody>`;
+    projets.forEach(p => {
+      const taches = s.taches.filter(t => t.projetId === p.id && !t.jalon);
+      const av = taches.length ? Math.round(taches.reduce((n, t) => n + (t.avancement||0), 0) / taches.length) : 0;
+      const debut = taches.length ? taches.reduce((m, t) => t.debut < m ? t.debut : m, '9999') : (p.debut || '');
+      const fin   = taches.length ? taches.reduce((m, t) => t.fin   > m ? t.fin   : m, '0000') : (p.fin   || '');
+      const col = sc(p.couleur || '#888');
+      const statutColor = p.statut === 'clos' ? '#6b7280' : p.statut === 'actif' ? '#059669' : '#f59e0b';
+      body += `<tr><td><span class="b" style="background:${col}22;color:${col}">${esc(p.code)}</span></td><td><strong>${esc(p.nom)}</strong></td><td>${esc(p.client||'—')}</td><td>${esc(p.groupe||'—')}</td><td><span class="b" style="color:${statutColor}">${esc(p.statut||'—')}</span></td><td>${debut && debut!=='9999' ? D.fmt(debut) : '—'}</td><td>${fin && fin!=='0000' ? D.fmt(fin) : '—'}</td><td>${av}%</td><td>${taches.length}</td></tr>`;
+    });
+    body += `</tbody></table>`;
+
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Tableau projets</title><style>${css}</style></head><body>${body}<script>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+    w.document.close();
   },
 
   importFile(file) {

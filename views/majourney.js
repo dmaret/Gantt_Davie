@@ -112,6 +112,7 @@ App.views.majourney = {
         <button class="btn-ghost" id="mj-prev">‹</button>
         <button class="btn-ghost${st.weekOffset===0?' active':''}" id="mj-today" style="font-size:12px">Aujourd'hui</button>
         <button class="btn-ghost" id="mj-next">›</button>
+        <button class="btn-ghost" id="mj-print" title="Imprimer les tâches de la semaine">⎙ Imprimer</button>
       </div>
 
       <div class="grid grid-3" style="margin-bottom:14px">
@@ -153,6 +154,7 @@ App.views.majourney = {
     document.getElementById('mj-prev').onclick   = () => { st.weekOffset--; App.refresh(); };
     document.getElementById('mj-next').onclick   = () => { st.weekOffset++; App.refresh(); };
     document.getElementById('mj-today').onclick  = () => { st.weekOffset = 0; App.refresh(); };
+    document.getElementById('mj-print').onclick  = () => this._printPersonal(personne, tachesSemaine, weekStart, weekEnd, today);
     if (showSelector) {
       const sel = document.getElementById('mj-personne-sel');
       if (sel) sel.onchange = e => { st.selectedPersonneId = e.target.value; App.refresh(); };
@@ -459,6 +461,46 @@ App.views.majourney = {
         <span class="alert-arrow">›</span>
       </li>`;
     }).join('')}</ul>`;
+  },
+
+  _printPersonal(personne, tachesSemaine, weekStart, weekEnd, today) {
+    const s = DB.state;
+    const esc = v => App.escapeHTML(String(v || ''));
+    const sc = c => App.safeColor(c);
+    const label = personne ? App.personneLabel(personne) : 'Inconnu';
+
+    const css = `body{font-family:system-ui,sans-serif;margin:20px;font-size:11px;color:#222}h1{font-size:15px;margin:0 0 2px}h2{font-size:12px;margin:10px 0 3px;padding:3px 8px;background:#f0f0f0;border-radius:3px}.sub{color:#777;font-size:9px;margin:0 0 10px}table{width:100%;border-collapse:collapse;margin-bottom:8px}th,td{padding:3px 7px;border:1px solid #ddd;text-align:left;font-size:10px}th{background:#f5f5f5;font-weight:600}tr:nth-child(even)td{background:#fafafa}.b{display:inline-block;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:600}.ret{color:#dc2626}@media print{@page{size:A4 portrait;margin:10mm}}`;
+
+    let body = `<h1>Ma journée — ${esc(label)}</h1><p class="sub">${D.fmt(weekStart)} → ${D.fmt(weekEnd)} · Généré le ${D.fmt(today)}</p>`;
+
+    body += `<h2>Tâches de la semaine (${tachesSemaine.length})</h2>`;
+    if (tachesSemaine.length) {
+      body += `<table><thead><tr><th>Tâche</th><th>Projet</th><th>Début</th><th>Fin</th><th>Lieu</th><th>Av.</th></tr></thead><tbody>`;
+      tachesSemaine.slice().sort((a,b) => a.debut.localeCompare(b.debut)).forEach(t => {
+        const prj = DB.projet(t.projetId);
+        const lieu = DB.lieu(t.lieuId);
+        const av = t.avancement || 0;
+        const col = sc(prj?.couleur || '#888');
+        const retard = t.fin < today && av < 100;
+        body += `<tr${retard?' class="ret"':''}><td>${esc(t.nom)}${av===100?' ✓':''}</td><td><span class="b" style="background:${col}22;color:${col}">${esc(prj?.code||'—')}</span></td><td>${D.fmt(t.debut)}</td><td>${D.fmt(t.fin)}</td><td>${esc(lieu?.nom||'—')}</td><td>${av}%</td></tr>`;
+      });
+      body += `</tbody></table>`;
+    } else {
+      body += `<p style="color:#999">Aucune tâche sur cette semaine.</p>`;
+    }
+
+    if (personne) {
+      const absences = (personne.absences||[]).filter(a => a.debut <= weekEnd && a.fin >= weekStart);
+      if (absences.length) {
+        body += `<h2>Absences</h2><table><thead><tr><th>Motif</th><th>Début</th><th>Fin</th></tr></thead><tbody>`;
+        absences.forEach(a => { body += `<tr><td>${esc(a.motif||'Absence')}</td><td>${D.fmt(a.debut)}</td><td>${D.fmt(a.fin)}</td></tr>`; });
+        body += `</tbody></table>`;
+      }
+    }
+
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Ma journée — ${esc(label)}</title><style>${css}</style></head><body>${body}<script>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+    w.document.close();
   },
 
   draw() {},
