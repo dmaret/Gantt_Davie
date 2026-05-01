@@ -176,8 +176,16 @@ const DB = {
     return p.absences.some(a => a.debut <= iso && a.fin >= iso);
   },
   save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
-    localStorage.setItem(STORAGE_KEY + '_checksum', this._computeChecksum(this.state));
+    try {
+      const json = JSON.stringify(this.state);
+      localStorage.setItem(STORAGE_KEY, json);
+      localStorage.setItem(STORAGE_KEY + '_checksum', this._computeChecksum(this.state));
+    } catch (e) {
+      if (e.name === 'QuotaExceededError' || e.code === 22) {
+        console.error('localStorage quota dépassé');
+        if (window.App && App.toast) App.toast('⚠️ Stockage plein — données non sauvegardées', 'error');
+      }
+    }
     if (this._skipHistory) { this._skipHistory = false; return; }
     this._pushHistory();
   },
@@ -200,6 +208,7 @@ const DB = {
     this.state = JSON.parse(prev);
     this._skipHistory = true;
     localStorage.setItem(STORAGE_KEY, prev);
+    localStorage.setItem(STORAGE_KEY + '_checksum', this._computeChecksum(this.state));
     return true;
   },
   redo() {
@@ -209,10 +218,21 @@ const DB = {
     this.state = JSON.parse(snap);
     this._skipHistory = true;
     localStorage.setItem(STORAGE_KEY, snap);
+    localStorage.setItem(STORAGE_KEY + '_checksum', this._computeChecksum(this.state));
     return true;
   },
   reset() { this.state = seed(); this.migrate(); this.save(); },
-  importJSON(obj) { this.state = obj; this.save(); },
+  importJSON(obj) {
+    // Validation minimale de schéma pour bloquer les imports malformés
+    const required = ['taches','projets','personnes','lieux','machines','stock','utilisateurs'];
+    for (const k of required) {
+      if (!obj || !Array.isArray(obj[k])) throw new Error(`Champ manquant ou invalide : ${k}`);
+    }
+    if (typeof obj !== 'object' || Array.isArray(obj)) throw new Error('Format JSON invalide');
+    this.state = obj;
+    this.migrate();
+    this.save();
+  },
   exportJSON() { return JSON.stringify(this.state, null, 2); },
 
   // Helpers

@@ -291,16 +291,17 @@ App.views.gantt = {
       const lieux = s.lieux.filter(l => l.type === 'production');
       const absents = s.personnes.filter(p => (p.absences||[]).some(a => a.debut<=to && a.fin>=from));
       let html = `<h3 style="margin:0 0 4px">Semaine ${wn} · ${D.fmt(from)} – ${D.fmt(to)}</h3><p class="muted small" style="margin:0 0 14px">Généré le ${D.fmt(today)} · ${taches.length} tâche(s)</p>`;
+      const resc = App.escapeHTML.bind(App);
       lieux.forEach(l => {
         const lt = taches.filter(t => t.lieuId === l.id).sort((a,b)=>a.debut.localeCompare(b.debut));
         if (!lt.length) return;
-        html += `<div style="margin-bottom:14px"><h4 style="margin:0 0 5px;padding:3px 8px;background:var(--surface-2);border-radius:4px">📍 ${l.nom}</h4><table class="data"><thead><tr><th>Tâche</th><th>Projet</th><th>Début</th><th>Fin</th><th>Assignés</th><th>Av.</th></tr></thead><tbody>
-          ${lt.map(t => { const prj=DB.projet(t.projetId); const pers=(t.assignes||[]).map(pid=>DB.personne(pid)).filter(Boolean).map(p=>App.personneLabel(p)).join(', ')||'—'; const av=t.avancement||0; return `<tr><td>${t.nom}${av===100?' ✓':''}</td><td><span class="badge" style="background:${prj?.couleur||'#888'}22;color:${prj?.couleur||'#888'}">${prj?.code||'?'}</span></td><td class="nowrap">${D.fmt(t.debut)}</td><td class="nowrap">${D.fmt(t.fin)}</td><td>${pers}</td><td><div class="bar-inline${av>=100?' good':av>=50?'':' warn'}" style="width:50px"><div class="fill" style="width:${av}%"></div></div> ${av}%</td></tr>`; }).join('')}
+        html += `<div style="margin-bottom:14px"><h4 style="margin:0 0 5px;padding:3px 8px;background:var(--surface-2);border-radius:4px">📍 ${resc(l.nom)}</h4><table class="data"><thead><tr><th>Tâche</th><th>Projet</th><th>Début</th><th>Fin</th><th>Assignés</th><th>Av.</th></tr></thead><tbody>
+          ${lt.map(t => { const prj=DB.projet(t.projetId); const pers=(t.assignes||[]).map(pid=>DB.personne(pid)).filter(Boolean).map(p=>App.personneLabel(p)).join(', ')||'—'; const av=t.avancement||0; return `<tr><td>${resc(t.nom)}${av===100?' ✓':''}</td><td><span class="badge" style="background:${prj?.couleur||'#888'}22;color:${prj?.couleur||'#888'}">${resc(prj?.code||'?')}</span></td><td class="nowrap">${D.fmt(t.debut)}</td><td class="nowrap">${D.fmt(t.fin)}</td><td>${pers}</td><td><div class="bar-inline${av>=100?' good':av>=50?'':' warn'}" style="width:50px"><div class="fill" style="width:${av}%"></div></div> ${av}%</td></tr>`; }).join('')}
           </tbody></table></div>`;
       });
       const autres = taches.filter(t => !lieux.find(l=>l.id===t.lieuId)).sort((a,b)=>a.debut.localeCompare(b.debut));
-      if (autres.length) html += `<div style="margin-bottom:14px"><h4 style="margin:0 0 5px;padding:3px 8px;background:var(--surface-2);border-radius:4px">📋 Autres tâches</h4><ul class="list">${autres.map(t=>{const prj=DB.projet(t.projetId);const pers=(t.assignes||[]).map(pid=>DB.personne(pid)).filter(Boolean).map(p=>App.personneLabel(p)).join(', ');return `<li><span class="badge" style="background:${prj?.couleur||'#888'}22;color:${prj?.couleur||'#888'}">${prj?.code||'?'}</span> <strong>${t.nom}</strong><span class="muted small"> · ${pers||'—'} · ${D.fmt(t.debut)}→${D.fmt(t.fin)} · ${t.avancement||0}%</span></li>`;}).join('')}</ul></div>`;
-      if (absents.length) html += `<div><h4 style="margin:0 0 5px;padding:3px 8px;background:#fff3cd;border-radius:4px">🏖 Absences</h4><ul class="list">${absents.map(p=>{return (p.absences||[]).filter(a=>a.debut<=to&&a.fin>=from).map(a=>`<li><strong>${App.personneLabel(p)}</strong><span class="muted small"> · ${a.motif||'Absence'} · ${D.fmt(a.debut)}→${D.fmt(a.fin)}</span></li>`).join('');}).join('')}</ul></div>`;
+      if (autres.length) html += `<div style="margin-bottom:14px"><h4 style="margin:0 0 5px;padding:3px 8px;background:var(--surface-2);border-radius:4px">📋 Autres tâches</h4><ul class="list">${autres.map(t=>{const prj=DB.projet(t.projetId);const pers=(t.assignes||[]).map(pid=>DB.personne(pid)).filter(Boolean).map(p=>App.personneLabel(p)).join(', ');return `<li><span class="badge" style="background:${prj?.couleur||'#888'}22;color:${prj?.couleur||'#888'}">${resc(prj?.code||'?')}</span> <strong>${resc(t.nom)}</strong><span class="muted small"> · ${pers||'—'} · ${D.fmt(t.debut)}→${D.fmt(t.fin)} · ${t.avancement||0}%</span></li>`;}).join('')}</ul></div>`;
+      if (absents.length) html += `<div><h4 style="margin:0 0 5px;padding:3px 8px;background:#fff3cd;border-radius:4px">🏖 Absences</h4><ul class="list">${absents.map(p=>{return (p.absences||[]).filter(a=>a.debut<=to&&a.fin>=from).map(a=>`<li><strong>${App.personneLabel(p)}</strong><span class="muted small"> · ${resc(a.motif||'Absence')} · ${D.fmt(a.debut)}→${D.fmt(a.fin)}</span></li>`).join('');}).join('')}</ul></div>`;
       if (!taches.length && !absents.length) html += '<p class="muted">Aucune tâche ni absence sur cette période.</p>';
       document.getElementById('rp-content').innerHTML = html;
     };
@@ -624,12 +625,12 @@ App.views.gantt = {
       const isProjectGroup = g.label && g.label.match(/^PRJ-/);
       const groupRowClass = isProjectGroup ? 'group-project' : 'group-other';
 
-      labelRows.push(`<div class="gantt-cell label group ${groupRowClass}">${g.label} <span style="font-size:10px;font-weight:400;opacity:.6">(${g.items.length})</span></div>`);
+      labelRows.push(`<div class="gantt-cell label group ${groupRowClass}">${App.escapeHTML(g.label)} <span style="font-size:10px;font-weight:400;opacity:.6">(${g.items.length})</span></div>`);
       for (let i=0; i<totalCols; i++) dayRows.push(`<div class="gantt-cell group ${groupRowClass} ${dayClasses(colToDate(i))}"></div>`);
 
       g.items.forEach(it => {
         const t = it.tache;
-        labelRows.push(`<div class="gantt-cell label" title="${t.nom}">${t.nom}</div>`);
+        labelRows.push(`<div class="gantt-cell label" title="${App.escapeHTML(t.nom)}">${App.escapeHTML(t.nom)}</div>`);
         for (let i=0; i<totalCols; i++) dayRows.push(`<div class="gantt-cell ${dayClasses(colToDate(i))}"></div>`);
       });
     });
@@ -677,7 +678,6 @@ App.views.gantt = {
         const isConflict = confPersons.has(t.id) || confMachines.has(t.id);
         const crit = isCritical(t);
         const color = prj ? prj.couleur : '#888';
-        const label = t.jalon ? '' : (t.nom + ' · ' + Math.round(t.avancement||0) + '%');
         barPos[t.id] = { left, right: left + width, top: top + 11, mid: top + 11 };
         // Ghost bar baseline
         if (st.baselineId && !t.jalon) {
@@ -699,14 +699,16 @@ App.views.gantt = {
         const avPct = Math.min(100, Math.max(0, t.avancement||0));
         const progressW = Math.round(avPct/100*width);
         if (t.jalon) {
-          bars.push(`<div class="gantt-bar milestone ${cls}" style="left:${left+width/2-7}px;top:${top+2}px;background:${color}" data-tid="${t.id}" title="${t.nom}"></div>`);
+          bars.push(`<div class="gantt-bar milestone ${cls}" style="left:${left+width/2-7}px;top:${top+2}px;background:${color}" data-tid="${t.id}" title="${App.escapeHTML(t.nom)}"></div>`);
         } else {
           const nComments = (t.commentaires||[]).length;
           const badge = nComments ? `<span class="gantt-bar-comment" title="${nComments} commentaire(s)">💬</span>` : '';
           const overdueBadge = overdue ? '<span class="gantt-bar-overdue" title="En retard !">⚠</span>' : '';
           const clTotal = (t.checklist||[]).length, clDone = (t.checklist||[]).filter(i=>i.done).length;
           const clBadge = clTotal ? `<span class="gantt-bar-cl" title="${clDone}/${clTotal} sous-tâche(s)">${clDone===clTotal?'☑':'☐'}${clDone}/${clTotal}</span>` : '';
-          bars.push(`<div class="gantt-bar ${cls}" style="left:${left}px;width:${width}px;top:${top}px;height:22px;background:${color}" data-tid="${t.id}" title="${t.nom} — ${D.fmt(t.debut)} → ${D.fmt(t.fin)}${crit?' [critique]':''}${overdue?' ⚠ En retard':''}${nComments?' · '+nComments+' commentaire(s)':''}"><div class="gantt-bar-progress" style="width:${progressW}px"></div>${overdueBadge}<span class="gantt-bar-label">${label}</span>${clBadge}${badge}</div>`);
+          const enom = App.escapeHTML(t.nom);
+          const elabel = t.jalon ? '' : (enom + ' · ' + Math.round(t.avancement||0) + '%');
+          bars.push(`<div class="gantt-bar ${cls}" style="left:${left}px;width:${width}px;top:${top}px;height:22px;background:${color}" data-tid="${t.id}" title="${enom} — ${D.fmt(t.debut)} → ${D.fmt(t.fin)}${crit?' [critique]':''}${overdue?' ⚠ En retard':''}${nComments?' · '+nComments+' commentaire(s)':''}"><div class="gantt-bar-progress" style="width:${progressW}px"></div>${overdueBadge}<span class="gantt-bar-label">${elabel}</span>${clBadge}${badge}</div>`);
           if (App.can('edit')) {
             bars.push(`<div class="gantt-resize-handle" data-tid="${t.id}" style="left:${left+width-5}px;top:${top}px;height:22px" title="Glisser pour modifier la durée"></div>`);
           }
@@ -801,15 +803,16 @@ App.views.gantt = {
           const dur = D.workdaysBetween(t.debut, t.fin);
           const av = t.avancement || 0;
           const nComm = (t.commentaires||[]).length;
+          const esc = App.escapeHTML.bind(App);
           tip.innerHTML = [
-            `<div class="gantt-tooltip-title" style="color:${prj?.couleur||'inherit'}">${prj?`<span style="opacity:.7;font-weight:400">[${prj.code}]</span> `:''}${t.nom}</div>`,
+            `<div class="gantt-tooltip-title" style="color:${prj?.couleur||'inherit'}">${prj?`<span style="opacity:.7;font-weight:400">[${esc(prj.code)}]</span> `:''}${esc(t.nom)}</div>`,
             `<div class="gantt-tooltip-row"><span class="tt-label">📅</span> ${D.fmt(t.debut)} → ${D.fmt(t.fin)} &nbsp;·&nbsp; <strong>${dur} j.o.</strong></div>`,
             av > 0 ? `<div class="gantt-tooltip-row"><span class="tt-label">⚡</span> <strong>${av}%</strong> avancé</div>` : '',
             assignes ? `<div class="gantt-tooltip-row"><span class="tt-label">👤</span> ${assignes}</div>` : '',
-            machine ? `<div class="gantt-tooltip-row"><span class="tt-label">⚙</span> ${machine}</div>` : '',
-            lieu ? `<div class="gantt-tooltip-row"><span class="tt-label">📍</span> ${lieu}</div>` : '',
+            machine ? `<div class="gantt-tooltip-row"><span class="tt-label">⚙</span> ${esc(machine)}</div>` : '',
+            lieu ? `<div class="gantt-tooltip-row"><span class="tt-label">📍</span> ${esc(lieu)}</div>` : '',
             nComm ? `<div class="gantt-tooltip-row"><span class="tt-label">💬</span> ${nComm} commentaire(s)</div>` : '',
-            t.notes ? `<div class="gantt-tooltip-row" style="margin-top:4px;font-size:11px;color:var(--text-muted);display:block">${t.notes.substring(0,100)}${t.notes.length>100?'…':''}</div>` : '',
+            t.notes ? `<div class="gantt-tooltip-row" style="margin-top:4px;font-size:11px;color:var(--text-muted);display:block">${esc(t.notes.substring(0,100))}${t.notes.length>100?'…':''}</div>` : '',
           ].filter(Boolean).join('');
           // Position: measure off-screen first
           tip.style.left = '-9999px'; tip.style.top = '0';
@@ -1007,7 +1010,7 @@ App.views.gantt = {
           <table class="data"><thead><tr><th>Projet</th><th>Tâche</th><th>Début</th><th>Fin</th><th>Statut</th></tr></thead><tbody>
           ${parsed.map(r => `<tr>
             <td>${r.prj?`<span class="badge" style="background:${r.prj.couleur}22;color:${r.prj.couleur}">${r.prj.code}</span>`:'<span class="badge bad">?</span>'}</td>
-            <td>${r.nom}</td><td>${r.debut}</td><td>${r.fin}</td>
+            <td>${App.escapeHTML(r.nom)}</td><td>${App.escapeHTML(r.debut)}</td><td>${App.escapeHTML(r.fin)}</td>
             <td>${r.errors.length?`<span class="badge bad">${r.errors.join(', ')}</span>`:r.existing?'<span class="badge warn">màj</span>':'<span class="badge good">nouveau</span>'}</td>
           </tr>`).join('')}
           </tbody></table>`;
@@ -1352,7 +1355,9 @@ App.views.gantt = {
         const items = document.getElementById('gabarit-items');
         const lbl = document.createElement('label');
         lbl.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;padding:2px 4px;border-radius:4px';
-        lbl.innerHTML = `<input type="checkbox" class="gabarit-cb" checked style="flex-shrink:0"> <span>${txt}</span>`;
+        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'gabarit-cb'; cb.checked = true; cb.style.flexShrink = '0';
+        const sp = document.createElement('span'); sp.textContent = txt;
+        lbl.appendChild(cb); lbl.appendChild(document.createTextNode(' ')); lbl.appendChild(sp);
         items.appendChild(lbl);
         addInput.value = '';
         addInput.focus();
@@ -1372,7 +1377,7 @@ App.views.gantt = {
         </div>
         <div id="gabarit-panel"></div>
       </div>` : ''}
-      <div class="field"><label>Nom</label><input id="f-nom" value="${t.nom||''}"></div>
+      <div class="field"><label>Nom</label><input id="f-nom" value="${App.escapeHTML(t.nom||'')}"></div>
       <div class="row">
         <div class="field"><label>Projet</label>
           <select id="f-projet">
@@ -1442,7 +1447,7 @@ App.views.gantt = {
       </div>
       <div class="field"><label>✅ Sous-tâches <span class="muted small" id="f-cl-count">${(t.checklist||[]).length ? (t.checklist||[]).filter(i=>i.done).length+'/'+(t.checklist||[]).length : ''}</span></label>
         <div id="f-cl-list" class="cl-list">
-          ${(t.checklist||[]).length ? (t.checklist||[]).map(item => `<div class="cl-item"><label class="cl-row${item.done?' cl-done':''}"><input type="checkbox" class="cl-cb" data-id="${item.id}" ${item.done?'checked':''}><span class="cl-text">${item.texte.replace(/</g,'&lt;')}</span></label><button class="btn-ghost cl-del" data-id="${item.id}" style="padding:0 6px;flex-shrink:0">×</button></div>`).join('') : '<p class="muted small" style="margin:4px 0">Aucune sous-tâche. Ajoute des étapes à cocher ci-dessous.</p>'}
+          ${(t.checklist||[]).length ? (t.checklist||[]).map(item => `<div class="cl-item"><label class="cl-row${item.done?' cl-done':''}"><input type="checkbox" class="cl-cb" data-id="${App.escapeHTML(item.id)}" ${item.done?'checked':''}><span class="cl-text">${App.escapeHTML(item.texte)}</span></label><button class="btn-ghost cl-del" data-id="${App.escapeHTML(item.id)}" style="padding:0 6px;flex-shrink:0">×</button></div>`).join('') : '<p class="muted small" style="margin:4px 0">Aucune sous-tâche. Ajoute des étapes à cocher ci-dessous.</p>'}
         </div>
         <div style="display:flex;gap:6px;margin-top:4px">
           <input id="f-cl-new" type="text" placeholder="Nouvelle sous-tâche (Entrée pour ajouter)…" style="flex:1">
@@ -1453,9 +1458,9 @@ App.views.gantt = {
         <div id="f-comments-list" class="comments-list">
           ${(t.commentaires||[]).length ? (t.commentaires||[]).slice().reverse().map(c => `
             <div class="comment-item" data-cid="${c.id}">
-              <div class="comment-head"><strong>${c.userName}</strong> <span class="muted small">· ${new Date(c.date).toLocaleString('fr-CH',{dateStyle:'short',timeStyle:'short'})}</span>
-              ${c.userId === App.currentUser().id ? `<button class="btn-ghost comment-del" data-cid="${c.id}" style="padding:0 6px;margin-left:auto" title="Supprimer">🗑</button>` : ''}</div>
-              <div class="comment-text">${c.texte.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>
+              <div class="comment-head"><strong>${App.escapeHTML(c.userName)}</strong> <span class="muted small">· ${new Date(c.date).toLocaleString('fr-CH',{dateStyle:'short',timeStyle:'short'})}</span>
+              ${c.userId === App.currentUser().id ? `<button class="btn-ghost comment-del" data-cid="${App.escapeHTML(c.id)}" style="padding:0 6px;margin-left:auto" title="Supprimer">🗑</button>` : ''}</div>
+              <div class="comment-text">${App.escapeHTML(c.texte).replace(/\n/g,'<br>')}</div>
             </div>
           `).join('') : '<p class="muted small" style="margin:4px 0">Aucun commentaire. Partage une info, un blocage, une décision…</p>'}
         </div>

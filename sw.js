@@ -1,4 +1,4 @@
-const CACHE_NAME = 'atelier-plan-v20260506';
+const CACHE_NAME = 'atelier-plan-v20260507';
 
 const PRECACHE_URLS = [
   './index.html',
@@ -24,7 +24,13 @@ const PRECACHE_URLS = [
   './views/plan.js',
   './views/modeles.js',
   './views/audit.js',
-  './views/whatif.js'
+  './views/whatif.js',
+  './views/flux.js',
+  './views/admin.js',
+  './views/aide.js',
+  './views/majourney.js',
+  './views/modelesprojets.js',
+  './views/timeline.js'
 ];
 
 // Install: precache all static assets
@@ -47,7 +53,7 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch: network-first for index.html, cache-first for JS/CSS assets
+// Fetch: network-first for HTML, cache-first for JS/CSS (only cache successful responses)
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
@@ -64,8 +70,10 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(event.request)
         .then(response => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
           return response;
         })
         .catch(() => caches.match(event.request))
@@ -77,8 +85,10 @@ self.addEventListener('fetch', event => {
         .then(cached => {
           if (cached) return cached;
           return fetch(event.request).then(response => {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+            if (response.ok) {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+            }
             return response;
           });
         })
