@@ -166,7 +166,7 @@ const App = {
     const u = this.currentUser();
     const hasPw = !!u.passwordHash;
     const body = `
-      <p class="muted small">Utilisateur : <strong>${u.nom}</strong> · groupe ${u.groupe}</p>
+      <p class="muted small">Utilisateur : <strong>${this.escapeHTML(u.nom)}</strong> · groupe ${this.escapeHTML(u.groupe||'—')}</p>
       ${hasPw ? '<div class="field"><label>Mot de passe actuel</label><input type="password" id="mp-current"></div>' : '<p class="muted small">Tu n\'as pas encore de mot de passe.</p>'}
       <div class="field"><label>Nouveau mot de passe (laisser vide pour retirer)</label><input type="password" id="mp-new"></div>
       <div class="field"><label>Confirmer</label><input type="password" id="mp-confirm"></div>
@@ -206,7 +206,7 @@ const App = {
     if (!sel) return;
     const users = DB.state.utilisateurs || [];
     const curId = this.currentUser().id;
-    sel.innerHTML = users.map(u => { const axes = u.axes || []; return `<option value="${u.id}" ${u.id===curId?'selected':''}>${u.nom} · ${u.groupe||'—'}${axes.length?' ('+axes.join('/')+')':''}</option>`; }).join('');
+    sel.innerHTML = users.map(u => { const axes = u.axes || []; const eid = this.escapeHTML(u.id); const enom = this.escapeHTML(u.nom); const egrp = this.escapeHTML(u.groupe||'—'); return `<option value="${eid}" ${u.id===curId?'selected':''}>${enom} · ${egrp}${axes.length?' ('+axes.join('/')+')':''}</option>`; }).join('');
     sel.onchange = e => this.setCurrentUser(e.target.value);
     this.refreshUserBadge();
   },
@@ -386,8 +386,8 @@ const App = {
     const body = alerts.length
       ? `<ul class="list list-clickable">${alerts.map((a,i) => `
           <li class="alert-row" data-idx="${i}" ${a.target?'role="button" tabindex="0"':''}>
-            <span class="badge ${a.niveau}">${a.kind}</span>
-            <span class="alert-msg">${a.msg}</span>
+            <span class="badge ${a.niveau}">${this.escapeHTML(a.kind)}</span>
+            <span class="alert-msg">${this.escapeHTML(a.msg)}</span>
             ${a.target ? '<span class="alert-arrow" title="Ouvrir la vue concernée">›</span>' : ''}
           </li>`).join('')}</ul>
           <p class="muted small" style="margin-top:8px">Clic sur une ligne pour ouvrir l'élément concerné.</p>`
@@ -1047,15 +1047,15 @@ const App = {
       sbResults = q.trim() ? this.searchAll(q, 12) : [];
       sbSelected = 0;
       if (!sbResults.length) {
-        results.innerHTML = q.trim() ? `<div class="sb-empty">Aucun résultat pour « ${q} »</div>` : '';
+        results.innerHTML = q.trim() ? `<div class="sb-empty">Aucun résultat pour « ${this.escapeHTML(q)} »</div>` : '';
         results.classList.toggle('hidden', !q.trim());
         return;
       }
       results.innerHTML = sbResults.map((r, i) =>
         `<div class="sb-item${i===0?' on':''}" data-i="${i}">
-          <span class="sb-kind">${r.kind}</span>
-          <span class="sb-label">${r.label}</span>
-          <span class="sb-meta">${r.meta||''}</span>
+          <span class="sb-kind">${this.escapeHTML(r.kind)}</span>
+          <span class="sb-label">${this.escapeHTML(r.label)}</span>
+          <span class="sb-meta">${this.escapeHTML(r.meta||'')}</span>
         </div>`).join('');
       results.classList.remove('hidden');
       results.querySelectorAll('.sb-item').forEach(el => {

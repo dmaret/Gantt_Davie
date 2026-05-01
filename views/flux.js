@@ -4,9 +4,9 @@ App.views.flux = {
     heatmap: false, traceMode: false, simDay: null, simPlaying: false, showBottleneck: false },
   _simTimer: null,
   _ZOOM_PRESETS: {
-    '10j': { label: '10 j', pxDay: 55, BACK: 2, FWD:  8 },
-    '20j': { label: '20 j', pxDay: 40, BACK: 3, FWD: 17 },
-    '30j': { label: '30 j', pxDay: 28, BACK: 3, FWD: 27 },
+    '10j': { label: '10 j', pxDay: 75, BACK: 2, FWD:  8 },
+    '20j': { label: '20 j', pxDay: 55, BACK: 3, FWD: 17 },
+    '30j': { label: '30 j', pxDay: 40, BACK: 3, FWD: 27 },
   },
 
   render(root) {

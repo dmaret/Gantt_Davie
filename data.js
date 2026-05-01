@@ -176,8 +176,16 @@ const DB = {
     return p.absences.some(a => a.debut <= iso && a.fin >= iso);
   },
   save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
-    localStorage.setItem(STORAGE_KEY + '_checksum', this._computeChecksum(this.state));
+    try {
+      const json = JSON.stringify(this.state);
+      localStorage.setItem(STORAGE_KEY, json);
+      localStorage.setItem(STORAGE_KEY + '_checksum', this._computeChecksum(this.state));
+    } catch (e) {
+      if (e.name === 'QuotaExceededError' || e.code === 22) {
+        console.error('localStorage quota dépassé');
+        if (window.App && App.toast) App.toast('⚠️ Stockage plein — données non sauvegardées', 'error');
+      }
+    }
     if (this._skipHistory) { this._skipHistory = false; return; }
     this._pushHistory();
   },
@@ -200,6 +208,7 @@ const DB = {
     this.state = JSON.parse(prev);
     this._skipHistory = true;
     localStorage.setItem(STORAGE_KEY, prev);
+    localStorage.setItem(STORAGE_KEY + '_checksum', this._computeChecksum(this.state));
     return true;
   },
   redo() {
@@ -209,10 +218,21 @@ const DB = {
     this.state = JSON.parse(snap);
     this._skipHistory = true;
     localStorage.setItem(STORAGE_KEY, snap);
+    localStorage.setItem(STORAGE_KEY + '_checksum', this._computeChecksum(this.state));
     return true;
   },
   reset() { this.state = seed(); this.migrate(); this.save(); },
-  importJSON(obj) { this.state = obj; this.save(); },
+  importJSON(obj) {
+    // Validation minimale de schéma pour bloquer les imports malformés
+    const required = ['taches','projets','personnes','lieux','machines','stock','utilisateurs'];
+    for (const k of required) {
+      if (!obj || !Array.isArray(obj[k])) throw new Error(`Champ manquant ou invalide : ${k}`);
+    }
+    if (typeof obj !== 'object' || Array.isArray(obj)) throw new Error('Format JSON invalide');
+    this.state = obj;
+    this.migrate();
+    this.save();
+  },
   exportJSON() { return JSON.stringify(this.state, null, 2); },
 
   // Helpers
@@ -421,20 +441,29 @@ function horairesDemiJournees(h) {
 // Ordre des étages (top → bottom) : 2e, 1er, Rez, S-sol
 const ETAGES_ORDER = ['2e','1er','Rez','S-sol'];
 function autoPosition(lieu, allLieux) {
-  const ETAGE_H = 260;      // hauteur d'un étage sur le plan
+  const MAX_COLS = 6;
   const LIEU_W = 180;
   const LIEU_H = 110;
+  const GAP_X = 12;
+  const GAP_Y = 30;
   const PAD_X = 20;
   const PAD_Y = 30;
+  const ROW_H = LIEU_H + GAP_Y;
+  const ETAGE_H = Math.ceil(allLieux.filter(l => l.etage === lieu.etage).length / MAX_COLS) * ROW_H + 50;
   const etageIdx = Math.max(0, ETAGES_ORDER.indexOf(lieu.etage));
-  // Index de ce lieu parmi ceux du même étage, typé prod puis stockage
   const sameEtage = allLieux.filter(l => l.etage === lieu.etage);
   sameEtage.sort((a,b) => (a.type === 'production' ? -1 : 1) - (b.type === 'production' ? -1 : 1));
   const idx = sameEtage.indexOf(lieu);
-  const col = idx; // une seule rangée par étage
+  const col = idx % MAX_COLS;
+  const row = Math.floor(idx / MAX_COLS);
+  let yBase = PAD_Y;
+  ETAGES_ORDER.slice(0, etageIdx).forEach(e => {
+    const n = allLieux.filter(l => l.etage === e).length;
+    yBase += Math.ceil(n / MAX_COLS) * ROW_H + 50;
+  });
   return {
-    x: PAD_X + col * (LIEU_W + 12),
-    y: PAD_Y + etageIdx * ETAGE_H,
+    x: PAD_X + col * (LIEU_W + GAP_X),
+    y: yBase + row * ROW_H,
     w: LIEU_W,
     h: LIEU_H,
   };
@@ -457,27 +486,30 @@ function seed() {
   const today = D.today();
   const start = D.addDays(today, -7);
 
-  // Lieux d'emballage/logistique/conditionnement
+  // Lieux d'emballage/logistique/conditionnement — positions explicites en 3 rangées
+  const W=180, H=110, GX=12, GY=30, PX=20, PY=30;
   const lieux = [
-    { id: 'L_ENTREE',      nom: 'Réception entrée',       etage: 'Rez', type: 'production', capacite: 6 },
-    { id: 'L_DECONDI',     nom: 'Zone déconditionnement', etage: 'Rez', type: 'production', capacite: 8 },
-    { id: 'L_ASSEMB',      nom: 'Poste assemblage',       etage: 'Rez', type: 'production', capacite: 10 },
-    { id: 'L_CALLAGE',     nom: 'Callage & protection',   etage: 'Rez', type: 'production', capacite: 6 },
-    { id: 'L_RECONDI',     nom: 'Reconditionnement',      etage: 'Rez', type: 'production', capacite: 12 },
-    { id: 'L_VALMONT',     nom: 'Salle Valmont',          etage: 'Rez', type: 'production', capacite: 8 },
-    { id: 'L_BANDERO',     nom: 'Banderollage',           etage: 'Rez', type: 'production', capacite: 4 },
-    { id: 'L_FILM',        nom: 'Filmage palette',        etage: 'Rez', type: 'production', capacite: 4 },
-    { id: 'L_CONTROLE',    nom: 'Contrôle qualité',       etage: 'Rez', type: 'production', capacite: 3 },
-    { id: 'L_EXPEDITION',  nom: 'Quai expédition',        etage: 'Rez', type: 'production', capacite: 4 },
-    // Stockages
-    { id: 'S_ARRIVAGE',    nom: 'Stock · Arrivages',      etage: 'Rez', type: 'stockage', capacite: 150 },
-    { id: 'S_DECOND',      nom: 'Stock · Pièces déconditionnées', etage: 'Rez', type: 'stockage', capacite: 120 },
-    { id: 'S_EN_COURS',    nom: 'Stock · En cours',       etage: 'Rez', type: 'stockage', capacite: 200 },
-    { id: 'S_EMBALLAGE',   nom: 'Stock · Matériaux emballage', etage: 'Rez', type: 'stockage', capacite: 100 },
-    { id: 'S_CONSOMMABLES',nom: 'Stock · Consommables',   etage: 'Rez', type: 'stockage', capacite: 80 },
-    { id: 'S_PALETTES',    nom: 'Stock · Palettes',       etage: 'Rez', type: 'stockage', capacite: 300 },
-    { id: 'S_OUTILLAGE',   nom: 'Stock · Outillage',      etage: 'Rez', type: 'stockage', capacite: 60 },
-    { id: 'S_FINAL',       nom: 'Stock · Produits finis', etage: 'Rez', type: 'stockage', capacite: 200 },
+    // Rangée 0 — Production flux principal
+    { id: 'L_ENTREE',     nom: 'Réception entrée',       etage:'Rez', type:'production', capacite:6,  x:PX,          y:PY,           w:W, h:H },
+    { id: 'L_DECONDI',    nom: 'Zone déconditionnement', etage:'Rez', type:'production', capacite:8,  x:PX+(W+GX),   y:PY,           w:W, h:H },
+    { id: 'L_ASSEMB',     nom: 'Poste assemblage',       etage:'Rez', type:'production', capacite:10, x:PX+2*(W+GX), y:PY,           w:W, h:H },
+    { id: 'L_CALLAGE',    nom: 'Callage & protection',   etage:'Rez', type:'production', capacite:6,  x:PX+3*(W+GX), y:PY,           w:W, h:H },
+    { id: 'L_RECONDI',    nom: 'Reconditionnement',      etage:'Rez', type:'production', capacite:12, x:PX+4*(W+GX), y:PY,           w:W, h:H },
+    { id: 'L_VALMONT',    nom: 'Salle Valmont',          etage:'Rez', type:'production', capacite:8,  x:PX+5*(W+GX), y:PY,           w:W, h:H },
+    // Rangée 1 — Production finition + stock arrivée
+    { id: 'L_BANDERO',    nom: 'Banderollage',           etage:'Rez', type:'production', capacite:4,  x:PX,          y:PY+H+GY,      w:W, h:H },
+    { id: 'L_FILM',       nom: 'Filmage palette',        etage:'Rez', type:'production', capacite:4,  x:PX+(W+GX),   y:PY+H+GY,      w:W, h:H },
+    { id: 'L_CONTROLE',   nom: 'Contrôle qualité',       etage:'Rez', type:'production', capacite:3,  x:PX+2*(W+GX), y:PY+H+GY,      w:W, h:H },
+    { id: 'L_EXPEDITION', nom: 'Quai expédition',        etage:'Rez', type:'production', capacite:4,  x:PX+3*(W+GX), y:PY+H+GY,      w:W, h:H },
+    { id: 'S_ARRIVAGE',   nom: 'Stock · Arrivages',      etage:'Rez', type:'stockage',   capacite:150,x:PX+4*(W+GX), y:PY+H+GY,      w:W, h:H },
+    { id: 'S_DECOND',     nom: 'Stock · Pièces déconditionnées', etage:'Rez', type:'stockage', capacite:120, x:PX+5*(W+GX), y:PY+H+GY, w:W, h:H },
+    // Rangée 2 — Stocks
+    { id: 'S_EN_COURS',      nom: 'Stock · En cours',          etage:'Rez', type:'stockage', capacite:200, x:PX,          y:PY+2*(H+GY), w:W, h:H },
+    { id: 'S_EMBALLAGE',     nom: 'Stock · Matériaux emballage', etage:'Rez', type:'stockage', capacite:100, x:PX+(W+GX),   y:PY+2*(H+GY), w:W, h:H },
+    { id: 'S_CONSOMMABLES',  nom: 'Stock · Consommables',      etage:'Rez', type:'stockage', capacite:80,  x:PX+2*(W+GX), y:PY+2*(H+GY), w:W, h:H },
+    { id: 'S_PALETTES',      nom: 'Stock · Palettes',          etage:'Rez', type:'stockage', capacite:300, x:PX+3*(W+GX), y:PY+2*(H+GY), w:W, h:H },
+    { id: 'S_OUTILLAGE',     nom: 'Stock · Outillage',         etage:'Rez', type:'stockage', capacite:60,  x:PX+4*(W+GX), y:PY+2*(H+GY), w:W, h:H },
+    { id: 'S_FINAL',         nom: 'Stock · Produits finis',    etage:'Rez', type:'stockage', capacite:200, x:PX+5*(W+GX), y:PY+2*(H+GY), w:W, h:H },
   ];
 
   // Machines d'emballage/logistique

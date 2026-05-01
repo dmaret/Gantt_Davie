@@ -33,15 +33,17 @@ App.views.audit = {
         ${list.length ? `
           <div class="tbl-wrap"><table class="data col-freeze-1">
             <thead><tr><th>Horodatage</th><th>Utilisateur</th><th>Action</th><th>Type</th><th>Détails</th><th>ID</th></tr></thead>
-            <tbody>${list.slice(0, 300).map(e => `
-              <tr>
+            <tbody>${list.slice(0, 300).map(e => {
+              const esc = App.escapeHTML.bind(App);
+              return `<tr>
                 <td class="mono small">${this.fmtTs(e.ts)}</td>
-                <td>${e.userNom || '?'}</td>
-                <td><span class="badge ${badgeCol(e.action)}">${e.action}</span></td>
-                <td><span class="badge muted">${e.entity}</span></td>
-                <td>${e.details||'—'}</td>
-                <td class="mono small muted">${e.entityId||''}</td>
-              </tr>`).join('')}</tbody>
+                <td>${esc(e.userNom || '?')}</td>
+                <td><span class="badge ${badgeCol(e.action)}">${esc(e.action)}</span></td>
+                <td><span class="badge muted">${esc(e.entity)}</span></td>
+                <td>${esc(e.details||'—')}</td>
+                <td class="mono small muted">${esc(e.entityId||'')}</td>
+              </tr>`;
+            }).join('')}</tbody>
           </table></div>
           ${list.length > 300 ? `<p class="muted small" style="margin-top:8px">Affichage limité aux 300 dernières entrées (filtré).</p>` : ''}
         ` : '<p class="muted">Aucune action enregistrée avec ces filtres.</p>'}
