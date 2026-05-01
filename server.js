@@ -60,8 +60,8 @@ function doBackup() {
   if (!fs.existsSync(DATA_FILE)) return;
   try {
     if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
-    const date = new Date().toISOString().slice(0, 10);   // YYYY-MM-DD
-    const time = new Date().toTimeString().slice(0, 5).replace(':', 'h'); // HHhMM
+    const date = new Date().toISOString().slice(0, 10);
+    const time = new Date().toTimeString().slice(0, 5).replace(':', 'h');
     const dest = path.join(BACKUP_DIR, `gantt-davie-${date}-${time}.json`);
     fs.copyFileSync(DATA_FILE, dest);
     // Garder seulement les 30 derniers backups
@@ -86,7 +86,6 @@ app.use(express.static(__dirname, { index: 'index.html' }));
 
 // ─── Routes publiques ────────────────────────────────────────────────────────
 
-// Liste des utilisateurs pour le formulaire de login (sans hash de mdp)
 app.get('/api/auth/users', (_req, res) => {
   res.json(getUsers().map(u => ({
     id: u.id,
@@ -96,7 +95,6 @@ app.get('/api/auth/users', (_req, res) => {
   })));
 });
 
-// Login : userId + SHA-256(password) calculé côté client
 app.post('/api/auth/login', (req, res) => {
   const { userId, passwordHash } = req.body || {};
   if (!userId) return res.status(400).json({ error: 'userId requis' });
@@ -116,14 +114,12 @@ app.post('/api/auth/login', (req, res) => {
 
 // ─── Routes protégées ────────────────────────────────────────────────────────
 
-// Récupère l'état complet
 app.get('/api/state', authMiddleware, (_req, res) => {
   const state = readState();
   if (!state) return res.status(404).json({ error: 'Pas de données — premier démarrage' });
   res.json(state);
 });
 
-// Sauvegarde l'état complet + backup NAS si configuré
 app.put('/api/state', authMiddleware, (req, res) => {
   if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
     return res.status(400).json({ error: 'Corps JSON invalide' });
@@ -156,9 +152,7 @@ app.listen(PORT, () => {
   }
   if (BACKUP_DIR) {
     console.log(`💾  Backup NAS actif → ${BACKUP_DIR}  (toutes les heures, 30 fichiers max)`);
-    // Backup toutes les heures
     setInterval(doBackup, 60 * 60 * 1000);
-    // Premier backup au démarrage
     setTimeout(doBackup, 5000);
   } else {
     console.log('ℹ️   Backup NAS désactivé — lance avec BACKUP_DIR="/Volumes/MyCloudHome/GanttDavie" npm start');
