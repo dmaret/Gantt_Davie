@@ -118,7 +118,7 @@ App.views.majourney = {
         <div class="card">
           <div class="muted small">Tâches actives aujourd'hui</div>
           <div style="font-size:28px;font-weight:700">${tachesActives.length}</div>
-          <div class="small muted">${tachesActives.length ? tachesActives.map(t=>t.nom).join(', ').substring(0,60)+(tachesActives.map(t=>t.nom).join(', ').length>60?'…':'') : 'Aucune'}</div>
+          <div class="small muted">${tachesActives.length ? tachesActives.map(t=>App.escapeHTML(t.nom)).join(', ').substring(0,60)+(tachesActives.map(t=>App.escapeHTML(t.nom)).join(', ').length>60?'…':'') : 'Aucune'}</div>
         </div>
         <div class="card">
           <div class="muted small">Heures estimées — ${weekLabel}</div>
@@ -246,7 +246,7 @@ App.views.majourney = {
                     ${tasks.map(t => {
                       const prj = DB.projet(t.projetId);
                       const col = prj ? prj.couleur : '#888';
-                      return `<div title="${t.nom}${prj?' · '+prj.nom:''}" style="background:${col}20;border-left:3px solid ${col};padding:1px 3px;font-size:9px;margin-bottom:1px;overflow:hidden;border-radius:0 2px 2px 0;line-height:1.3;cursor:pointer" data-tache-id="${t.id}">${prj?prj.code:'—'}</div>`;
+                      return `<div title="${App.escapeHTML(t.nom)}${prj?' · '+App.escapeHTML(prj.nom):''}" style="background:${App.safeColor(col)}20;border-left:3px solid ${App.safeColor(col)};padding:1px 3px;font-size:9px;margin-bottom:1px;overflow:hidden;border-radius:0 2px 2px 0;line-height:1.3;cursor:pointer" data-tache-id="${t.id}">${prj?App.escapeHTML(prj.code):'—'}</div>`;
                     }).join('')}
                   </td>`;
                 }).join('')}
@@ -261,8 +261,8 @@ App.views.majourney = {
         <span class="muted small">Légende :</span>
         ${s.projets.filter(p=>p.statut!=='clos').map(p=>`
           <span style="display:flex;align-items:center;gap:4px;font-size:10px">
-            <span style="width:10px;height:10px;border-radius:2px;background:${p.couleur};flex-shrink:0"></span>
-            ${p.code}
+            <span style="width:10px;height:10px;border-radius:2px;background:${App.safeColor(p.couleur)};flex-shrink:0"></span>
+            ${App.escapeHTML(p.code)}
           </span>`).join('')}
       </div>
     `;
@@ -299,7 +299,7 @@ App.views.majourney = {
             ${tasks.map(t => {
               const prj = DB.projet(t.projetId);
               const col = prj ? prj.couleur : '#888';
-              return `<div class="pill" style="border-left:3px solid ${col};background:${col}18" title="${t.nom}">${prj?prj.code:'—'}</div>`;
+              return `<div class="pill" style="border-left:3px solid ${App.safeColor(col)};background:${App.safeColor(col)}18" title="${App.escapeHTML(t.nom)}">${prj?App.escapeHTML(prj.code):'—'}</div>`;
             }).join('')}
           </td>`;
         }).join('')}
@@ -308,8 +308,8 @@ App.views.majourney = {
 
     const legendHtml = s.projets.filter(p=>p.statut!=='clos').map(p=>
       `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px">
-        <span style="width:10px;height:10px;border-radius:2px;background:${p.couleur};display:inline-block"></span>
-        <strong>${p.code}</strong> ${p.nom}
+        <span style="width:10px;height:10px;border-radius:2px;background:${App.safeColor(p.couleur)};display:inline-block"></span>
+        <strong>${App.escapeHTML(p.code)}</strong> ${App.escapeHTML(p.nom)}
       </span>`
     ).join('');
 
@@ -339,7 +339,7 @@ App.views.majourney = {
         }
       </style></head><body>
       <h1>Planning équipe</h1>
-      <div class="meta">Du ${debut} au ${fin} · Généré le ${D.fmt(today)} par ${user ? user.nom : '—'} · Atelier · Planification</div>
+      <div class="meta">Du ${debut} au ${fin} · Généré le ${D.fmt(today)} par ${App.escapeHTML(user ? user.nom : '—')} · Atelier · Planification</div>
       <table>
         <thead>
           <tr>
@@ -379,9 +379,9 @@ App.views.majourney = {
       return `<li class="alert-row" data-tache-id="${t.id}" role="button" tabindex="0">
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <strong>${t.nom}</strong>
-            ${prj ? `<span class="badge" style="background:${prj.couleur}22;color:${prj.couleur}">${prj.code}</span>` : ''}
-            ${lieu ? `<span class="badge muted">${lieu.nom}</span>` : ''}
+            <strong>${App.escapeHTML(t.nom)}</strong>
+            ${prj ? `<span class="badge" style="background:${App.safeColor(prj.couleur)}22;color:${App.safeColor(prj.couleur)}">${App.escapeHTML(prj.code)}</span>` : ''}
+            ${lieu ? `<span class="badge muted">${App.escapeHTML(lieu.nom)}</span>` : ''}
           </div>
           <div class="small muted" style="margin-bottom:6px">${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${assigns || '—'}</div>
           <div style="display:flex;align-items:center;gap:8px">
@@ -412,8 +412,8 @@ App.views.majourney = {
             return `<span title="${App.personneLabel(p)}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--primary-weak);color:var(--primary);font-size:9px;font-weight:700;border:1px solid var(--primary)">${initials}</span>`;
           }).join('');
           return `<tr data-tache-id="${t.id}" role="button" tabindex="0">
-            <td><strong>${t.nom}</strong>${isLate?'<span class="badge bad" style="font-size:9px;margin-left:4px">retard</span>':''}</td>
-            <td>${prj?`<span class="badge" style="background:${prj.couleur}22;color:${prj.couleur}">${prj.code}</span>`:'<span class="muted">—</span>'}</td>
+            <td><strong>${App.escapeHTML(t.nom)}</strong>${isLate?'<span class="badge bad" style="font-size:9px;margin-left:4px">retard</span>':''}</td>
+            <td>${prj?`<span class="badge" style="background:${App.safeColor(prj.couleur)}22;color:${App.safeColor(prj.couleur)}">${App.escapeHTML(prj.code)}</span>`:'<span class="muted">—</span>'}</td>
             <td><div style="display:flex;gap:3px;flex-wrap:wrap">${assignes||'<span class="muted small">—</span>'}</div></td>
             <td class="mono">${D.fmt(t.debut)}</td>
             <td class="mono">${D.fmt(t.fin)}</td>
@@ -438,7 +438,7 @@ App.views.majourney = {
       const nbJours = D.workdaysBetween(a.debut, a.fin) + 1;
       return `<li class="alert-row" onclick="App.navigate('absences')" role="button" tabindex="0" style="cursor:pointer">
         <div>
-          <strong>${a.motif}</strong>${a.note?`<span class="muted small"> · ${a.note}</span>`:''}
+          <strong>${App.escapeHTML(a.motif)}</strong>${a.note?`<span class="muted small"> · ${App.escapeHTML(a.note)}</span>`:''}
           <div class="small muted">${D.fmt(a.debut)} → ${D.fmt(a.fin)} · ${nbJours} j. ouvré(s)</div>
         </div>
         <span class="badge ${encours?'bad':'warn'}">${encours?'en cours':'à venir'}</span>
@@ -453,8 +453,8 @@ App.views.majourney = {
       const origine = DB.lieu(d.origineId), dest = DB.lieu(d.destinationId), prj = DB.projet(d.projetId);
       return `<li class="alert-row" onclick="App.navigate('deplacements')" role="button" tabindex="0" style="cursor:pointer">
         <div>
-          <strong>${d.motif}</strong>${prj?`<span class="badge" style="background:${prj.couleur}22;color:${prj.couleur};margin-left:6px">${prj.code}</span>`:''}
-          <div class="small muted">${D.fmt(d.date)} · ${origine?origine.nom:'—'} → ${dest?dest.nom:'—'} · ${d.duree}</div>
+          <strong>${App.escapeHTML(d.motif)}</strong>${prj?`<span class="badge" style="background:${App.safeColor(prj.couleur)}22;color:${App.safeColor(prj.couleur)};margin-left:6px">${App.escapeHTML(prj.code)}</span>`:''}
+          <div class="small muted">${D.fmt(d.date)} · ${origine?App.escapeHTML(origine.nom):'—'} → ${dest?App.escapeHTML(dest.nom):'—'} · ${d.duree}</div>
         </div>
         <span class="alert-arrow">›</span>
       </li>`;

@@ -200,14 +200,14 @@ App.views.flux = {
         const showLabel = pxDay >= 14;
         return `
           <div style="position:absolute;left:${x}px;top:4px;width:${w}px;height:calc(100% - 8px);
-            background:${bc}20;border:1.5px solid ${bc}99;border-radius:5px;overflow:hidden;
+            background:${App.safeColor(bc)}20;border:1.5px solid ${App.safeColor(bc)}99;border-radius:5px;overflow:hidden;
             cursor:pointer;box-sizing:border-box;display:flex;align-items:center;"
             onclick="App.navigateToTarget({view:'gantt',tacheId:'${t.id}'});"
-            title="${t.nom}${proj?' · '+proj.code:''} (${D.fmt(t.debut)}→${D.fmt(t.fin)}) — ${pct}%">
-            <div style="position:absolute;bottom:0;left:0;height:3px;width:${pct}%;background:${bc};"></div>
-            ${showLabel ? `<div style="padding:0 5px;font-size:10px;font-weight:600;color:${bc};
+            title="${App.escapeHTML(t.nom)}${proj?' · '+App.escapeHTML(proj.code):''} (${D.fmt(t.debut)}→${D.fmt(t.fin)}) — ${pct}%">
+            <div style="position:absolute;bottom:0;left:0;height:3px;width:${pct}%;background:${App.safeColor(bc)};"></div>
+            ${showLabel ? `<div style="padding:0 5px;font-size:10px;font-weight:600;color:${App.safeColor(bc)};
               white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;">
-              ${proj ? `<span style="opacity:.65;font-size:9px;">${proj.code}</span> ` : ''}${t.nom}
+              ${proj ? `<span style="opacity:.65;font-size:9px;">${App.escapeHTML(proj.code)}</span> ` : ''}${App.escapeHTML(t.nom)}
             </div>` : ''}
           </div>`;
       }).join('');
@@ -218,7 +218,7 @@ App.views.flux = {
             border-right:1px solid var(--border);position:sticky;left:0;z-index:2;
             display:flex;align-items:center;gap:6px;">
             <span style="width:8px;height:8px;border-radius:50%;background:${st.color};flex-shrink:0;"></span>
-            <span style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.nom}</span>
+            <span style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${App.escapeHTML(m.nom)}</span>
           </div>
           <div style="flex:1;position:relative;min-width:${timelineW}px;background:var(--bg);">
             ${colGrid}
@@ -235,7 +235,7 @@ App.views.flux = {
           <div style="margin-bottom:18px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
             <div style="padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border);
               font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px;position:sticky;left:0;">
-              🏭 ${lieu ? lieu.nom : 'Sans lieu'}
+              🏭 ${lieu ? App.escapeHTML(lieu.nom) : 'Sans lieu'}
               <span class="badge muted" style="font-size:11px;">${ms.length} machine${ms.length > 1 ? 's' : ''}</span>
             </div>
             <div style="display:flex;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5;background:var(--surface);">
@@ -282,10 +282,10 @@ App.views.flux = {
                     <div class="fx-machine-card" data-mid="${m.id}"
                       style="cursor:pointer;padding:10px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${col.color};transition:box-shadow .15s;"
                       onmouseenter="this.style.boxShadow='0 4px 16px rgba(0,0,0,.10)'" onmouseleave="this.style.boxShadow=''">
-                      <div style="font-weight:600;font-size:13px;margin-bottom:2px;">${m.nom}</div>
-                      ${lieu ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:${task ? '6px' : '2px'};">${lieu.nom}</div>` : ''}
+                      <div style="font-weight:600;font-size:13px;margin-bottom:2px;">${App.escapeHTML(m.nom)}</div>
+                      ${lieu ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:${task ? '6px' : '2px'};">${App.escapeHTML(lieu.nom)}</div>` : ''}
                       ${task ? `
-                        <div style="font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;" title="${task.nom}">${task.nom}</div>
+                        <div style="font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;" title="${App.escapeHTML(task.nom)}">${App.escapeHTML(task.nom)}</div>
                         <div style="height:4px;border-radius:2px;background:var(--border);overflow:hidden;">
                           <div style="height:100%;width:${task.avancement||0}%;background:${col.color};border-radius:2px;"></div>
                         </div>
@@ -375,11 +375,11 @@ App.views.flux = {
         ${traceBadge}
         ${goulotBadge}
         ${iconHtml}
-        <div class="fx-block-name">${m.nom}</div>
-        ${lieu ? `<div class="fx-block-lieu">${lieu.nom}</div>` : ''}
+        <div class="fx-block-name">${App.escapeHTML(m.nom)}</div>
+        ${lieu ? `<div class="fx-block-lieu">${App.escapeHTML(lieu.nom)}</div>` : ''}
         <div class="fx-block-status" style="color:${st.color}">● ${st.label}${st.code === 'surcharge' ? ' (' + st.tasks.length + ')' : ''}</div>
         ${task ? `
-          <div class="fx-block-task" title="${task.nom}">${task.nom}</div>
+          <div class="fx-block-task" title="${App.escapeHTML(task.nom)}">${App.escapeHTML(task.nom)}</div>
           <div class="fx-bar"><div style="width:${task.avancement||0}%;background:${st.color}"></div></div>
           <div class="fx-bar-pct">${task.avancement||0}%</div>
         ` : ''}
@@ -590,8 +590,8 @@ App.views.flux = {
         ${active.map(t => {
           const m = (DB.state.machines||[]).find(x => x.id === t.machineId);
           return `<div class="fx-sb-task">
-            <div class="fx-sb-task-name">${t.nom}</div>
-            <div class="fx-sb-task-sub">${m ? m.nom : ''} · ${t.avancement||0}%</div>
+            <div class="fx-sb-task-name">${App.escapeHTML(t.nom)}</div>
+            <div class="fx-sb-task-sub">${m ? App.escapeHTML(m.nom) : ''} · ${t.avancement||0}%</div>
           </div>`;
         }).join('')}
       ` : ''}
@@ -624,8 +624,8 @@ App.views.flux = {
     const body = `
       <div style="font-size:13px">
         <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
-          ${m.type  ? `<span class="chip">${m.type}</span>`  : ''}
-          ${lieu    ? `<span class="chip">${lieu.nom}</span>` : ''}
+          ${m.type  ? `<span class="chip">${App.escapeHTML(m.type)}</span>`  : ''}
+          ${lieu    ? `<span class="chip">${App.escapeHTML(lieu.nom)}</span>` : ''}
           <span class="spacer" style="flex:1"></span>
           <div style="text-align:right">
             <div style="font-weight:700;font-size:22px;line-height:1">${active.length}</div>
@@ -639,8 +639,8 @@ App.views.flux = {
             return `<div class="card" style="padding:8px;margin-bottom:6px">
               <div style="display:flex;justify-content:space-between;align-items:start;gap:6px">
                 <div style="flex:1">
-                  <div style="font-weight:600">${t.nom}</div>
-                  <div class="muted small">${proj ? proj.code+' · ' : ''}${D.fmt(t.debut)} → ${D.fmt(t.fin)}</div>
+                  <div style="font-weight:600">${App.escapeHTML(t.nom)}</div>
+                  <div class="muted small">${proj ? App.escapeHTML(proj.code)+' · ' : ''}${D.fmt(t.debut)} → ${D.fmt(t.fin)}</div>
                 </div>
                 ${transferUI(t)}
               </div>
@@ -655,7 +655,7 @@ App.views.flux = {
           <div class="muted small" style="font-weight:600;margin-bottom:6px">Prochaines tâches</div>
           ${upcoming.map(t => `<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;">
             <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
-              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${t.nom}</span>
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${App.escapeHTML(t.nom)}</span>
               <span class="muted" style="flex-shrink:0">${D.fmt(t.debut)}</span>
               ${transferUI(t)}
             </div>
@@ -920,11 +920,11 @@ App.views.flux = {
           const proj = task ? DB.projet(task.projetId) : null;
           const color = proj?.couleur || (task ? '#6b7280' : null);
           const isToday = d === refDay;
-          const fill = task ? `background:${color}66;border:1px solid ${color}` : 'background:var(--border);';
+          const fill = task ? `background:${App.safeColor(color)}66;border:1px solid ${App.safeColor(color)}` : 'background:var(--border);';
           const todayMark = isToday ? 'outline:2px solid #ef4444;outline-offset:-1px;' : '';
-          const tip = task ? `${task.nom} · ${D.fmt(d)}` : D.fmt(d);
+          const tip = task ? `${App.escapeHTML(task.nom)} · ${D.fmt(d)}` : D.fmt(d);
           return `<div class="fx-mini-bar-cell" style="${fill};${todayMark}" title="${tip}">
-            ${task && task.avancement ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${task.avancement}%;background:${color};opacity:.45;"></div>` : ''}
+            ${task && task.avancement ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${task.avancement}%;background:${App.safeColor(color)};opacity:.45;"></div>` : ''}
           </div>`;
         }).join('');
         const dayLabels = days.map(d => {
@@ -934,7 +934,7 @@ App.views.flux = {
         const loads = this._computeLoad(mid) || [];
         const loadPct = loads.length ? Math.round(loads.filter(Boolean).length / loads.length * 100) : 0;
         tt.innerHTML = `
-          <div style="font-weight:700;margin-bottom:4px">${m.nom}</div>
+          <div style="font-weight:700;margin-bottom:4px">${App.escapeHTML(m.nom)}</div>
           <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Charge 5 j : <strong style="color:${this._heatColor(loads)}">${loadPct}%</strong> · ${tasks.length} tâche(s) à venir</div>
           <div class="fx-mini-bar">${bars}</div>
           <div class="fx-mini-bar" style="margin-bottom:0">${dayLabels}</div>
@@ -942,7 +942,7 @@ App.views.flux = {
             ${tasks.map(t => {
               const proj = DB.projet(t.projetId);
               return `<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:2px;font-size:10px">
-                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${proj?proj.code+' · ':''}${t.nom}</span>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${proj?App.escapeHTML(proj.code)+' · ':''}${App.escapeHTML(t.nom)}</span>
                 <span class="muted" style="flex-shrink:0">${D.fmt(t.debut)}→${D.fmt(t.fin)}</span>
               </div>`;
             }).join('')}

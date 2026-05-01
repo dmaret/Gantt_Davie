@@ -98,9 +98,9 @@ App.views.whatif = {
       if (!d.added.length && !d.removed.length && !d.modified.length) return '';
       return `<h3>${k} (${d.added.length} ajoutée(s), ${d.removed.length} supprimée(s), ${d.modified.length} modifiée(s))</h3>
         <ul class="list">
-          ${d.added.map(x => `<li><span class="badge good">+</span> <strong>${this.labelOf(k,x)}</strong></li>`).join('')}
-          ${d.removed.map(x => `<li><span class="badge bad">−</span> ${this.labelOf(k,x)}</li>`).join('')}
-          ${d.modified.map(m => `<li><span class="badge warn">~</span> <strong>${this.labelOf(k,m.new)}</strong><div class="small muted">${m.fields.map(f => `${f.k}: ${f.a} → ${f.b}`).join(' · ')}</div></li>`).join('')}
+          ${d.added.map(x => `<li><span class="badge good">+</span> <strong>${App.escapeHTML(this.labelOf(k,x))}</strong></li>`).join('')}
+          ${d.removed.map(x => `<li><span class="badge bad">−</span> ${App.escapeHTML(this.labelOf(k,x))}</li>`).join('')}
+          ${d.modified.map(m => `<li><span class="badge warn">~</span> <strong>${App.escapeHTML(this.labelOf(k,m.new))}</strong><div class="small muted">${m.fields.map(f => `${App.escapeHTML(f.k)}: ${App.escapeHTML(f.a)} → ${App.escapeHTML(f.b)}`).join(' · ')}</div></li>`).join('')}
         </ul>`;
     }).join('');
     document.getElementById('wi-diff').innerHTML = sections || '<p class="muted">Aucune différence détectée.</p>';

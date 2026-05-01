@@ -77,13 +77,13 @@ App.views.machines = {
       const pct = capa ? Math.min(100, Math.round(jours / capa * 100)) : 0;
       const cls = pct > 90 ? 'bad' : pct > 70 ? 'warn' : '';
       const projChips = Array.from(new Set(tasks.map(t => t.projetId))).map(pid => {
-        const p = DB.projet(pid); return p ? `<span class="chip" style="background:${p.couleur}22;color:${p.couleur}">${p.code}</span>` : '';
+        const p = DB.projet(pid); return p ? `<span class="chip" style="background:${App.safeColor(p.couleur)}22;color:${App.safeColor(p.couleur)}">${App.escapeHTML(p.code)}</span>` : '';
       }).join('');
       const confBadge = conflSet.has(m.id) ? '<span class="badge bad">conflit</span>' : '';
       return `<tr data-id="${m.id}" style="cursor:pointer">
-        <td><strong>${m.nom}</strong> ${confBadge}</td>
-        <td>${m.type}</td>
-        <td>${lieu?lieu.nom:'—'} <span class="muted small">${lieu?'· '+lieu.etage:''}</span></td>
+        <td><strong>${App.escapeHTML(m.nom)}</strong> ${confBadge}</td>
+        <td>${App.escapeHTML(m.type)}</td>
+        <td>${lieu?App.escapeHTML(lieu.nom):'—'} <span class="muted small">${lieu?'· '+App.escapeHTML(lieu.etage):''}</span></td>
         <td class="right">${m.capaciteJour} j-h/j</td>
         <td class="right">${tasks.length}</td>
         <td><div class="bar-inline ${cls}"><div class="fill" style="width:${pct}%"></div></div></td>
@@ -136,8 +136,8 @@ App.views.machines = {
         const updates = parsed.filter(r => r.existing).length;
         const body = `<p class="muted small">${creates} à créer · ${updates} à mettre à jour</p>
           <table class="data"><thead><tr><th>Nom</th><th>Type</th><th>Lieu</th><th>Cap.</th><th>Statut</th></tr></thead><tbody>
-          ${parsed.map(r => `<tr><td>${r.nom}</td><td>${r.type}</td>
-            <td class="${r.lieuId?'':'warn'}">${r.lieuNom||'—'}${r.lieuId?'':' ⚠'}</td>
+          ${parsed.map(r => `<tr><td>${App.escapeHTML(r.nom)}</td><td>${App.escapeHTML(r.type)}</td>
+            <td class="${r.lieuId?'':'warn'}">${App.escapeHTML(r.lieuNom||'—')}${r.lieuId?'':' ⚠'}</td>
             <td>${r.capa}h/j</td>
             <td><span class="badge ${r.existing?'warn':'good'}">${r.existing?'màj':'nouveau'}</span></td></tr>`).join('')}
           </tbody></table>`;
@@ -194,7 +194,7 @@ App.views.machines = {
             const taskRow = (t, p, idx) => t ? `
               <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 0">
                 <div style="flex:1;min-width:0">
-                  <strong>${t.nom}</strong> <span class="muted small">${p?p.code:''}</span>
+                  <strong>${App.escapeHTML(t.nom)}</strong> <span class="muted small">${p?App.escapeHTML(p.code):''}</span>
                   <span class="small muted"> · ${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${dur(t)} j. ouvrés</span>
                 </div>
                 <button class="btn btn-secondary conf-shift" data-tid="${t.id}" data-ci="${ci}" data-other="${idx===0?c.t2:c.t1}" style="white-space:nowrap;font-size:11px;padding:3px 8px" title="Décaler cette tâche juste après l'autre">⏩ Décaler</button>
@@ -218,16 +218,16 @@ App.views.machines = {
         <ul class="list" style="max-height:140px;overflow:auto">
           ${nonConflictTaches.map(t => {
             const p = DB.projet(t.projetId);
-            return `<li><div><strong>${t.nom}</strong> · <span class="muted small">${p?p.code:''}</span>
+            return `<li><div><strong>${App.escapeHTML(t.nom)}</strong> · <span class="muted small">${p?App.escapeHTML(p.code):''}</span>
               <div class="small muted">${D.fmt(t.debut)} → ${D.fmt(t.fin)}</div></div></li>`;
           }).join('')}
         </ul>
       </div>` : '';
 
     const body = `
-      <div class="field"><label>Nom</label><input id="mf-nom" value="${m.nom||''}"></div>
+      <div class="field"><label>Nom</label><input id="mf-nom" value="${App.escapeHTML(m.nom||'')}"></div>
       <div class="row">
-        <div class="field"><label>Type</label><input id="mf-type" value="${m.type||''}" placeholder="CNC, Laser, Soudure..."></div>
+        <div class="field"><label>Type</label><input id="mf-type" value="${App.escapeHTML(m.type||'')}" placeholder="CNC, Laser, Soudure..."></div>
         <div class="field"><label>Capacité (heures/jour)</label><input type="number" id="mf-capa" value="${m.capaciteJour||8}"></div>
       </div>
       <div class="field"><label>Lieu de production</label>

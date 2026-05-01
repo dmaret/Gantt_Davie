@@ -147,7 +147,7 @@ App.views.dashboard = {
         const badge = pr.delayDays >= 3 ? 'bad' : pr.delayDays >= 1 ? 'warn' : pr.delayDays <= -1 ? 'good' : 'muted';
         const sign = pr.delayDays > 0 ? '+' : '';
         return `<tr>
-          <td><span class="badge" style="background:${p.couleur}22;color:${p.couleur}">${p.code}</span> ${p.nom}</td>
+          <td><span class="badge" style="background:${App.safeColor(p.couleur)}22;color:${App.safeColor(p.couleur)}">${App.escapeHTML(p.code)}</span> ${App.escapeHTML(p.nom)}</td>
           <td>${D.fmt(p.fin)}</td>
           <td><strong>${D.fmt(pr.predEnd)}</strong></td>
           <td class="right"><span class="badge ${badge}">${sign}${pr.delayDays} j</span></td>
@@ -173,7 +173,7 @@ App.views.dashboard = {
         const per = DB.personne(p.personneId);
         const t1 = DB.tache(p.t1), t2 = DB.tache(p.t2);
         rows.push(subRow({view:'personnes', personneId: p.personneId},
-          `${per ? App.personneLabel(per) : '—'} · <em>${t1?.nom||'—'}</em> ↔ <em>${t2?.nom||'—'}</em>`));
+          `${per ? App.personneLabel(per) : '—'} · <em>${App.escapeHTML(t1?.nom||'—')}</em> ↔ <em>${App.escapeHTML(t2?.nom||'—')}</em>`));
       });
       if (c.personnes.length > MAX) rows.push(`<li class="muted small sub-row" style="padding:2px 10px 4px">+${c.personnes.length - MAX} autre(s)</li>`);
     }
@@ -185,7 +185,7 @@ App.views.dashboard = {
         const t1 = DB.tache(m.t1), t2 = DB.tache(m.t2);
         const p1 = t1 ? DB.projet(t1.projetId) : null, p2 = t2 ? DB.projet(t2.projetId) : null;
         rows.push(subRow({view:'gantt', tacheId: m.t1, machineId: m.machineId, conflictTacheId: m.t2},
-          `${mach?.nom||'—'} · ${p1?p1.code+' ':''}${t1?.nom||'—'} ↔ ${p2?p2.code+' ':''}${t2?.nom||'—'}`));
+          `${App.escapeHTML(mach?.nom||'—')} · ${p1?App.escapeHTML(p1.code)+' ':''}${App.escapeHTML(t1?.nom||'—')} ↔ ${p2?App.escapeHTML(p2.code)+' ':''}${App.escapeHTML(t2?.nom||'—')}`));
       });
       if (c.machines.length > MAX) rows.push(`<li class="muted small sub-row" style="padding:2px 10px 4px">+${c.machines.length - MAX} autre(s)</li>`);
     }
@@ -195,7 +195,7 @@ App.views.dashboard = {
       c.stock.slice(0, MAX).forEach(s => {
         const art = DB.stock(s.id);
         rows.push(subRow({view:'stock', articleId: s.id},
-          `${art?.ref||'—'} — ${art?.nom||'—'} (manque : ${s.manque} ${art?.unite||''})`));
+          `${App.escapeHTML(art?.ref||'—')} — ${App.escapeHTML(art?.nom||'—')} (manque : ${s.manque} ${art?.unite||''})`));
       });
       if (c.stock.length > MAX) rows.push(`<li class="muted small sub-row" style="padding:2px 10px 4px">+${c.stock.length - MAX} autre(s)</li>`);
     }
@@ -205,7 +205,7 @@ App.views.dashboard = {
       c.commandes.slice(0, MAX).forEach(cmd => {
         const commande = (DB.state.commandes||[]).find(x => x.id === cmd.id);
         rows.push(subRow({view:'commandes', commandeId: cmd.id},
-          `${commande?.ref||'—'} · ${commande?.fournisseur||'—'} (${(cmd.manquants||[]).join(', ')})`));
+          `${App.escapeHTML(commande?.ref||'—')} · ${App.escapeHTML(commande?.fournisseur||'—')} (${(cmd.manquants||[]).join(', ')})`));
       });
       if (c.commandes.length > MAX) rows.push(`<li class="muted small sub-row" style="padding:2px 10px 4px">+${c.commandes.length - MAX} autre(s)</li>`);
     }
@@ -225,9 +225,9 @@ App.views.dashboard = {
         const cell = k => c.validations[k] ? '<span class="badge good">✓</span>' : '<span class="badge muted">·</span>';
         const statutBadge = c.statut==='engagée' ? 'good' : c.statut==='en-attente' ? 'warn' : 'muted';
         return `<tr>
-          <td class="mono">${c.ref}</td>
-          <td>${c.fournisseur}</td>
-          <td>${prj?prj.code:'—'}</td>
+          <td class="mono">${App.escapeHTML(c.ref)}</td>
+          <td>${App.escapeHTML(c.fournisseur)}</td>
+          <td>${prj?App.escapeHTML(prj.code):'—'}</td>
           <td class="right">${Money.chf(ht)}</td>
           <td class="right"><strong>${Money.chf(Money.ttc(ht,taux))}</strong></td>
           <td>${cell('A1')}</td><td>${cell('A2')}</td><td>${cell('A3')}</td><td>${cell('A4')}</td>
@@ -249,10 +249,10 @@ App.views.dashboard = {
       const assigns = (t.assignes||[]).map(id => App.personneLabel(DB.personne(id))).join(', ');
       return `<li class="alert-row" onclick="App.navigateToTarget({view:'gantt',tacheId:'${t.id}'})" role="button" tabindex="0">
         <div>
-          <div><strong>${t.nom}</strong> · <span class="muted small">${prj?prj.code:''}</span></div>
-          <div class="small muted">${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${lieu?lieu.nom:'—'} · ${assigns||'—'}</div>
+          <div><strong>${App.escapeHTML(t.nom)}</strong> · <span class="muted small">${prj?App.escapeHTML(prj.code):''}</span></div>
+          <div class="small muted">${D.fmt(t.debut)} → ${D.fmt(t.fin)} · ${lieu?App.escapeHTML(lieu.nom):'—'} · ${assigns||'—'}</div>
         </div>
-        <span class="badge" style="background:${prj?prj.couleur+'33':''};color:${prj?prj.couleur:''}">${prj?prj.code:''}</span>
+        <span class="badge" style="background:${prj?App.safeColor(prj.couleur)+'33':''};color:${prj?App.safeColor(prj.couleur):''}">${prj?App.escapeHTML(prj.code):''}</span>
       </li>`;
     }).join('')}</ul>`;
   },
@@ -268,8 +268,8 @@ App.views.dashboard = {
       const o = DB.lieu(d.origineId), de = DB.lieu(d.destinationId);
       return `<li>
         <div>
-          <div><strong>${App.personneLabel(p)}</strong> · ${d.motif}</div>
-          <div class="small muted">${D.fmt(d.date)} · ${o?o.nom:'—'} → ${de?de.nom:'—'} · ${d.duree}</div>
+          <div><strong>${App.personneLabel(p)}</strong> · ${App.escapeHTML(d.motif)}</div>
+          <div class="small muted">${D.fmt(d.date)} · ${o?App.escapeHTML(o.nom):'—'} → ${de?App.escapeHTML(de.nom):'—'} · ${d.duree}</div>
         </div>
         <span class="badge muted">${d.projetId||''}</span>
       </li>`;
@@ -290,7 +290,7 @@ App.views.dashboard = {
       const pct = Math.min(100, Math.round(jours / capa * 100));
       const cls = pct > 90 ? 'bad' : pct > 70 ? 'warn' : '';
       return `<tr>
-        <td><strong>${l.nom}</strong> <span class="muted small">· ${l.etage}</span></td>
+        <td><strong>${App.escapeHTML(l.nom)}</strong> <span class="muted small">· ${App.escapeHTML(l.etage)}</span></td>
         <td>${tasks.length}</td>
         <td>${jours} j-h</td>
         <td>${capa} j-h</td>
@@ -316,7 +316,7 @@ App.views.dashboard = {
       return `<li class="alert-row" onclick="App.navigate('absences')" role="button" tabindex="0">
         <div>
           <strong>${App.personneLabel(e.p)}</strong>
-          <div class="small muted">${D.fmt(e.debut)} → ${D.fmt(e.fin)} · ${e.motif}${e.note?' · '+e.note:''}</div>
+          <div class="small muted">${D.fmt(e.debut)} → ${D.fmt(e.fin)} · ${App.escapeHTML(e.motif)}${e.note?' · '+App.escapeHTML(e.note):''}</div>
         </div>
         <span class="badge ${encours?'bad':'warn'}">${encours?'en cours':'à venir'}</span>
         <span class="alert-arrow">›</span>
@@ -370,7 +370,7 @@ App.views.dashboard = {
       const rupture = x.art.quantite < x.qte;
       return `<li class="alert-row" onclick="App.navigateToTarget({view:'stock',articleId:'${x.art.id}'})" role="button" tabindex="0">
         <div style="flex:1">
-          <strong>${x.art.ref}</strong> · ${x.art.nom}
+          <strong>${App.escapeHTML(x.art.ref)}</strong> · ${App.escapeHTML(x.art.nom)}
           <div class="small muted">besoin : ${x.qte} ${x.art.unite} · stock : ${x.art.quantite} ${x.art.unite} ${rupture?'<span class="badge bad">rupture</span>':''}</div>
           <div class="bar-inline ${rupture?'bad':'good'}" style="margin-top:4px;height:6px"><div class="fill" style="width:${pct}%"></div></div>
         </div>
@@ -394,12 +394,12 @@ App.views.dashboard = {
       const isLate = taches.some(t => t.fin < today && t.avancement < 100);
       return `<li class="alert-row" onclick="App.navigateToTarget({view:'projets',projetId:'${p.id}'})" role="button" tabindex="0" style="display:block;padding:8px 10px">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
-          <span><span class="badge" style="background:${p.couleur}22;color:${p.couleur}">${p.code}</span> <strong>${p.nom}</strong>${isLate?' <span class="badge bad" style="font-size:9px">retard</span>':''}</span>
+          <span><span class="badge" style="background:${App.safeColor(p.couleur)}22;color:${App.safeColor(p.couleur)}">${App.escapeHTML(p.code)}</span> <strong>${App.escapeHTML(p.nom)}</strong>${isLate?' <span class="badge bad" style="font-size:9px">retard</span>':''}</span>
           <span class="small mono" style="margin-left:8px">${pct}%</span>
         </div>
         <div style="position:relative;height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden">
-          <div style="position:absolute;left:0;top:0;bottom:0;width:${blendPct}%;background:${p.couleur};opacity:.3;border-radius:4px"></div>
-          <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:${p.couleur};border-radius:4px"></div>
+          <div style="position:absolute;left:0;top:0;bottom:0;width:${blendPct}%;background:${App.safeColor(p.couleur)};opacity:.3;border-radius:4px"></div>
+          <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:${App.safeColor(p.couleur)};border-radius:4px"></div>
         </div>
         <div class="small muted" style="margin-top:3px">${done}/${total} terminées · ${inProg} en cours · fin ${D.fmt(p.fin)}</div>
       </li>`;
@@ -423,7 +423,7 @@ App.views.dashboard = {
         : `App.navigate('${view}')`;
       return `<li class="alert-row" onclick="${navTarget}" role="button" tabindex="0">
         <span class="badge ${badgeClass[issue.type]||'muted'}">${typeLabel[issue.type]||issue.type}</span>
-        <span class="alert-msg">${issue.msg}</span>
+        <span class="alert-msg">${App.escapeHTML(issue.msg)}</span>
         <span class="alert-arrow">›</span>
       </li>`;
     });
@@ -550,9 +550,9 @@ App.views.dashboard = {
       return `<li class="alert-row" onclick="App.views.flux.state.projet='';App.navigate('flux')" role="button" tabindex="0"
           style="display:flex;align-items:center;gap:8px;padding:6px 10px">
         <span style="color:${st.c};font-size:14px;flex-shrink:0">●</span>
-        <span style="flex:1;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.nom}</span>
+        <span style="flex:1;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${App.escapeHTML(m.nom)}</span>
         <span style="font-size:11px;color:${st.c};flex-shrink:0">${st.l}</span>
-        ${st.t ? `<span class="muted" style="font-size:10px;flex-shrink:0;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${st.t.nom}</span>` : ''}
+        ${st.t ? `<span class="muted" style="font-size:10px;flex-shrink:0;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${App.escapeHTML(st.t.nom)}</span>` : ''}
       </li>`;
     });
 

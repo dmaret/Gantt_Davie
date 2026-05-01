@@ -21,10 +21,10 @@ App.views.deplacements = {
             return `<tr data-id="${d.id}" style="cursor:pointer">
               <td class="mono">${D.fmt(d.date)}</td>
               <td>${App.personneLabel(p)}</td>
-              <td>${o?o.nom:'—'}</td>
-              <td>${dest?dest.nom:'—'}</td>
-              <td>${d.motif}</td>
-              <td>${prj?`<span class="badge" style="background:${prj.couleur}22;color:${prj.couleur}">${prj.code}</span>`:'<span class="muted small">—</span>'}</td>
+              <td>${o?App.escapeHTML(o.nom):'—'}</td>
+              <td>${dest?App.escapeHTML(dest.nom):'—'}</td>
+              <td>${App.escapeHTML(d.motif)}</td>
+              <td>${prj?`<span class="badge" style="background:${App.safeColor(prj.couleur)}22;color:${App.safeColor(prj.couleur)}">${App.escapeHTML(prj.code)}</span>`:'<span class="muted small">—</span>'}</td>
               <td>${d.duree}</td>
             </tr>`;
           }).join('')}
@@ -62,7 +62,7 @@ App.views.deplacements = {
         <div class="field"><label>Origine</label><select id="df-o">${optLieux}</select></div>
         <div class="field"><label>Destination</label><select id="df-d">${optLieux}</select></div>
       </div>
-      <div class="field"><label>Motif</label><input id="df-motif" value="${d.motif||''}"></div>
+      <div class="field"><label>Motif</label><input id="df-motif" value="${App.escapeHTML(d.motif||'')}"></div>
       <div class="field"><label>Projet lié (optionnel)</label>
         <select id="df-prj"><option value="">—</option>${optProj}</select>
       </div>
@@ -156,9 +156,9 @@ App.views.deplacements = {
         const body = `<p class="muted small">${importable.length} à créer · ${parsed.filter(r=>r.errors.length).length} erreur(s)</p>
           <table class="data"><thead><tr><th>Date</th><th>Personne</th><th>Origine → Destination</th><th>Motif</th><th>Statut</th></tr></thead><tbody>
           ${parsed.map(r => `<tr>
-            <td>${r.date}</td><td>${r.prenom} ${r.nomP}</td>
-            <td>${r.origine?r.origine.nom:'?'} → ${r.dest?r.dest.nom:'?'}</td>
-            <td>${r.motif}</td>
+            <td>${r.date}</td><td>${App.escapeHTML(r.prenom)} ${App.escapeHTML(r.nomP)}</td>
+            <td>${r.origine?App.escapeHTML(r.origine.nom):'?'} → ${r.dest?App.escapeHTML(r.dest.nom):'?'}</td>
+            <td>${App.escapeHTML(r.motif)}</td>
             <td>${r.errors.length?`<span class="badge bad">${r.errors.join(', ')}</span>`:'<span class="badge good">nouveau</span>'}</td>
           </tr>`).join('')}
           </tbody></table>`;

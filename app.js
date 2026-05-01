@@ -40,6 +40,10 @@ const App = {
     div.textContent = str;
     return div.innerHTML;
   },
+  // Valide qu'une couleur est un hex CSS sûr (#rgb ou #rrggbb), sinon retourne le fallback
+  safeColor(c, fallback = '#888888') {
+    return (typeof c === 'string' && /^#[0-9a-fA-F]{3,6}$/.test(c)) ? c : fallback;
+  },
 
   isAuthed() {
     const id = sessionStorage.getItem('atelier_authed');

@@ -73,8 +73,8 @@ App.views.bom = {
           ? `<input type="number" class="inline-edit" data-bom-qte="${p.id}:${l.articleId}" min="0" step="1" value="${l.quantite}"> <span class="muted small">${art.unite}</span>`
           : `${l.quantite} ${art.unite}`;
         return `<tr>
-          <td class="mono">${art.ref}</td>
-          <td>${art.nom}</td>
+          <td class="mono">${App.escapeHTML(art.ref)}</td>
+          <td>${App.escapeHTML(art.nom)}</td>
           <td class="right">${qteCell}</td>
           <td class="right ${rupture?'':'muted'}">${art.quantite} ${art.unite}</td>
           <td>${rupture?'<span class="badge bad">manque</span>':'<span class="badge good">OK</span>'}</td>
@@ -83,7 +83,7 @@ App.views.bom = {
       }).join('');
       return `<div style="margin-bottom:14px">
         <h3 style="display:flex;align-items:center;gap:8px;margin:0 0 6px 0">
-          <span class="badge" style="background:${p.couleur}22;color:${p.couleur}">${p.code}</span> ${p.nom}
+          <span class="badge" style="background:${App.safeColor(p.couleur)}22;color:${App.safeColor(p.couleur)}">${App.escapeHTML(p.code)}</span> ${App.escapeHTML(p.nom)}
           <button class="btn-ghost" data-add-bom="${p.id}" style="padding:2px 10px;margin-left:auto">+ Article</button>
         </h3>
         ${bom.length ? `<table class="data"><thead><tr><th>Réf</th><th>Article</th><th class="right">Besoin</th><th class="right">Stock</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted small">Aucune ligne. Cliquer « + Article » pour ajouter.</p>'}
@@ -108,8 +108,8 @@ App.views.bom = {
         const cls = a.deficit > 0 ? 'bad' : a.deficit > -5 ? 'warn' : 'good';
         const statut = a.deficit > 0 ? `<span class="badge bad">manque ${a.deficit}</span>` : a.deficit > -5 ? `<span class="badge warn">tendu</span>` : `<span class="badge good">OK</span>`;
         return `<tr>
-          <td class="mono">${a.ref}</td>
-          <td>${a.nom}</td>
+          <td class="mono">${App.escapeHTML(a.ref)}</td>
+          <td>${App.escapeHTML(a.nom)}</td>
           <td class="right">${a.quantite}</td>
           <td class="right muted">${a.cmd||'—'}</td>
           <td class="right">${a.besoin}</td>
@@ -160,7 +160,7 @@ App.views.bom = {
     const s = DB.state;
     const body = `
       <div class="field"><label>Article</label>
-        <select id="bf-art">${s.stock.map(x => `<option value="${x.id}">${x.ref} — ${x.nom} (${x.quantite} ${x.unite} dispo)</option>`).join('')}</select>
+        <select id="bf-art">${s.stock.map(x => `<option value="${x.id}">${App.escapeHTML(x.ref)} — ${App.escapeHTML(x.nom)} (${x.quantite} ${App.escapeHTML(x.unite)} dispo)</option>`).join('')}</select>
       </div>
       <div class="field"><label>Quantité requise</label><input type="number" id="bf-qte" min="1" value="1"></div>
     `;
@@ -230,8 +230,8 @@ App.views.bom = {
         const body = `<p class="muted small">${parsed.filter(r=>!r.existingLine&&!r.errors.length).length} à créer · ${parsed.filter(r=>r.existingLine).length} à mettre à jour · ${parsed.filter(r=>r.errors.length).length} erreur(s)</p>
           <table class="data"><thead><tr><th>Projet</th><th>Article</th><th>Qté</th><th>Statut</th></tr></thead><tbody>
           ${parsed.map(r => `<tr>
-            <td>${r.prj?`<span class="badge" style="background:${r.prj.couleur}22;color:${r.prj.couleur}">${r.prj.code}</span>`:'<span class="badge bad">'+r.pCode+'</span>'}</td>
-            <td>${r.art?r.art.nom:r.artRef}</td><td>${r.qte}</td>
+            <td>${r.prj?`<span class="badge" style="background:${App.safeColor(r.prj.couleur)}22;color:${App.safeColor(r.prj.couleur)}">${App.escapeHTML(r.prj.code)}</span>`:'<span class="badge bad">'+App.escapeHTML(r.pCode)+'</span>'}</td>
+            <td>${r.art?App.escapeHTML(r.art.nom):App.escapeHTML(r.artRef)}</td><td>${r.qte}</td>
             <td>${r.errors.length?`<span class="badge bad">${r.errors.join(', ')}</span>`:r.existingLine?'<span class="badge warn">màj</span>':'<span class="badge good">nouveau</span>'}</td>
           </tr>`).join('')}
           </tbody></table>`;

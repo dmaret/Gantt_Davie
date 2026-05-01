@@ -6,7 +6,7 @@ App.views.personnes = {
       <div class="toolbar">
         <input type="search" id="p-search" placeholder="Rechercher nom, rôle, compétence...">
         <select id="p-role"><option value="">Tous rôles</option>${[...new Set(s.personnes.map(p=>p.role))].map(r=>`<option>${r}</option>`).join('')}</select>
-        <select id="p-lieu"><option value="">Tous lieux</option>${s.lieux.filter(l=>l.type==='production').map(l=>`<option value="${l.id}">${l.nom}</option>`).join('')}</select>
+        <select id="p-lieu"><option value="">Tous lieux</option>${s.lieux.filter(l=>l.type==='production').map(l=>`<option value="${l.id}">${App.escapeHTML(l.nom)}</option>`).join('')}</select>
         <span class="spacer"></span>
         <input type="file" id="p-import-file" accept=".csv,.json" hidden>
         <button class="btn-ghost" id="p-import" data-perm="admin" title="Importer des personnes depuis un fichier CSV ou JSON">⬆ Importer</button>
@@ -84,9 +84,9 @@ App.views.personnes = {
       }).join('')}</div>`;
       return `<tr data-id="${p.id}"${p.pendingValidation ? ' style="background:#fff8ed;"' : ''}>
         <td><strong class="p-name" style="cursor:pointer">${App.personneLabel(p)}</strong>${p.pendingValidation ? ' <span class="badge warn" title="Importé automatiquement — à valider">⚠ À valider</span>' : ''}</td>
-        <td>${p.role}</td>
-        <td><span class="muted">${DB.lieu(p.lieuPrincipalId)?.nom || '—'}</span></td>
-        <td>${(p.competences||[]).map(c => `<span class="chip">${c}</span>`).join('')}</td>
+        <td>${App.escapeHTML(p.role)}</td>
+        <td><span class="muted">${App.escapeHTML(DB.lieu(p.lieuPrincipalId)?.nom || '—')}</span></td>
+        <td>${(p.competences||[]).map(c => `<span class="chip">${App.escapeHTML(c)}</span>`).join('')}</td>
         <td>${hMini}</td>
         <td>${tsNow.length}</td>
         <td><div style="display:flex;gap:3px">${cells}</div></td>
@@ -146,9 +146,9 @@ App.views.personnes = {
       const avCls = av === 100 ? 'good' : av > 0 ? 'warn' : '';
       const jours = D.weekdaysBetween(t.debut > w.start ? t.debut : w.start, t.fin < w.end ? t.fin : w.end);
       return `<tr class="wd-task-row" data-tid="${t.id}" style="cursor:pointer">
-        <td><span class="badge" style="background:${prj?prj.couleur+'22':''};color:${prj?prj.couleur:'var(--text-muted)'};border:1px solid ${prj?prj.couleur+'55':'var(--border)'}">${prj?prj.code:'—'}</span></td>
-        <td><strong>${t.nom}</strong></td>
-        <td class="muted small">${lieu?lieu.nom:'—'}</td>
+        <td><span class="badge" style="background:${prj?App.safeColor(prj.couleur)+'22':''};color:${prj?App.safeColor(prj.couleur):'var(--text-muted)'};border:1px solid ${prj?App.safeColor(prj.couleur)+'55':'var(--border)'}">${prj?App.escapeHTML(prj.code):'—'}</span></td>
+        <td><strong>${App.escapeHTML(t.nom)}</strong></td>
+        <td class="muted small">${lieu?App.escapeHTML(lieu.nom):'—'}</td>
         <td class="muted small">${D.fmt(t.debut)} → ${D.fmt(t.fin)}</td>
         <td class="right"><span class="muted small">${jours}j</span></td>
         <td class="right"><span class="badge ${avCls}">${av}%</span></td>
@@ -157,13 +157,13 @@ App.views.personnes = {
     }).join('') : `<tr><td colspan="7" class="muted" style="text-align:center;padding:12px">Aucune tâche cette semaine</td></tr>`;
 
     const absRows = absences.map(a => `<tr>
-      <td colspan="5" class="muted small">🏖 Absence : ${a.motif||'—'} · ${D.fmt(a.debut)} → ${D.fmt(a.fin)}</td>
+      <td colspan="5" class="muted small">🏖 Absence : ${App.escapeHTML(a.motif||'—')} · ${D.fmt(a.debut)} → ${D.fmt(a.fin)}</td>
     </tr>`).join('');
 
     const body = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:10px 14px;border-radius:8px;background:var(--surface-2)">
         <div style="flex:1">
-          <div class="muted small">${p.role} · ${DB.lieu(p.lieuPrincipalId)?.nom||'—'}</div>
+          <div class="muted small">${App.escapeHTML(p.role)} · ${App.escapeHTML(DB.lieu(p.lieuPrincipalId)?.nom||'—')}</div>
           <div style="margin-top:4px;font-size:13px">${h}h assignées sur ${p.capaciteHebdo}h de capacité</div>
           <div class="bar-inline ${cls}" style="margin-top:6px"><div class="fill" style="width:${pct}%"></div></div>
         </div>
@@ -258,14 +258,14 @@ App.views.personnes = {
 
       const riskHtml = delta > 0
         ? `<div style="margin-top:6px;padding:6px 8px;border-radius:6px;background:#fff3cd;border:1px solid #f0ad4e;font-size:11px">
-            ⚠ Décaler impacte <strong>${prj?.nom||'le projet'}</strong> : fin repoussée de <strong>+${delta}j</strong> (${D.fmt(prj.fin)} → ${D.fmt(newEnd)})
+            ⚠ Décaler impacte <strong>${App.escapeHTML(prj?.nom||'le projet')}</strong> : fin repoussée de <strong>+${delta}j</strong> (${D.fmt(prj.fin)} → ${D.fmt(newEnd)})
           </div>`
         : `<div class="muted small" style="margin-top:4px">✓ Décaler n'impacte pas la fin du projet</div>`;
 
       return `<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <span class="badge" style="background:${col}22;color:${col};border:1px solid ${col}55">${prj?.code||'—'}</span>
-          <strong>${t.nom}</strong>
+          <span class="badge" style="background:${App.safeColor(col)}22;color:${App.safeColor(col)};border:1px solid ${App.safeColor(col)}55">${App.escapeHTML(prj?.code||'—')}</span>
+          <strong>${App.escapeHTML(t.nom)}</strong>
           <span class="muted small">${D.fmt(t.debut)} → ${D.fmt(t.fin)}</span>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
@@ -376,11 +376,11 @@ App.views.personnes = {
       const tItems = r.ts.length ? r.ts.map(t => {
         const prj = DB.projet(t.projetId);
         const lieu = DB.lieu(t.lieuId);
-        return `<li class="alert-row" data-tid="${t.id}" role="button" tabindex="0"><div style="flex:1"><span class="badge" style="background:${prj?prj.couleur+'33':''};color:${prj?prj.couleur:''}">${prj?prj.code:''}</span> <strong>${t.nom}</strong> <span class="muted small">· ${D.fmt(t.debut)}→${D.fmt(t.fin)} · ${lieu?lieu.nom:'—'}</span></div><span class="alert-arrow">›</span></li>`;
+        return `<li class="alert-row" data-tid="${t.id}" role="button" tabindex="0"><div style="flex:1"><span class="badge" style="background:${prj?App.safeColor(prj.couleur)+'33':''};color:${prj?App.safeColor(prj.couleur):''}">${prj?App.escapeHTML(prj.code):''}</span> <strong>${App.escapeHTML(t.nom)}</strong> <span class="muted small">· ${D.fmt(t.debut)}→${D.fmt(t.fin)} · ${lieu?App.escapeHTML(lieu.nom):'—'}</span></div><span class="alert-arrow">›</span></li>`;
       }).join('') : '<li class="muted">Aucune tâche.</li>';
       const dItems = r.deps.length ? r.deps.map(d => {
         const o = DB.lieu(d.origineId), de = DB.lieu(d.destinationId);
-        return `<li class="alert-row" data-did="${d.id}" role="button" tabindex="0"><div style="flex:1">🚚 ${D.fmt(d.date)} · ${d.motif} · ${o?o.nom:'—'} → ${de?de.nom:'—'} · ${d.duree}</div><span class="alert-arrow">›</span></li>`;
+        return `<li class="alert-row" data-did="${d.id}" role="button" tabindex="0"><div style="flex:1">🚚 ${D.fmt(d.date)} · ${App.escapeHTML(d.motif)} · ${o?App.escapeHTML(o.nom):'—'} → ${de?App.escapeHTML(de.nom):'—'} · ${d.duree}</div><span class="alert-arrow">›</span></li>`;
       }).join('') : '';
       return `<div class="card" style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -398,7 +398,7 @@ App.views.personnes = {
     };
 
     const body = `
-      <div class="muted small" style="margin-bottom:10px">${p.role} · ${DB.lieu(p.lieuPrincipalId)?.nom || '—'} · Capacité ${p.capaciteHebdo}h/sem · Compétences : ${(p.competences||[]).join(', ')||'—'}</div>
+      <div class="muted small" style="margin-bottom:10px">${App.escapeHTML(p.role)} · ${App.escapeHTML(DB.lieu(p.lieuPrincipalId)?.nom || '—')} · Capacité ${p.capaciteHebdo}h/sem · Compétences : ${App.escapeHTML((p.competences||[]).join(', ')||'—')}</div>
       ${renderBloc('Cette semaine', today, weekEnd, cette)}
       ${renderBloc('Semaine prochaine', nextWeekStart, nextWeekEnd, prochaine)}
     `;
@@ -436,15 +436,15 @@ App.views.personnes = {
         <span class="muted">Complète les informations ci-dessous puis clique sur <strong>Valider</strong> pour confirmer, ou <strong>Refuser</strong> pour supprimer cette entrée.</span>
       </div>` : ''}
       <div class="row">
-        <div class="field"><label>Prénom</label><input id="pf-prenom" value="${p.prenom||''}"></div>
-        <div class="field"><label>Nom</label><input id="pf-nom" value="${p.nom||''}"></div>
+        <div class="field"><label>Prénom</label><input id="pf-prenom" value="${App.escapeHTML(p.prenom||'')}"></div>
+        <div class="field"><label>Nom</label><input id="pf-nom" value="${App.escapeHTML(p.nom||'')}"></div>
       </div>
       <div class="row">
-        <div class="field"><label>Rôle</label><input id="pf-role" value="${p.role||''}"></div>
+        <div class="field"><label>Rôle</label><input id="pf-role" value="${App.escapeHTML(p.role||'')}"></div>
         <div class="field"><label>Capacité hebdo (h)</label><input type="number" id="pf-capa" value="${p.capaciteHebdo||35}"></div>
       </div>
       <div class="field"><label>Lieu principal</label>
-        <select id="pf-lieu">${s.lieux.filter(l=>l.type==='production').map(l=>`<option value="${l.id}" ${l.id===p.lieuPrincipalId?'selected':''}>${l.nom}</option>`).join('')}</select>
+        <select id="pf-lieu">${s.lieux.filter(l=>l.type==='production').map(l=>`<option value="${l.id}" ${l.id===p.lieuPrincipalId?'selected':''}>${App.escapeHTML(l.nom)}</option>`).join('')}</select>
       </div>
       <div class="field"><label>Compétences (Ctrl/Cmd)</label>
         <select id="pf-comps" multiple size="6">
@@ -564,8 +564,8 @@ App.views.personnes = {
 
     const mkRow = (action, badge, r) => {
       const lieu = findLieu(r.lieu);
-      const lieuCell = lieu ? lieu.nom : (r.lieu ? `<span class="badge warn">${r.lieu} — non trouvé</span>` : '—');
-      return `<tr><td>${badge}</td><td>${r.prenom}</td><td>${r.nom}</td><td>${r.role}</td><td>${lieuCell}</td><td class="small">${r.competences.join(', ')||'—'}</td><td>${r.capaciteHebdo}h</td></tr>`;
+      const lieuCell = lieu ? App.escapeHTML(lieu.nom) : (r.lieu ? `<span class="badge warn">${App.escapeHTML(r.lieu)} — non trouvé</span>` : '—');
+      return `<tr><td>${badge}</td><td>${App.escapeHTML(r.prenom)}</td><td>${App.escapeHTML(r.nom)}</td><td>${App.escapeHTML(r.role)}</td><td>${lieuCell}</td><td class="small">${App.escapeHTML(r.competences.join(', ')||'—')}</td><td>${r.capaciteHebdo}h</td></tr>`;
     };
     const body = `
       <p class="muted small" style="margin-bottom:8px">
