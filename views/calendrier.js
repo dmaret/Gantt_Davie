@@ -19,6 +19,7 @@ App.views.calendrier = {
         <select id="cal-pers"><option value="">Toutes personnes</option>${s.personnes.map(p=>`<option value="${p.id}">${App.personneLabel(p)}</option>`).join('')}</select>
         <select id="cal-lieu"><option value="">Tous lieux</option>${s.lieux.filter(l=>l.type==='production').map(l=>`<option value="${l.id}">${l.nom}</option>`).join('')}</select>
         <span class="spacer"></span>
+        <button class="btn-ghost" id="cal-print" title="Imprimer le calendrier">⎙ Imprimer</button>
       </div>
       <div class="card"><div id="cal-body"></div></div>
     `;
@@ -29,6 +30,7 @@ App.views.calendrier = {
     document.getElementById('cal-mode').onchange = e => { st.mode = e.target.value; this.draw(); };
     document.getElementById('cal-pers').onchange = e => { st.filterPersonne = e.target.value; this.draw(); };
     document.getElementById('cal-lieu').onchange = e => { st.filterLieu = e.target.value; this.draw(); };
+    document.getElementById('cal-print').onclick = () => this._printCal();
     this.draw();
   },
   shift(n) {
@@ -111,6 +113,82 @@ App.views.calendrier = {
     while (d.getUTCDay() !== 1) d.setUTCDate(d.getUTCDate() - 1);
     return D.iso(d);
   },
+  _printCal() {
+    const st = this.state, s = DB.state;
+    const today = D.today();
+    const esc = v => App.escapeHTML(String(v || ''));
+    const sc = c => App.safeColor(c);
+    const mois = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+    const cursor = D.parse(st.cursor);
+    let title, days;
+    if (st.mode === 'mois') {
+      title = mois[cursor.getUTCMonth()] + ' ' + cursor.getUTCFullYear();
+      const last = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0));
+      days = [];
+      const d = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), 1));
+      while (D.iso(d) <= D.iso(last)) { days.push(D.iso(d)); d.setUTCDate(d.getUTCDate() + 1); }
+    } else {
+      const ws = this.weekStart(st.cursor);
+      title = 'Semaine du ' + D.fmt(ws);
+      days = Array.from({length:7}, (_, i) => D.addDays(ws, i));
+    }
+
+    const personneFilter = s.personnes.find(p => p.id === st.filterPersonne);
+    const lieuFilter = s.lieux.find(l => l.id === st.filterLieu);
+    const subtitle = [personneFilter ? `Personne : ${App.personneLabel(personneFilter)}` : '', lieuFilter ? `Lieu : ${lieuFilter.nom}` : ''].filter(Boolean).join(' · ') || 'Toutes personnes · Tous lieux';
+
+    const css = `body{font-family:system-ui,sans-serif;margin:20px;font-size:11px;color:#222}h1{font-size:15px;margin:0 0 2px}h2{font-size:12px;margin:10px 0 3px;padding:3px 8px;background:#f0f0f0;border-radius:3px}.sub{color:#777;font-size:9px;margin:0 0 10px}table{width:100%;border-collapse:collapse;margin-bottom:8px}th,td{padding:3px 7px;border:1px solid #ddd;text-align:left;font-size:10px}th{background:#f5f5f5;font-weight:600}tr:nth-child(even)td{background:#fafafa}.b{display:inline-block;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:600}.we{color:#999}@media print{@page{size:A4 portrait;margin:10mm}}`;
+
+    let body = `<h1>Calendrier — ${esc(title)}</h1><p class="sub">${esc(subtitle)}</p>`;
+
+    const daysWithContent = days.filter(d => {
+      let ts = s.taches.filter(t => t.debut <= d && t.fin >= d);
+      if (st.filterPersonne) ts = ts.filter(t => (t.assignes||[]).includes(st.filterPersonne));
+      if (st.filterLieu) ts = ts.filter(t => t.lieuId === st.filterLieu);
+      let ms = s.deplacements.filter(m => m.date === d);
+      if (st.filterPersonne) ms = ms.filter(m => m.personneId === st.filterPersonne);
+      return ts.length > 0 || ms.length > 0;
+    });
+
+    if (!daysWithContent.length) {
+      body += `<p style="color:#999">Aucune tâche ni déplacement sur cette période.</p>`;
+    } else {
+      daysWithContent.forEach(d => {
+        let ts = s.taches.filter(t => t.debut <= d && t.fin >= d);
+        if (st.filterPersonne) ts = ts.filter(t => (t.assignes||[]).includes(st.filterPersonne));
+        if (st.filterLieu) ts = ts.filter(t => t.lieuId === st.filterLieu);
+        let ms = s.deplacements.filter(m => m.date === d);
+        if (st.filterPersonne) ms = ms.filter(m => m.personneId === st.filterPersonne);
+        const dt = D.parse(d);
+        const isWE = dt.getUTCDay() === 0 || dt.getUTCDay() === 6;
+        const isToday = d === today;
+        body += `<h2><span${isWE?' class="we"':''}${isToday?' style="font-weight:700;color:#2563eb"':''}>${D.fmt(d)}</span>${isToday?'  <span style="font-size:9px;color:#2563eb">Aujourd\'hui</span>':''}${isWE?' <span style="font-size:9px;color:#999">Week-end</span>':''}</h2>`;
+        if (ts.length) {
+          body += `<table><thead><tr><th>Tâche</th><th>Projet</th><th>Lieu</th><th>Assignés</th><th>Av.</th></tr></thead><tbody>`;
+          ts.forEach(t => {
+            const prj = DB.projet(t.projetId);
+            const lieu = DB.lieu(t.lieuId);
+            const ass = (t.assignes||[]).map(pid => DB.personne(pid)).filter(Boolean).map(p => App.personneLabel(p)).join(', ') || '—';
+            const av = t.avancement || 0;
+            const col = sc(prj?.couleur || '#888');
+            body += `<tr><td>${esc(t.nom)}</td><td><span class="b" style="background:${col}22;color:${col}">${esc(prj?.code||'—')}</span></td><td>${esc(lieu?.nom||'—')}</td><td>${esc(ass)}</td><td>${av}%</td></tr>`;
+          });
+          body += `</tbody></table>`;
+        }
+        ms.forEach(m => {
+          const p = DB.personne(m.personneId);
+          const o = DB.lieu(m.origineId);
+          const de = DB.lieu(m.destinationId);
+          body += `<p style="margin:2px 0 4px;font-size:10px">🚚 ${esc(App.personneLabel(p))} · ${esc(m.motif||'Déplacement')} · ${esc(o?.nom||'—')} → ${esc(de?.nom||'—')}</p>`;
+        });
+      });
+    }
+
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Calendrier ${esc(title)}</title><style>${css}</style></head><body>${body}<script>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+    w.document.close();
+  },
+
   openDay(d) {
     const s = DB.state, st = this.state;
     let ts = s.taches.filter(t => t.debut <= d && t.fin >= d);

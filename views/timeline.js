@@ -25,6 +25,7 @@ App.views.timeline = {
           <option value="14" ${st.rangeDays === 14 ? 'selected' : ''}>2 sem</option>
           <option value="30" ${st.rangeDays === 30 ? 'selected' : ''}>1 mois</option>
         </select>
+        <button class="btn-ghost" id="tl-print" title="Imprimer la timeline">⎙ Imprimer</button>
       </div>
       <div class="card" style="overflow:auto;padding:0">
         <div id="tl-grid"></div>
@@ -37,6 +38,7 @@ App.views.timeline = {
     document.getElementById('tl-today').onclick = () => { st.rangeStart = D.addDays(D.today(), -1); this.draw(); };
     document.getElementById('tl-next').onclick = () => { st.rangeStart = D.addDays(st.rangeStart, 7); this.draw(); };
     document.getElementById('tl-range').onchange = e => { st.rangeDays = +e.target.value; this.draw(); };
+    document.getElementById('tl-print').onclick = () => this._printTimeline();
 
     this.draw();
   },
@@ -275,5 +277,72 @@ App.views.timeline = {
       `;
       bodyEl.appendChild(todayLine);
     }
+  },
+
+  _printTimeline() {
+    const st = this.state;
+    const s = DB.state;
+    const start = st.rangeStart;
+    const days = st.rangeDays;
+    const today = D.today();
+    const end = D.addDays(start, days - 1);
+    const esc = v => App.escapeHTML(String(v || ''));
+    const sc = c => App.safeColor(c);
+    const dowLetters = ['D','L','M','M','J','V','S'];
+
+    let personnes = s.personnes.slice();
+    if (st.lieuFilter) personnes = personnes.filter(p => p.lieuPrincipalId === st.lieuFilter);
+    if (st.search) personnes = personnes.filter(p => App.personneLabel(p).toLowerCase().includes(st.search));
+
+    const dayList = Array.from({length: days}, (_, i) => D.addDays(start, i));
+
+    const css = `body{font-family:system-ui,sans-serif;margin:20px;font-size:11px;color:#222}h1{font-size:15px;margin:0 0 2px}.sub{color:#777;font-size:9px;margin:0 0 10px}table{width:100%;border-collapse:collapse}th,td{padding:3px 5px;border:1px solid #ddd;text-align:center;font-size:9px}th{background:#f5f5f5;font-weight:600}td.name{text-align:left;font-size:10px;font-weight:500;min-width:120px;white-space:nowrap}td.we{background:#f8f8f8;color:#ccc}td.today{background:#dbeafe}.b{display:inline-block;padding:1px 3px;border-radius:2px;font-size:8px;font-weight:600}.absent{background:#fef3c7}.leg{margin-top:8px;font-size:9px;color:#555}@media print{@page{size:A4 landscape;margin:8mm}}`;
+
+    let body = `<h1>Timeline — ${D.fmt(start)} → ${D.fmt(end)}</h1><p class="sub">${personnes.length} personne(s) · ${days} jour(s)</p>`;
+    body += `<table><thead><tr><th class="name">Personne</th>`;
+    dayList.forEach(d => {
+      const dt = D.parse(d);
+      const dow = dt.getUTCDay();
+      const isWE = dow === 0 || dow === 6;
+      const isToday = d === today;
+      body += `<th class="${isToday ? 'today' : isWE ? 'we' : ''}" style="min-width:28px">${dowLetters[dow]}<br>${dt.getUTCDate()}</th>`;
+    });
+    body += `</tr></thead><tbody>`;
+
+    personnes.forEach(p => {
+      const label = App.personneLabel(p);
+      const absenceDays = new Set();
+      (p.absences||[]).forEach(a => { dayList.forEach(d => { if (d >= a.debut && d <= a.fin) absenceDays.add(d); }); });
+      body += `<tr><td class="name">${esc(label)}</td>`;
+      dayList.forEach(d => {
+        const dt = D.parse(d);
+        const dow = dt.getUTCDay();
+        const isWE = dow === 0 || dow === 6;
+        const isToday = d === today;
+        const isAbsent = absenceDays.has(d);
+        const taches = s.taches.filter(t => !t.jalon && (t.assignes||[]).includes(p.id) && t.debut <= d && t.fin >= d);
+        let cls = isToday ? 'today' : isWE ? 'we' : '';
+        if (isAbsent) cls += ' absent';
+        let content = isAbsent && !taches.length ? '🏖' : taches.map(t => {
+          const prj = DB.projet(t.projetId);
+          const col = sc(prj?.couleur || '#888');
+          return `<div class="b" style="background:${col}22;color:${col};border-left:2px solid ${col}">${esc(prj?.code||'?')}</div>`;
+        }).join('');
+        body += `<td class="${cls}">${content}</td>`;
+      });
+      body += `</tr>`;
+    });
+    body += `</tbody></table>`;
+
+    const projetIds = new Set();
+    personnes.forEach(p => s.taches.filter(t => !t.jalon && (t.assignes||[]).includes(p.id) && t.debut <= end && t.fin >= start).forEach(t => { if (t.projetId) projetIds.add(t.projetId); }));
+    const projetsList = [...projetIds].map(id => DB.projet(id)).filter(Boolean);
+    if (projetsList.length) {
+      body += `<p class="leg">${projetsList.map(p => { const col = sc(p.couleur||'#888'); return `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px"><span style="width:8px;height:8px;border-radius:2px;background:${col};display:inline-block"></span><strong>${esc(p.code)}</strong> ${esc(p.nom)}</span>`; }).join('')}</p>`;
+    }
+
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Timeline</title><style>${css}</style></head><body>${body}<script>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+    w.document.close();
   },
 };
