@@ -67,26 +67,26 @@ App.views.projets = {
     const daysLabel = daysLeft === null ? null : overdue ? `J+${Math.abs(daysLeft)}` : `J-${daysLeft}`;
     const daysCls   = overdue ? 'bad' : daysLeft <= 5 ? 'warn' : daysLeft <= 20 ? '' : 'good';
     return `
-      <div class="card prj-card" data-id="${p.id}" style="cursor:pointer;border-left:4px solid ${p.couleur}">
+      <div class="card prj-card" data-id="${p.id}" style="cursor:pointer;border-left:4px solid ${App.safeColor(p.couleur)}">
         <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;">
           <div style="min-width:0;flex:1">
-            <h3 style="margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.code} · ${p.nom}</h3>
-            <div class="muted small">${p.client} · étage ${p.etage}</div>
+            <h3 style="margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${App.escapeHTML(p.code)} · ${App.escapeHTML(p.nom)}</h3>
+            <div class="muted small">${App.escapeHTML(p.client||'')} · étage ${p.etage}</div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-            <span class="badge ${p.priorite==='haute'?'bad':p.priorite==='moyenne'?'warn':'muted'}">${p.priorite}</span>
+            <span class="badge ${p.priorite==='haute'?'bad':p.priorite==='moyenne'?'warn':'muted'}">${App.escapeHTML(p.priorite)}</span>
             ${daysLabel ? `<span class="badge ${daysCls}" style="font-size:11px;font-weight:700">${daysLabel}</span>` : ''}
           </div>
         </div>
         <div class="small muted" style="margin-top:6px">${D.fmt(p.debut)} → ${D.fmt(p.fin)} · ${D.diffDays(p.debut,p.fin)} j</div>
         <div style="margin-top:8px">
           <div style="position:relative;height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden;">
-            <div style="position:absolute;left:0;top:0;bottom:0;width:${blendPct}%;background:${p.couleur};opacity:.3;border-radius:4px;"></div>
-            <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:${p.couleur};border-radius:4px;"></div>
+            <div style="position:absolute;left:0;top:0;bottom:0;width:${blendPct}%;background:${App.safeColor(p.couleur)};opacity:.3;border-radius:4px;"></div>
+            <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:${App.safeColor(p.couleur)};border-radius:4px;"></div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:3px">
             <span class="small muted">${done}/${total} terminées${inProg ? ` · ${inProg} en cours` : ''}</span>
-            <span class="small mono" style="font-weight:700;color:${p.couleur}">${pct}%</span>
+            <span class="small mono" style="font-weight:700;color:${App.safeColor(p.couleur)}">${pct}%</span>
           </div>
         </div>
         <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
