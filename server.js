@@ -1,4 +1,4 @@
-// Serveur Gantt Davie — Express + JWT + stockage JSON
+// Serveur Gantt Davie — Express + JWT + stockage JSON + backup NAS
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
@@ -9,6 +9,11 @@ const PORT       = process.env.PORT       || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'gantt-davie-dev-secret-changeme';
 const DATA_DIR   = path.join(__dirname, 'data');
 const DATA_FILE  = path.join(DATA_DIR, 'state.json');
+
+// Dossier de backup NAS — définir via variable d'environnement BACKUP_DIR
+// Exemple : BACKUP_DIR="/Volumes/MyCloudHome/GanttDavie" npm start
+// Laisser vide pour désactiver le backup automatique
+const BACKUP_DIR = process.env.BACKUP_DIR || '';
 
 // Utilisateurs par défaut (première utilisation, avant que le state soit créé)
 const DEFAULT_USERS = [
@@ -45,6 +50,32 @@ function authMiddleware(req, res, next) {
     next();
   } catch {
     res.status(401).json({ error: 'Token invalide ou expiré' });
+  }
+}
+
+// ─── Backup NAS ──────────────────────────────────────────────────────────────
+
+function doBackup() {
+  if (!BACKUP_DIR) return;
+  if (!fs.existsSync(DATA_FILE)) return;
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const date = new Date().toISOString().slice(0, 10);   // YYYY-MM-DD
+    const time = new Date().toTimeString().slice(0, 5).replace(':', 'h'); // HHhMM
+    const dest = path.join(BACKUP_DIR, `gantt-davie-${date}-${time}.json`);
+    fs.copyFileSync(DATA_FILE, dest);
+    // Garder seulement les 30 derniers backups
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter(f => f.startsWith('gantt-davie-') && f.endsWith('.json'))
+      .sort();
+    if (files.length > 30) {
+      files.slice(0, files.length - 30).forEach(f => {
+        try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch {}
+      });
+    }
+    console.log(`💾  Backup NAS → ${dest}`);
+  } catch (e) {
+    console.error(`⚠️  Backup NAS échoué : ${e.message}`);
   }
 }
 
@@ -92,7 +123,7 @@ app.get('/api/state', authMiddleware, (_req, res) => {
   res.json(state);
 });
 
-// Sauvegarde l'état complet
+// Sauvegarde l'état complet + backup NAS si configuré
 app.put('/api/state', authMiddleware, (req, res) => {
   if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
     return res.status(400).json({ error: 'Corps JSON invalide' });
@@ -101,7 +132,14 @@ app.put('/api/state', authMiddleware, (req, res) => {
   res.json({ ok: true });
 });
 
-// Télécharger une sauvegarde complète
+// Déclencher un backup NAS manuellement
+app.post('/api/backup', authMiddleware, (req, res) => {
+  if (!BACKUP_DIR) return res.status(400).json({ error: 'BACKUP_DIR non configuré' });
+  doBackup();
+  res.json({ ok: true, dir: BACKUP_DIR });
+});
+
+// Télécharger une sauvegarde complète (navigateur)
 app.get('/api/export', authMiddleware, (req, res) => {
   if (!fs.existsSync(DATA_FILE)) return res.status(404).json({ error: 'Pas de données' });
   const filename = `gantt-davie-${new Date().toISOString().slice(0, 10)}.json`;
@@ -115,5 +153,14 @@ app.listen(PORT, () => {
   if (!fs.existsSync(DATA_FILE)) {
     console.log('ℹ️   Première utilisation — les données seront créées au premier login.');
     console.log('    Comptes disponibles : U_DIR (admin, sans mdp), U_CP, U_LOG, U_TECH, U_BUD, U_OBS');
+  }
+  if (BACKUP_DIR) {
+    console.log(`💾  Backup NAS actif → ${BACKUP_DIR}  (toutes les heures, 30 fichiers max)`);
+    // Backup toutes les heures
+    setInterval(doBackup, 60 * 60 * 1000);
+    // Premier backup au démarrage
+    setTimeout(doBackup, 5000);
+  } else {
+    console.log('ℹ️   Backup NAS désactivé — lance avec BACKUP_DIR="/Volumes/MyCloudHome/GanttDavie" npm start');
   }
 });
