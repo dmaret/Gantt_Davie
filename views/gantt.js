@@ -575,7 +575,7 @@ App.views.gantt = {
     const colToDay  = i => isHourMode ? Math.floor(i / HOURS_PER_DAY) : i;
     const colToHour = i => isHourMode ? (i % HOURS_PER_DAY) + WORK_START_H : null;
     const colToDate = i => D.addDays(start, colToDay(i));
-    const LABEL_W = 220;
+    const LABEL_W = 280;
     const dowLetters = ['D','L','M','M','J','V','S']; // dim=0, lun=1, …, sam=6
     const isoWeekNum = iso => { const d = D.parse(iso); const thu = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 4 - (d.getUTCDay()||7))); return Math.ceil(((thu - new Date(Date.UTC(thu.getUTCFullYear(),0,1)))/864e5+1)/7); };
     const dayClasses = d => {
