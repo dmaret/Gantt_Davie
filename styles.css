@@ -995,7 +995,7 @@ body.dark .h-cell[data-lvl="1"] { background: #254a77; color: #cfe4ff; }
 }
 
 /* Mode tablette atelier — UI agrandie, nav + sortie toujours accessibles */
-body.tablette .topbar .actions > :not(#btn-tablette):not(#btn-theme) { display: none; }
+body.tablette .topbar .actions > :not(#btn-tablette):not(#btn-theme):not(#btn-logout):not(#btn-password) { display: none; }
 body.tablette #btn-tablette { background: var(--primary-weak); color: var(--primary); border-color: var(--primary); }
 body.tablette main#view-root { padding: 30px; font-size: 18px; }
 body.tablette .kpi .value { font-size: 40px; }
