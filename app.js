@@ -143,6 +143,7 @@ const App = {
       const ok = await this.login(userSel.value, pwInput.value);
       btn.disabled = false; btn.textContent = 'Se connecter';
       if (ok) {
+        this._pendingSwitch = null;
         document.getElementById('login-overlay').remove();
         // Charge les données puis lance l'appli
         const vr = document.getElementById('view-root');
@@ -171,6 +172,7 @@ const App = {
       const prev = this._pendingSwitch;
       if (prev?.prevToken) DB._setToken(prev.prevToken);
       if (prev?.prevId) localStorage.setItem('atelier_user_id', prev.prevId);
+      else              localStorage.removeItem('atelier_user_id');
       this._pendingSwitch = null;
       document.getElementById('login-overlay').remove();
       this.populateUserSelect();

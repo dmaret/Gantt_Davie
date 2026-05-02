@@ -199,7 +199,7 @@ App.views.projets = {
       ${bomHtml}
       ${cmdHtml}
       <div class="footer">Généré le ${D.fmt(today)} par ${App.escapeHTML(App.currentUser().nom)} · Atelier · Planification</div>
-      <script>setTimeout(() => window.print(), 400);</script>
+      <script>setTimeout(() => window.print(), 400);<\/script>
       </body></html>`;
     const w = window.open('', '_blank');
     if (!w) { App.toast('Pop-up bloqué — autoriser les pop-ups','error'); return; }
