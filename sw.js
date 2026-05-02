@@ -1,4 +1,4 @@
-const CACHE_NAME = 'atelier-plan-v20260507';
+const CACHE_NAME = 'atelier-plan-v20260508';
 
 const PRECACHE_URLS = [
   './index.html',
@@ -59,6 +59,10 @@ self.addEventListener('fetch', event => {
 
   // Only handle same-origin requests
   if (url.origin !== location.origin) return;
+
+  // Bypass complet pour les routes API (auth, state, backup) — jamais cacher,
+  // sinon les données serveur deviennent figées et la sync multi-poste casse.
+  if (url.pathname.startsWith('/api/')) return;
 
   const isHTML = event.request.destination === 'document' ||
                  url.pathname.endsWith('.html') ||

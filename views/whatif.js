@@ -34,6 +34,7 @@ App.views.whatif = {
         const snap = JSON.parse(localStorage.getItem(this.SNAP_KEY));
         delete snap._snapDate;
         DB.state = snap;
+        DB.migrate();
         DB.save();
         this.addToHistory({ action: 'reject', date: new Date().toISOString(), diff: document.getElementById('wi-diff')?.textContent });
         localStorage.removeItem(this.SNAP_KEY);

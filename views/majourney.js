@@ -358,7 +358,7 @@ App.views.majourney = {
       </table>
       <div class="legend"><strong>Légende :</strong> ${legendHtml}</div>
       <div class="footer">Atelier · Planification — ${D.fmt(today)}</div>
-      <script>setTimeout(() => window.print(), 400);</script>
+      <script>setTimeout(() => window.print(), 400);<\/script>
     </body></html>`;
 
     const w = window.open('', '_blank');
