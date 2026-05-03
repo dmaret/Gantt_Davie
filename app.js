@@ -20,6 +20,7 @@ const App = {
     this.populateUserSelect();
     this.updateBell();
     this.bellInterval = setInterval(() => this.updateBell(), 30000);
+    this.startSyncPolling();
     this.initNotifications();
     this.applyGroupUI();
     this.navigate(location.hash.replace('#','') || 'dashboard');
@@ -80,8 +81,41 @@ const App = {
   },
 
   clearAllIntervals() {
-    if (this.bellInterval) { clearInterval(this.bellInterval); this.bellInterval = null; }
-    if (this.tabletteRefresh) { clearInterval(this.tabletteRefresh); this.tabletteRefresh = null; }
+    if (this.bellInterval)   { clearInterval(this.bellInterval);   this.bellInterval   = null; }
+    if (this.tabletteRefresh){ clearInterval(this.tabletteRefresh);this.tabletteRefresh= null; }
+    if (this.syncInterval)   { clearInterval(this.syncInterval);   this.syncInterval   = null; }
+  },
+
+  // Polling 5s — détecte les changements des autres utilisateurs et rafraîchit
+  _stateFingerprint() {
+    const s = DB.state;
+    const lastAudit = (s.audit && s.audit.length) ? s.audit[s.audit.length - 1]?.ts : '';
+    return (s.taches?.length || 0) + '|' + (s.stock?.length || 0) + '|' + (s.commandes?.length || 0) + '|' + lastAudit;
+  },
+  startSyncPolling() {
+    if (this.syncInterval) clearInterval(this.syncInterval);
+    this._lastFingerprint = this._stateFingerprint();
+    this.syncInterval = setInterval(async () => {
+      if (!this.isAuthed()) return;
+      if (DB._saveTimer) return; // Save local en cours — ne pas écraser
+      const token = DB._token();
+      if (!token) return;
+      try {
+        const res = await fetch('/api/state', { headers: { 'Authorization': 'Bearer ' + token } });
+        if (!res.ok) return;
+        const remote = await res.json();
+        const remoteAudit = (remote.audit && remote.audit.length) ? remote.audit[remote.audit.length - 1]?.ts : '';
+        const remoteFingerprint = (remote.taches?.length || 0) + '|' + (remote.stock?.length || 0) + '|' + (remote.commandes?.length || 0) + '|' + remoteAudit;
+        if (remoteFingerprint !== this._lastFingerprint) {
+          DB.state = remote;
+          DB._invalidateMaps();
+          DB.migrate();
+          this._lastFingerprint = remoteFingerprint;
+          this.refresh();
+          this.toast('🔄 Données synchronisées', 'info');
+        }
+      } catch { /* silence — réseau instable */ }
+    }, 5000);
   },
 
   async setPassword(userId, newPassword) {

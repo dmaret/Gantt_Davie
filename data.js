@@ -183,7 +183,9 @@ const DB = {
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify(this.state),
       });
-      if (res.status === 401) { this._clearToken(); }
+      if (res.status === 401) { this._clearToken(); return; }
+      // Mettre à jour le fingerprint pour éviter un faux positif de sync
+      if (window.App && App._lastFingerprint !== undefined) App._lastFingerprint = App._stateFingerprint();
     } catch (e) {
       console.error('save failed', e);
       if (window.App && App.toast) App.toast('⚠️ Erreur de sauvegarde serveur', 'error');
