@@ -25,6 +25,26 @@ const DEFAULT_USERS = [
   { id: 'U_OBS',  nom: 'Frank Observateur',  groupe: 'utilisateur', axes: [] },
 ];
 
+// ─── Rate limiting login (in-memory, no dep) ────────────────────────────────
+// Fenêtre glissante : max 10 tentatives par IP sur 15 min
+const _loginAttempts = new Map(); // ip → { count, resetAt }
+function checkLoginRateLimit(ip) {
+  const now = Date.now();
+  const WINDOW = 15 * 60 * 1000; // 15 min
+  const MAX    = 10;
+  let rec = _loginAttempts.get(ip);
+  if (!rec || now > rec.resetAt) rec = { count: 0, resetAt: now + WINDOW };
+  if (rec.count >= MAX) return false;
+  rec.count++;
+  _loginAttempts.set(ip, rec);
+  return true;
+}
+// Nettoyage périodique pour éviter la fuite mémoire (toutes les heures)
+setInterval(() => {
+  const now = Date.now();
+  _loginAttempts.forEach((v, k) => { if (now > v.resetAt) _loginAttempts.delete(k); });
+}, 3600000);
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function readState() {
@@ -96,6 +116,10 @@ app.get('/api/auth/users', (_req, res) => {
 });
 
 app.post('/api/auth/login', (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  if (!checkLoginRateLimit(ip)) {
+    return res.status(429).json({ error: 'Trop de tentatives. Réessayez dans 15 minutes.' });
+  }
   const { userId, passwordHash } = req.body || {};
   if (!userId) return res.status(400).json({ error: 'userId requis' });
   const users = getUsers();
