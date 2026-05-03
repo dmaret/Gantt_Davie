@@ -431,6 +431,16 @@ flowchart TD
 
 ---
 
+## 📚 Documentation
+
+Voir le dossier [`docs/`](./docs/) pour :
+- **`security/`** — Audits de sécurité, rapports de vulnérabilités
+- **`setup/`** — Guides d'installation, configuration, autonomie de l'app
+- **`architecture/`** — Architecture système, conception technique
+- **`releases/`** — Notes de version, changelogs
+
+---
+
 ## Utilisation & contact
 
 | | |
