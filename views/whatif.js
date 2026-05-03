@@ -31,15 +31,25 @@ App.views.whatif = {
       this.drawDiff();
       document.getElementById('wi-reset').onclick = () => {
         if (!confirm('Rejeter toutes les modifications et revenir au snapshot ?')) return;
-        const snap = JSON.parse(localStorage.getItem(this.SNAP_KEY));
-        delete snap._snapDate;
-        DB.state = snap;
-        DB.migrate();
-        DB.save();
-        this.addToHistory({ action: 'reject', date: new Date().toISOString(), diff: document.getElementById('wi-diff')?.textContent });
-        localStorage.removeItem(this.SNAP_KEY);
-        App.toast('Snapshot restauré','info');
-        App.refresh();
+        try {
+          const snapStr = localStorage.getItem(this.SNAP_KEY);
+          if (!snapStr) throw new Error('Snapshot not found');
+          const snap = JSON.parse(snapStr);
+          if (!snap || typeof snap !== 'object') throw new Error('Invalid snapshot format');
+          delete snap._snapDate;
+          DB.state = snap;
+          DB.migrate();
+          DB.save();
+          this.addToHistory({ action: 'reject', date: new Date().toISOString(), diff: document.getElementById('wi-diff')?.textContent });
+          localStorage.removeItem(this.SNAP_KEY);
+          App.toast('Snapshot restauré','info');
+          App.refresh();
+        } catch (e) {
+          console.error('Erreur lors de la restauration du snapshot:', e);
+          localStorage.removeItem(this.SNAP_KEY);
+          App.toast('Snapshot corrompu, réinitialisation','warn');
+          App.refresh();
+        }
       };
       document.getElementById('wi-commit').onclick = () => {
         if (!confirm('Valider définitivement ces changements ?')) return;
@@ -87,14 +97,18 @@ App.views.whatif = {
     }
   },
   drawDiff() {
-    const snap = JSON.parse(localStorage.getItem(this.SNAP_KEY));
-    const cur = DB.state;
-    const diff = {
-      taches: this.diffSet(snap.taches || [], cur.taches || [], 'id'),
-      commandes: this.diffSet(snap.commandes || [], cur.commandes || [], 'id'),
-      stock: this.diffSet(snap.stock || [], cur.stock || [], 'id'),
-      projets: this.diffSet(snap.projets || [], cur.projets || [], 'id'),
-    };
+    try {
+      const snapStr = localStorage.getItem(this.SNAP_KEY);
+      if (!snapStr) throw new Error('Snapshot not found');
+      const snap = JSON.parse(snapStr);
+      if (!snap || typeof snap !== 'object') throw new Error('Invalid snapshot format');
+      const cur = DB.state;
+      const diff = {
+        taches: this.diffSet(snap.taches || [], cur.taches || [], 'id'),
+        commandes: this.diffSet(snap.commandes || [], cur.commandes || [], 'id'),
+        stock: this.diffSet(snap.stock || [], cur.stock || [], 'id'),
+        projets: this.diffSet(snap.projets || [], cur.projets || [], 'id'),
+      };
     const sections = Object.entries(diff).map(([k, d]) => {
       if (!d.added.length && !d.removed.length && !d.modified.length) return '';
       return `<h3>${k} (${d.added.length} ajoutée(s), ${d.removed.length} supprimée(s), ${d.modified.length} modifiée(s))</h3>
@@ -103,8 +117,13 @@ App.views.whatif = {
           ${d.removed.map(x => `<li><span class="badge bad">−</span> ${App.escapeHTML(this.labelOf(k,x))}</li>`).join('')}
           ${d.modified.map(m => `<li><span class="badge warn">~</span> <strong>${App.escapeHTML(this.labelOf(k,m.new))}</strong><div class="small muted">${m.fields.map(f => `${App.escapeHTML(f.k)}: ${App.escapeHTML(f.a)} → ${App.escapeHTML(f.b)}`).join(' · ')}</div></li>`).join('')}
         </ul>`;
-    }).join('');
-    document.getElementById('wi-diff').innerHTML = sections || '<p class="muted">Aucune différence détectée.</p>';
+      }).join('');
+      document.getElementById('wi-diff').innerHTML = sections || '<p class="muted">Aucune différence détectée.</p>';
+    } catch (e) {
+      console.error('Erreur lors du calcul du diff:', e);
+      document.getElementById('wi-diff').innerHTML = '<p class="muted bad">Snapshot corrompu. Recommencez.</p>';
+      localStorage.removeItem(this.SNAP_KEY);
+    }
   },
   diffSet(a, b, key) {
     const ai = Object.fromEntries((a || []).map(x => [x[key], x]));

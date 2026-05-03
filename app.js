@@ -73,9 +73,15 @@ const App = {
   },
 
   logout() {
+    this.clearAllIntervals();
     DB._clearToken();
     localStorage.removeItem('atelier_user_id');
     this.showLogin();
+  },
+
+  clearAllIntervals() {
+    if (this.bellInterval) { clearInterval(this.bellInterval); this.bellInterval = null; }
+    if (this.tabletteRefresh) { clearInterval(this.tabletteRefresh); this.tabletteRefresh = null; }
   },
 
   async setPassword(userId, newPassword) {
@@ -521,7 +527,7 @@ const App = {
         this.tabletteRefresh = setInterval(() => this.refresh(), 60000);
         this.toast('Mode tablette · refresh auto 60s','info');
       } else {
-        clearInterval(this.tabletteRefresh);
+        if (this.tabletteRefresh) { clearInterval(this.tabletteRefresh); this.tabletteRefresh = null; }
       }
     });
     if (localStorage.getItem('tablette') === '1') {

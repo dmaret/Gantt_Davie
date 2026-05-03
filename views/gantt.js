@@ -552,7 +552,11 @@ App.views.gantt = {
 
     document.getElementById('g-mode').onchange = e => { st.mode = e.target.value; this._savePersistedState(); this.draw(); };
     document.getElementById('g-proj').onchange = e => { st.projetFilter = e.target.value; this._savePersistedState(); this.draw(); };
-    document.getElementById('g-search').oninput = e => { st.search = e.target.value.toLowerCase(); this.draw(); };
+    document.getElementById('g-search').oninput = e => {
+      st.search = e.target.value.toLowerCase();
+      clearTimeout(this._searchTimeout);
+      this._searchTimeout = setTimeout(() => { this.draw(); }, 300);
+    };
     document.getElementById('g-start').onchange = e => { st.rangeStart = e.target.value; this.draw(); };
     document.getElementById('g-days').onchange = e => { st.rangeDays = +e.target.value; this._savePersistedState(); this.draw(); };
     document.getElementById('g-zoom').onchange = e => { st.zoom = e.target.value; this._savePersistedState(); this.draw(); };
