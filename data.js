@@ -21,6 +21,7 @@ const DB = {
       }
       if (!res.ok) throw new Error('HTTP ' + res.status);
       this.state = await res.json();
+      this._invalidateMaps();
       this.migrate();
       this._pushHistory();
       return true;
@@ -182,7 +183,9 @@ const DB = {
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify(this.state),
       });
-      if (res.status === 401) { this._clearToken(); }
+      if (res.status === 401) { this._clearToken(); return; }
+      // Mettre à jour le fingerprint pour éviter un faux positif de sync
+      if (window.App && App._lastFingerprint !== undefined) App._lastFingerprint = App._stateFingerprint();
     } catch (e) {
       console.error('save failed', e);
       if (window.App && App.toast) App.toast('⚠️ Erreur de sauvegarde serveur', 'error');
@@ -190,6 +193,7 @@ const DB = {
   },
   // Sauvegarde debouncée (800 ms) — appelée partout dans l'appli
   save() {
+    this._invalidateMaps();
     if (!this._skipHistory) this._pushHistory();
     this._skipHistory = false;
     if (this._saveTimer) clearTimeout(this._saveTimer);
@@ -241,12 +245,29 @@ const DB = {
   // Helpers
   uid(prefix='id') { return prefix + '_' + Math.random().toString(36).slice(2, 9); },
 
-  personne(id) { return this.state.personnes.find(p => p.id === id); },
-  lieu(id)     { return this.state.lieux.find(l => l.id === id); },
-  machine(id)  { return this.state.machines.find(m => m.id === id); },
-  projet(id)   { return this.state.projets.find(p => p.id === id); },
-  tache(id)    { return this.state.taches.find(t => t.id === id); },
-  stock(id)    { return this.state.stock.find(s => s.id === id); },
+  personne(id) { return this._buildMaps().personnes.get(id); },
+  lieu(id)     { return this._buildMaps().lieux.get(id); },
+  machine(id)  { return this._buildMaps().machines.get(id); },
+  projet(id)   { return this._buildMaps().projets.get(id); },
+  tache(id)    { return this._buildMaps().taches.get(id); },
+  stock(id)    { return this._buildMaps().stock.get(id); },
+
+  // Maps indexées par id — O(1) au lieu de O(n) pour chaque lookup
+  _maps: null,
+  _buildMaps() {
+    if (this._maps) return this._maps;
+    const s = this.state;
+    this._maps = {
+      personnes: new Map((s.personnes || []).map(x => [x.id, x])),
+      lieux:     new Map((s.lieux     || []).map(x => [x.id, x])),
+      machines:  new Map((s.machines  || []).map(x => [x.id, x])),
+      projets:   new Map((s.projets   || []).map(x => [x.id, x])),
+      taches:    new Map((s.taches    || []).map(x => [x.id, x])),
+      stock:     new Map((s.stock     || []).map(x => [x.id, x])),
+    };
+    return this._maps;
+  },
+  _invalidateMaps() { this._maps = null; },
 
   tachesDuProjet(pid) { return this.state.taches.filter(t => t.projetId === pid); },
   tachesDePersonne(pid) { return this.state.taches.filter(t => (t.assignes||[]).includes(pid)); },
@@ -257,7 +278,7 @@ const DB = {
 const D = {
   today() {
     const d = new Date();
-    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth()+1).padStart(2,'0') + '-' + String(d.getUTCDate()).padStart(2,'0');
   },
   iso(d) {
     return d.getUTCFullYear() + '-' + String(d.getUTCMonth()+1).padStart(2,'0') + '-' + String(d.getUTCDate()).padStart(2,'0');

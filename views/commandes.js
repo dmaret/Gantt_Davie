@@ -1,4 +1,5 @@
 App.views.commandes = {
+  _limit: 100,
   render(root) {
     const s = DB.state;
     root.innerHTML = `
@@ -39,7 +40,10 @@ App.views.commandes = {
   draw() {
     const s = DB.state;
     s.commandes.forEach(c => this.migrate(c));
-    const rows = s.commandes.slice().sort((a,b)=>b.dateDemande.localeCompare(a.dateDemande)).map(c => {
+    const allCommandes = s.commandes.slice().sort((a,b)=>b.dateDemande.localeCompare(a.dateDemande));
+    const total = allCommandes.length;
+    const hasMore = total > this._limit;
+    const rows = allCommandes.slice(0, this._limit).map(c => {
       const prj = DB.projet(c.projetId);
       const axes = s.regle4A.axes;
       const validCount = axes.filter(a => c.validations[a.code]).length;
@@ -81,7 +85,9 @@ App.views.commandes = {
         </tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
+      <p class="muted small" style="margin-top:8px">${Math.min(this._limit, total)} commande(s) affichée(s) sur ${total}${hasMore ? ` — <button id="c-show-more" class="btn-ghost small">Voir ${Math.min(100, total - this._limit)} de plus</button>` : ''}</p>
     `;
+    if (hasMore) document.getElementById('c-show-more').onclick = () => { this._limit += 100; this.draw(); };
     document.querySelectorAll('.axe-tg').forEach(b => b.onclick = () => {
       const c = DB.state.commandes.find(x => x.id === b.dataset.cmd);
       this.migrate(c);

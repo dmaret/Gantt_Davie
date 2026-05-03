@@ -1,5 +1,5 @@
 App.views.stock = {
-  state: { search:'', lieuFilter:'', projetFilter:'', onlyAlert:false },
+  state: { search:'', lieuFilter:'', projetFilter:'', onlyAlert:false, limit:100 },
   render(root) {
     const s = DB.state;
     root.innerHTML = `
@@ -17,7 +17,7 @@ App.views.stock = {
       </div>
       <div class="card"><div id="st-table"></div></div>
     `;
-    document.getElementById('st-search').oninput = e => { this.state.search = e.target.value.toLowerCase(); this.draw(); };
+    document.getElementById('st-search').oninput = e => { this.state.search = e.target.value.toLowerCase(); this.state.limit = 100; this.draw(); };
     document.getElementById('st-lieu').onchange = e => { this.state.lieuFilter = e.target.value; this.draw(); };
     document.getElementById('st-proj').onchange = e => { this.state.projetFilter = e.target.value; this.draw(); };
     document.getElementById('st-alert').onchange = e => { this.state.onlyAlert = e.target.checked; this.draw(); };
@@ -47,6 +47,9 @@ App.views.stock = {
     if (st.onlyAlert) list = list.filter(x => x.quantite < x.seuilAlerte);
 
     const canEdit = App.can('edit');
+    const total = list.length;
+    const hasMore = total > this.state.limit;
+    list = list.slice(0, this.state.limit);
     const rows = list.map(x => {
       const pct = x.seuilAlerte ? Math.min(100, Math.round(x.quantite / (x.seuilAlerte*2) * 100)) : 100;
       const cls = x.quantite < x.seuilAlerte ? 'bad' : x.quantite < x.seuilAlerte*1.3 ? 'warn' : '';
@@ -73,8 +76,9 @@ App.views.stock = {
         <thead><tr><th>Réf</th><th>Article</th><th>Stockage</th><th class="right">Qté</th><th class="right">Seuil</th><th>Niveau</th><th>Projets liés</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
-      <p class="muted small" style="margin-top:10px">${list.length} article(s)</p>
+      <p class="muted small" style="margin-top:10px">${list.length} article(s) affiché(s) sur ${total}${hasMore ? ` — <button id="st-show-more" class="btn-ghost small">Voir ${Math.min(100, total - this.state.limit)} de plus</button>` : ''}</p>
     `;
+    if (hasMore) document.getElementById('st-show-more').onclick = () => { this.state.limit += 100; this.draw(); };
     document.querySelectorAll('#st-table tbody td.st-open').forEach(td => td.style.cursor = 'pointer');
     document.querySelectorAll('#st-table tbody td.st-open').forEach(td => td.onclick = () => this.openForm(td.closest('tr').dataset.id));
     document.querySelectorAll('[data-stock-qte]').forEach(inp => {

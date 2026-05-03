@@ -20,6 +20,7 @@ const App = {
     this.populateUserSelect();
     this.updateBell();
     this.bellInterval = setInterval(() => this.updateBell(), 30000);
+    this.startSyncPolling();
     this.initNotifications();
     this.applyGroupUI();
     this.navigate(location.hash.replace('#','') || 'dashboard');
@@ -80,8 +81,41 @@ const App = {
   },
 
   clearAllIntervals() {
-    if (this.bellInterval) { clearInterval(this.bellInterval); this.bellInterval = null; }
-    if (this.tabletteRefresh) { clearInterval(this.tabletteRefresh); this.tabletteRefresh = null; }
+    if (this.bellInterval)   { clearInterval(this.bellInterval);   this.bellInterval   = null; }
+    if (this.tabletteRefresh){ clearInterval(this.tabletteRefresh);this.tabletteRefresh= null; }
+    if (this.syncInterval)   { clearInterval(this.syncInterval);   this.syncInterval   = null; }
+  },
+
+  // Polling 5s — détecte les changements des autres utilisateurs et rafraîchit
+  _stateFingerprint() {
+    const s = DB.state;
+    const lastAudit = (s.audit && s.audit.length) ? s.audit[s.audit.length - 1]?.ts : '';
+    return (s.taches?.length || 0) + '|' + (s.stock?.length || 0) + '|' + (s.commandes?.length || 0) + '|' + lastAudit;
+  },
+  startSyncPolling() {
+    if (this.syncInterval) clearInterval(this.syncInterval);
+    this._lastFingerprint = this._stateFingerprint();
+    this.syncInterval = setInterval(async () => {
+      if (!this.isAuthed()) return;
+      if (DB._saveTimer) return; // Save local en cours — ne pas écraser
+      const token = DB._token();
+      if (!token) return;
+      try {
+        const res = await fetch('/api/state', { headers: { 'Authorization': 'Bearer ' + token } });
+        if (!res.ok) return;
+        const remote = await res.json();
+        const remoteAudit = (remote.audit && remote.audit.length) ? remote.audit[remote.audit.length - 1]?.ts : '';
+        const remoteFingerprint = (remote.taches?.length || 0) + '|' + (remote.stock?.length || 0) + '|' + (remote.commandes?.length || 0) + '|' + remoteAudit;
+        if (remoteFingerprint !== this._lastFingerprint) {
+          DB.state = remote;
+          DB._invalidateMaps();
+          DB.migrate();
+          this._lastFingerprint = remoteFingerprint;
+          this.refresh();
+          this.toast('🔄 Données synchronisées', 'info');
+        }
+      } catch { /* silence — réseau instable */ }
+    }, 5000);
   },
 
   async setPassword(userId, newPassword) {
@@ -358,6 +392,10 @@ const App = {
       { label:'+ Nouveau projet', meta:'action', action: () => { this.navigate('projets'); setTimeout(() => this.views.projets?.newItem?.(), 80); } },
       { label:'+ Nouvelle personne', meta:'action', action: () => { this.navigate('personnes'); setTimeout(() => this.views.personnes?.newItem?.(), 80); } },
       { label:'Exporter JSON', meta:'action', action: () => this.exportData() },
+      { label:'Exporter CSV — Tâches', meta:'action', action: () => this.exportCSV('taches') },
+      { label:'Exporter CSV — Stock', meta:'action', action: () => this.exportCSV('stock') },
+      { label:'Exporter CSV — Commandes', meta:'action', action: () => this.exportCSV('commandes') },
+      { label:'Exporter CSV — Personnes', meta:'action', action: () => this.exportCSV('personnes') },
       { label:'Alertes proactives', meta:'action', action: () => this.showBellPanel() },
       { label:'Aide · raccourcis clavier', meta:'action', action: () => this.showHelp() },
     ];
@@ -853,6 +891,53 @@ const App = {
     URL.revokeObjectURL(url);
     this.toast('Export JSON téléchargé', 'success');
   },
+  exportCSV(type = 'taches') {
+    const s = DB.state;
+    let rows, headers, filename;
+
+    if (type === 'taches') {
+      headers = ['ID','Nom','Projet','Assigné(s)','Début','Fin','Avancement%','Statut','Machine','Lieu'];
+      rows = (s.taches || []).map(t => {
+        const prj = DB.projet(t.projetId);
+        const assignes = (t.assignes || []).map(pid => { const p = DB.personne(pid); return p ? (p.prenom + ' ' + p.nom) : pid; }).join(' | ');
+        const machine = t.machineId ? (DB.machine(t.machineId)?.nom || t.machineId) : '';
+        const lieu = t.lieuId ? (DB.lieu(t.lieuId)?.nom || t.lieuId) : '';
+        return [t.id, t.nom, prj?.nom || '', assignes, t.debut, t.fin, t.avancement || 0, t.statut || '', machine, lieu];
+      });
+      filename = 'taches-' + D.today() + '.csv';
+    } else if (type === 'stock') {
+      headers = ['ID','Réf','Nom','Quantité','Seuil alerte','Unité','Emplacement'];
+      rows = (s.stock || []).map(a => {
+        const lieu = a.lieuId ? (DB.lieu(a.lieuId)?.nom || a.lieuId) : '';
+        return [a.id, a.ref || '', a.nom, a.quantite ?? '', a.seuilAlerte ?? '', a.unite || '', lieu];
+      });
+      filename = 'stock-' + D.today() + '.csv';
+    } else if (type === 'commandes') {
+      headers = ['ID','Réf','Fournisseur','Article','Qté','Statut','Date commande','Date livraison prévue'];
+      rows = (s.commandes || []).map(c => [c.id, c.ref || '', c.fournisseur || '', c.article || '', c.quantite ?? '', c.statut || '', c.dateCommande || '', c.dateLivraison || '']);
+      filename = 'commandes-' + D.today() + '.csv';
+    } else if (type === 'personnes') {
+      headers = ['ID','Prénom','Nom','Groupe','Lieu principal','Horaires (h/sem)'];
+      rows = (s.personnes || []).map(p => {
+        const lieu = p.lieuPrincipalId ? (DB.lieu(p.lieuPrincipalId)?.nom || '') : '';
+        const heures = p.horaires ? Object.values(p.horaires).reduce((sum, h) => sum + (h.debut && h.fin ? (D.parse(D.today().slice(0,8)+'01') ? 8 : 8) : 0), 0) : '';
+        return [p.id, p.prenom || '', p.nom, p.groupe || '', lieu, heures];
+      });
+      filename = 'personnes-' + D.today() + '.csv';
+    } else {
+      return;
+    }
+
+    const escape = v => { const s = String(v ?? ''); return s.includes(',') || s.includes('"') || s.includes('\n') ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const csv = [headers, ...rows].map(r => r.map(escape).join(',')).join('\r\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+    this.toast('Export CSV téléchargé (' + rows.length + ' lignes)', 'success');
+  },
+
   importData(file) {
     if (!file) return;
     const r = new FileReader();
